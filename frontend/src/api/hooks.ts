@@ -11,6 +11,7 @@ export const useResults = (runId: string) =>
   useQuery({ queryKey: ["results", runId], queryFn: () => api.listResults(runId), enabled: !!runId })
 export const useCompanyResults = (companyId: string) =>
   useQuery({ queryKey: ["companyResults", companyId], queryFn: () => api.companyResults(companyId) })
+export const useAllResults = () => useQuery({ queryKey: ["allResults"], queryFn: api.listAllResults })
 export const usePriority = (runId: string, pamId?: string) =>
   useQuery({ queryKey: ["priority", runId, pamId], queryFn: () => api.listPriority(runId, pamId), enabled: !!runId })
 export const useTemplates = () => useQuery({ queryKey: ["templates"], queryFn: api.listTemplates })
@@ -59,4 +60,12 @@ export const useToggleSchedule = () => {
 export const useCommitImport = () => {
   const inv = useInvalidateAll()
   return useMutation({ mutationFn: (fileName: string) => api.commitImport(fileName), onSuccess: inv })
+}
+
+export const useReassign = () => {
+  const inv = useInvalidateAll()
+  return useMutation({
+    mutationFn: (v: { companyIds: string[]; toPamId: string; actor: string }) => api.reassignCompanies(v.companyIds, v.toPamId, v.actor),
+    onSuccess: inv,
+  })
 }

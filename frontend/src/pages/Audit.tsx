@@ -13,15 +13,17 @@ import { fmtDateTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 const area = (action: string) => action.split(".")[0]
-const areaTone: Record<string, string> = {
-  auth: "bg-chart-5/12 text-chart-5",
-  run: "bg-primary/10 text-primary",
-  notify: "bg-success/15 text-success",
-  import: "bg-info/15 text-info",
-  template: "bg-chart-2/15 text-[color-mix(in_oklch,var(--chart-2),black_30%)] dark:text-chart-2",
-  provider: "bg-warning/20 text-[color-mix(in_oklch,var(--warning),black_40%)] dark:text-warning",
-  pam: "bg-destructive/10 text-destructive",
-  schedule: "bg-muted text-muted-foreground",
+// One quiet dot per event area; the action text carries the meaning.
+const areaDot: Record<string, string> = {
+  auth: "bg-chart-5",
+  run: "bg-brand-blue",
+  notify: "bg-success",
+  import: "bg-chart-3",
+  template: "bg-brand",
+  provider: "bg-warning",
+  pam: "bg-destructive",
+  schedule: "bg-muted-foreground/50",
+  company: "bg-brand-blue",
 }
 
 export default function Audit() {
@@ -89,7 +91,10 @@ export default function Audit() {
                     <p className="text-xs capitalize text-muted-foreground">{e.role}</p>
                   </TableCell>
                   <TableCell>
-                    <Badge className={cn("font-mono text-[11px]", areaTone[area(e.action)])}>{e.action}</Badge>
+                    <Badge variant="outline" className="gap-1.5 font-mono text-[11px] font-normal text-foreground/80">
+                      <span className={cn("size-1.5 rounded-full", areaDot[area(e.action)] ?? "bg-muted-foreground/50")} aria-hidden="true" />
+                      {e.action}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-sm">{e.entity}</TableCell>
                   <TableCell className="max-w-xs whitespace-normal text-sm text-muted-foreground">{e.detail || "—"}</TableCell>

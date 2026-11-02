@@ -33,6 +33,7 @@ export interface NewsFeedApi {
   getRun(id: string): Promise<Run | undefined>
   listResults(runId: string): Promise<ResearchResult[]>
   companyResults(companyId: string): Promise<ResearchResult[]>
+  listAllResults(): Promise<ResearchResult[]>
   listPriority(runId: string, pamId?: string): Promise<PriorityAction[]>
   listTemplates(): Promise<Template[]>
   listSchedules(): Promise<Schedule[]>
@@ -45,6 +46,7 @@ export interface NewsFeedApi {
   previewImport(fileName: string): Promise<ImportPreview>
   commitImport(fileName: string): Promise<ImportRecord>
   deactivatePam(pamId: string, actor: string): Promise<RebalanceResult>
+  reassignCompanies(companyIds: string[], toPamId: string, actor: string): Promise<void>
   startRun(input: { label: string; templateId: string; scope: string; actor: string }): Promise<Run>
   resendDigest(runId: string, pamId: string, actor: string): Promise<void>
   toggleSchedule(id: string, enabled: boolean, actor: string): Promise<void>
@@ -98,6 +100,7 @@ export const mockApi: NewsFeedApi = {
   getRun: (id) => wait(db.runs.find((r) => r.id === id)),
   listResults: (runId) => wait(db.results.filter((r) => r.runId === runId)),
   companyResults: (companyId) => wait(db.results.filter((r) => r.companyId === companyId)),
+  listAllResults: () => wait(db.results),
   listPriority: (runId, pamId) =>
     wait(db.priorityActions.filter((p) => p.runId === runId && (!pamId || p.pamId === pamId)).sort((a, b) => a.rank - b.rank)),
   listTemplates: () => wait(db.templates),
@@ -138,6 +141,21 @@ export const mockApi: NewsFeedApi = {
     })
     logAudit(actor, "admin", "pam.deactivate", `PAM ${pam.name}`, `Deactivated; ${result.moves.length} companies auto-rebalanced`)
     return wait(result, 800)
+  },
+  async reassignCompanies(companyIds, toPamId, actor) {
+    // One transaction: close each open assignment and open a manual one for the new PAM.
+    const ts = nowIso()
+    const pam = db.pams.find((p) => p.id === toPamId)!
+    companyIds.forEach((id) => {
+      const company = db.companies.find((c) => c.id === id)
+      if (!company || company.pamId === toPamId) return
+      const open = db.assignments.find((a) => a.companyId === id && a.validTo === null)
+      if (open) open.validTo = ts
+      db.assignments.push({ id: `a${Date.now()}${id}`, companyId: id, pamId: toPamId, validFrom: ts, validTo: null, reason: "manual", actor })
+      company.pamId = toPamId
+    })
+    logAudit(actor, "admin", "company.reassign", `${companyIds.length} compan${companyIds.length === 1 ? "y" : "ies"}`, `Manually reassigned to ${pam.name}`)
+    return wait(undefined, 500)
   },
   async startRun({ label, templateId, scope, actor }) {
     const id = `R-00${14 + db.runs.filter((r) => r.trigger === "adhoc").length - 1}`
