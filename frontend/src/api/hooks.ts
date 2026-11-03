@@ -97,7 +97,7 @@ export const useCommitBackendImport = () => {
   const inv = useInvalidate([["imports"], ["jobs"], ["scopes"]])
   return useMutation({ mutationFn: (v: { id: string; schedule: RunPlan }) => backend.commitImport(v.id, v.schedule), onSuccess: inv })
 }
-export const useJobs = (q: { page: number; pageSize: number; status?: string }) =>
+export const useJobs = (q: { page: number; pageSize: number; status?: string; q?: string }) =>
   useQuery({
     queryKey: ["jobs", q],
     queryFn: () => backend.listJobs(q),
@@ -106,7 +106,7 @@ export const useJobs = (q: { page: number; pageSize: number; status?: string }) 
   })
 export const useJob = (id: string) =>
   useQuery({ queryKey: ["job", id], queryFn: () => backend.getJob(id), refetchInterval: (q) => (q.state.data && ACTIVE.has(q.state.data.status) ? 2_000 : false) })
-export const useJobResults = (id: string, q: { page: number; pageSize: number; status?: string }, live: boolean) =>
+export const useJobResults = (id: string, q: { page: number; pageSize: number; status?: string; q?: string }, live: boolean) =>
   useQuery({ queryKey: ["jobResults", id, q], queryFn: () => backend.jobResults(id, q), placeholderData: keepPreviousData, refetchInterval: live ? 3_000 : false })
 export const useJobNotifications = (id: string, live: boolean) =>
   useQuery({ queryKey: ["jobNotifications", id], queryFn: () => backend.jobNotifications(id), refetchInterval: live ? 3_000 : false })

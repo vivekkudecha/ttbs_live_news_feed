@@ -134,7 +134,7 @@ export default function Imports() {
         if (res.run) {
           toast.success("Import committed", {
             description: `${res.import.summary}. ${res.run.status === "scheduled" ? `Research scheduled for ${fmtDateTime(res.run.scheduledFor)}` : "Research queued"}.`,
-            action: { label: "View job", onClick: () => navigate(`/jobs/${res.run!.id}`) },
+            action: { label: "View run", onClick: () => navigate(`/runs/${res.run!.id}`) },
           })
         } else toast.success("Import committed", { description: res.import.summary })
       }
@@ -311,7 +311,7 @@ export default function Imports() {
         <CardHeader className="pt-5">
           <CardTitle>Import history</CardTitle>
           <CardDescription>
-            Research jobs started from an import appear under <Link to="/jobs" className="underline underline-offset-2">Jobs</Link>.
+            Research started from an import appears under <Link to="/runs" className="underline underline-offset-2">Research runs</Link>.
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">

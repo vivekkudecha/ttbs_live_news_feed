@@ -72,10 +72,10 @@ export function NewRunDialog() {
     try {
       const run = await start.mutateAsync({ label: `Ad-hoc: ${chosen?.label ?? scope}`, templateId, scopeKey: scope, actor: user!.username })
       setOpen(false)
-      toast.success(`Job ${run.id} queued`, {
+      toast.success(`Run #${run.id} queued`, {
         description: `${count.toLocaleString("en-IN")} companies · results stream in as each logo finishes`,
       })
-      navigate(`/jobs/${run.id}`)
+      navigate(`/runs/${run.id}`)
     } catch (e) {
       toast.error("Could not start the run", { description: errorMessage(e) })
     }
@@ -322,8 +322,8 @@ export default function Schedules() {
                       onClick={() =>
                         runNow.mutate(s.id, {
                           onSuccess: (job) => {
-                            toast.success(`Job ${job.id} queued`)
-                            navigate(`/jobs/${job.id}`)
+                            toast.success(`Run #${job.id} queued`)
+                            navigate(`/runs/${job.id}`)
                           },
                           onError: (e) => toast.error("Could not start the run", { description: errorMessage(e) }),
                         })

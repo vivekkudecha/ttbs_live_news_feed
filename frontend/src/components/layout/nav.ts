@@ -5,7 +5,6 @@ import {
   CalendarClock,
   FileSpreadsheet,
   FileText,
-  ListChecks,
   LayoutDashboard,
   MailCheck,
   PlugZap,
@@ -37,7 +36,6 @@ export const navGroups: NavGroup[] = [
       { to: "/signals", label: "Signals feed", icon: Zap },
       { to: "/digest", label: "PAM digest preview", icon: MailCheck },
       { to: "/runs", label: "Research runs", icon: Activity },
-      { to: "/jobs", label: "Jobs", icon: ListChecks },
     ],
   },
   {

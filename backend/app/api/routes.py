@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 import redis
 from fastapi import APIRouter, Depends, File, Query, UploadFile
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, select, text
 
 from app.api import schemas as sch
 from app.api.deps import current_actor
@@ -18,6 +18,7 @@ from app.db.models import (
     RES_RUNNING,
     RUN_ACTIVE,
     AuditLog,
+    Company,
     ImportBatch,
     Notification,
     ResearchResult,
@@ -157,24 +158,36 @@ def create_run(body: sch.RunCreate, actor: str = Depends(current_actor)) -> dict
         return sch.run_out(run)
 
 
+# Status groups for the runs list tabs ("status" also accepts a single raw status).
+RUN_GROUPS: dict[str, tuple[str, ...]] = {
+    "active": RUN_ACTIVE,
+    "finished": ("completed", "partial", "failed", "cancelled"),
+    "attention": ("partial", "failed"),
+}
+
+
 @router.get("/runs")
-def list_runs(pg: tuple[int, int] = Depends(_page), status: str | None = None) -> dict[str, Any]:
+def list_runs(pg: tuple[int, int] = Depends(_page), status: str | None = None, q: str | None = None) -> dict[str, Any]:
+    """Runs, newest first. `status` = active | finished | attention | a raw status; `q` searches the
+    label. `groups` carries the count per group (for tab badges) under the same search."""
     page, size = pg
+    search = (q or "").strip()[:100]
 
     def load():
         with unit_of_work() as uow:
-            q = select(Run)
-            cq = select(func.count(Run.id))
-            if status:
-                q, cq = q.where(Run.status == status), cq.where(Run.status == status)
-            rows = list(uow.session.scalars(q.order_by(Run.id.desc()).limit(size).offset(page * size)))
+            conds = [Run.label.ilike(f"%{search}%")] if search else []
+            statuses = RUN_GROUPS.get(status or "", (status,) if status else None)
+            where = conds + ([Run.status.in_(statuses)] if statuses else [])
+            rows = list(uow.session.scalars(select(Run).where(*where).order_by(Run.id.desc()).limit(size).offset(page * size)))
             notes = _note_counts(uow, [r.id for r in rows])
-            return {"rows": [sch.run_out(r, notes.get(r.id)) for r in rows], "total": uow.session.scalar(cq) or 0,
-                    "page": page, "pageSize": size}
+            by_status = dict(uow.session.execute(select(Run.status, func.count(Run.id)).where(*conds).group_by(Run.status)).all())
+            groups = {"all": sum(by_status.values())} | {g: sum(by_status.get(s, 0) for s in sts) for g, sts in RUN_GROUPS.items()}
+            total = uow.session.scalar(select(func.count(Run.id)).where(*where)) or 0
+            return {"rows": [sch.run_out(r, notes.get(r.id)) for r in rows], "total": total, "page": page, "pageSize": size, "groups": groups}
 
     s = get_settings()
-    ttl = lambda v: s.cache_ttl_job_running if any(r["status"] in RUN_ACTIVE for r in v["rows"]) else s.cache_ttl_lists  # noqa: E731
-    return cache.cached("runs", f"list:{status}:{page}:{size}", ttl, load)
+    ttl = lambda v: s.cache_ttl_job_running if any(r["status"] in RUN_ACTIVE for r in v["rows"]) or v["groups"]["active"] else s.cache_ttl_lists  # noqa: E731
+    return cache.cached("runs", f"list:{status}:{search.lower()}:{page}:{size}", ttl, load)
 
 
 @router.get("/runs/{run_id}")
@@ -190,15 +203,23 @@ def get_run(run_id: int) -> dict[str, Any]:
 
 
 @router.get("/runs/{run_id}/results")
-def run_results(run_id: int, pg: tuple[int, int] = Depends(_page), status: str | None = None) -> dict[str, Any]:
+def run_results(run_id: int, pg: tuple[int, int] = Depends(_page), status: str | None = None, q: str | None = None) -> dict[str, Any]:
+    """Results for a run: signals first, then by company name. `q` searches the company name;
+    status `pending` also covers companies being researched right now."""
     page, size = pg
     with unit_of_work() as uow:
         runs.get_run(uow, run_id)
-        q = select(ResearchResult).where(ResearchResult.run_id == run_id)
-        cq = select(func.count(ResearchResult.id)).where(ResearchResult.run_id == run_id)
+        conds = [ResearchResult.run_id == run_id]
         if status:
-            q, cq = q.where(ResearchResult.status == status), cq.where(ResearchResult.status == status)
-        rows = uow.session.scalars(q.order_by(ResearchResult.id).limit(size).offset(page * size))
+            conds.append(ResearchResult.status.in_([RES_PENDING, RES_RUNNING] if status == RES_PENDING else [status]))
+        base = select(ResearchResult).join(Company, Company.id == ResearchResult.company_id)
+        cq = select(func.count(ResearchResult.id)).join(Company, Company.id == ResearchResult.company_id)
+        search = (q or "").strip()[:100]
+        if search:
+            conds.append(Company.name.ilike(f"%{search}%"))
+        signal_first = case((ResearchResult.status == "signal", 0), (ResearchResult.status == "failed", 1), else_=2)
+        rows = uow.session.scalars(base.where(*conds).order_by(signal_first, Company.name, ResearchResult.id).limit(size).offset(page * size))
+        cq = cq.where(*conds)
         counts = dict(uow.session.execute(
             select(ResearchResult.status, func.count()).where(ResearchResult.run_id == run_id).group_by(ResearchResult.status)
         ).all())

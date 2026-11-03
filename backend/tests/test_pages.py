@@ -103,6 +103,20 @@ def test_pams_query_rebalance_and_deactivate(client):
     assert "pam.deactivate" in [a["action"] for a in client.get("/api/v1/audit?pageSize=50").json()["rows"]]
 
 
+def test_runs_list_groups_search_and_results_search(client):
+    run_id = _seed(client)
+    body = client.get("/api/v1/runs?status=finished&pageSize=10").json()
+    assert [r["id"] for r in body["rows"]] == [run_id]
+    assert body["groups"] == {"all": 1, "active": 0, "finished": 1, "attention": 0}
+    assert client.get("/api/v1/runs?status=active").json()["total"] == 0
+    assert client.get("/api/v1/runs?q=nomatch").json()["groups"]["all"] == 0
+
+    res = client.get(f"/api/v1/runs/{run_id}/results?q=havells").json()
+    assert [r["companyName"] for r in res["rows"]] == ["Havells India"] and res["total"] == 1
+    allr = client.get(f"/api/v1/runs/{run_id}/results").json()["rows"]
+    assert [r["companyName"] for r in allr] == sorted(r["companyName"] for r in allr)  # all signals → by name
+
+
 def test_live_grid_and_changes(client):
     run_id = _seed(client)
     snap = client.get(f"/api/v1/run-summaries/{run_id}/live").json()

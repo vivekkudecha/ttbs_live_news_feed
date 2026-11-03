@@ -608,3 +608,7 @@ export interface LlmModelList {
   models: LlmModel[]
   providers: { key: string; count: number }[]
 }
+/** Runs list page with per-group counts for the status tabs. */
+export interface JobPage extends Page<Job> {
+  groups: { all: number; active: number; finished: number; attention: number }
+}
