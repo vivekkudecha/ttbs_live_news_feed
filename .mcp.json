@@ -6,6 +6,13 @@
         "shadcn@latest",
         "mcp"
       ]
+    },
+    "21st": {
+      "type": "http",
+      "url": "https://21st.dev/api/mcp",
+      "headers": {
+        "x-api-key": "21st_sk_2944c8f4e8427218ad37604c9d7b5651ad19b15d995abce08cdd4422d0838748"
+      }
     }
   }
 }

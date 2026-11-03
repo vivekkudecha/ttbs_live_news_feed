@@ -12,12 +12,12 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { useSchedules, useStartRun, useTemplates, useToggleSchedule } from "@/api/hooks"
+import { useSchedules, useScopeOptions, useStartRun, useTemplates, useToggleSchedule } from "@/api/hooks"
 import { can, useSession } from "@/context/session"
 import { fmtDateTime, fmtUsd } from "@/lib/format"
 
-const scopes = ["All active companies", "Region = West", "Region = North", "Segment = Enterprise", "Selected PAM: Aarav Mehta"]
-const scopeCount: Record<string, number> = { "All active companies": 48, "Region = West": 13, "Region = North": 14, "Segment = Enterprise": 18, "Selected PAM: Aarav Mehta": 6 }
+const PER_LOGO_USD = 0.0125
+const RATE_PER_SEC = 45
 
 export function NewRunDialog() {
   const { user } = useSession()
@@ -25,15 +25,19 @@ export function NewRunDialog() {
   const start = useStartRun()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const [scope, setScope] = useState(scopes[1])
+  const scopes = useScopeOptions()
+  const [scope, setScope] = useState("region:West")
   const [templateId, setTemplateId] = useState("t1")
   const [windowDays, setWindowDays] = useState("10")
-  const est = scopeCount[scope] * 0.036
+  const chosen = scopes.data?.find((s) => s.key === scope)
+  const count = chosen?.count ?? 0
+  const est = count * PER_LOGO_USD
+  const minutes = Math.max(1, Math.ceil(count / RATE_PER_SEC / 60))
 
   const submit = async () => {
-    const run = await start.mutateAsync({ label: `Ad-hoc: ${scope}`, templateId, scope, actor: user!.username })
+    const run = await start.mutateAsync({ label: `Ad-hoc: ${chosen?.label ?? scope}`, templateId, scopeKey: scope, actor: user!.username })
     setOpen(false)
-    toast.success(`${run.id} queued`, { description: `${scopeCount[scope]} companies · estimated ${fmtUsd(est)}` })
+    toast.success(`${run.id} started`, { description: `${count.toLocaleString("en-IN")} companies · results stream in as each logo finishes` })
     navigate(`/runs/${run.id}`)
   }
 
@@ -57,9 +61,9 @@ export function NewRunDialog() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {scopes.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s} ({scopeCount[s]})
+                {scopes.data?.map((s) => (
+                  <SelectItem key={s.key} value={s.key}>
+                    {s.label} ({s.count.toLocaleString("en-IN")})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -89,7 +93,7 @@ export function NewRunDialog() {
           <Alert>
             <Wallet />
             <AlertTitle>Estimated cost {fmtUsd(est)}</AlertTitle>
-            <AlertDescription>Within the monthly budget. Cached results from the last {windowDays} days are reused at no cost.</AlertDescription>
+            <AlertDescription>About {minutes} min at {RATE_PER_SEC} logos/s. Results appear live as each logo finishes, and each PAM's digest goes out as soon as their logos are done. Cached results from the last {windowDays} days are reused at no cost.</AlertDescription>
           </Alert>
         </div>
         <DialogFooter>

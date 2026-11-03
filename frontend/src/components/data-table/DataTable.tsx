@@ -6,6 +6,10 @@ import { cn } from "@/lib/utils"
 /**
  * Presentational TanStack table: the page owns state and columns, this renders them.
  * Rows are clickable when `onRowClick` is given (keyboard: Enter on the focused row).
+ *
+ * `stickyHeader`: the table scrolls inside its own container (both axes) and the header row
+ * stays pinned. It must be a single scroll container: a sticky element sticks to its nearest
+ * scrolling ancestor, so the inner shadcn wrapper's overflow is switched off.
  */
 export function DataTable<T>({
   table,
@@ -13,18 +17,27 @@ export function DataTable<T>({
   onRowClick,
   activeRowId,
   minWidth = "56rem",
+  stickyHeader = false,
+  maxHeight = "calc(100svh - 18rem)",
 }: {
   table: TanTable<T>
   empty: ReactNode
   onRowClick?: (row: T) => void
   activeRowId?: string
   minWidth?: string
+  stickyHeader?: boolean
+  maxHeight?: string
 }) {
   const rows = table.getRowModel().rows
   return (
-    <div className="overflow-x-auto rounded-lg border bg-card">
-      <Table style={{ minWidth }}>
-        <TableHeader>
+    <div className={cn("rounded-lg border bg-card", stickyHeader ? "overflow-auto overscroll-contain" : "overflow-x-auto")} style={stickyHeader ? { maxHeight } : undefined}>
+      <Table style={{ minWidth }} containerClassName={stickyHeader ? "overflow-visible" : undefined}>
+        <TableHeader
+          className={cn(
+            stickyHeader &&
+              "sticky top-0 z-10 [&_th]:bg-[color-mix(in_oklab,var(--muted)_60%,var(--card))] [&_th]:shadow-[inset_0_-1px_0_var(--border)] [&_tr]:border-b-0",
+          )}
+        >
           {table.getHeaderGroups().map((hg) => (
             <TableRow key={hg.id} className="hover:bg-transparent">
               {hg.headers.map((h) => (

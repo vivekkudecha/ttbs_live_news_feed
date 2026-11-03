@@ -1,19 +1,29 @@
+import { useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Clock, Coins, Database, Mail, MessageCircle, RefreshCw, RotateCcw, Users, Zap } from "lucide-react"
+import { ChevronLeft, ChevronRight, Coins, Database, Radio, RefreshCw, Search, Users, Zap } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { StatCard } from "@/components/common/StatCard"
 import { StatusBadge } from "@/components/common/StatusBadge"
+import { LiveRunPanel } from "@/components/live/LiveRunPanel"
+import { CompanyDrawer } from "@/components/companies/CompanyDrawer"
+import { ReassignDialog } from "@/components/companies/ReassignDialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useCompanies, usePams, useResend, useResults, useRun, useRuns } from "@/api/hooks"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { usePamJobs, useResend, useRun, useRuns } from "@/api/hooks"
 import { can, useSession } from "@/context/session"
+import { useDebounced } from "@/lib/use-debounced"
 import { durationMin, fmtDate, fmtDateTime, fmtUsd, pct } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import { NewRunDialog } from "./Schedules"
+
+const n = (x: number) => x.toLocaleString("en-IN")
 
 export function RunsList() {
   const { user } = useSession()
@@ -22,12 +32,12 @@ export function RunsList() {
     <div>
       <PageHeader
         title="Research runs"
-        description="Every scheduled or ad-hoc run, split into one job per PAM. Each run records the template version and provider it used."
+        description="Every scheduled or ad-hoc run. Results stream in logo by logo, and each PAM's digest goes out as soon as their logos finish."
         actions={can.runJobs(user!.role) && <NewRunDialog />}
       />
       <Card className="py-0">
         <CardContent className="overflow-x-auto p-0">
-          <Table className="min-w-[52rem]">
+          <Table className="min-w-[56rem]">
             <TableHeader>
               <TableRow>
                 <TableHead className="pl-5">Run</TableHead>
@@ -43,28 +53,37 @@ export function RunsList() {
               {runs.data?.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell className="pl-5">
-                    <Link to={`/runs/${r.id}`} className="font-medium hover:text-primary hover:underline">
+                    <Link to={`/runs/${r.id}`} className="font-medium hover:text-brand-blue hover:underline">
                       {r.id}
                     </Link>
                     <p className="text-xs text-muted-foreground">
-                      {r.label} · <Badge variant="outline" className="h-4 px-1.5 text-[10px] font-normal">{r.trigger}</Badge>
+                      {r.label} ·{" "}
+                      <Badge variant="outline" className="h-4 px-1.5 text-[10px] font-normal">
+                        {r.trigger}
+                      </Badge>
                     </p>
                   </TableCell>
                   <TableCell className="text-sm">
                     {fmtDate(r.windowStart)} – {fmtDate(r.windowEnd)}
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={r.status} />
+                    {r.status === "running" ? (
+                      <Link to={`/runs/${r.id}`} className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-blue hover:underline">
+                        <Radio className="size-3.5" /> Watch live
+                      </Link>
+                    ) : (
+                      <StatusBadge status={r.status} />
+                    )}
                   </TableCell>
-                  <TableCell className="w-48">
+                  <TableCell className="w-56">
                     <div className="flex items-center gap-2">
                       <Progress value={pct(r.done, r.companies)} className="h-1.5" />
-                      <span className="tabular w-14 text-right text-xs text-muted-foreground">
-                        {r.done}/{r.companies}
+                      <span className="tabular w-24 text-right text-xs text-muted-foreground">
+                        {n(r.done)}/{n(r.companies)}
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className="tabular text-right">{r.withSignal}</TableCell>
+                  <TableCell className="tabular text-right">{n(r.withSignal)}</TableCell>
                   <TableCell className="tabular text-right">{fmtUsd(r.cost)}</TableCell>
                   <TableCell className="pr-5 text-sm text-muted-foreground">
                     {fmtDateTime(r.startedAt)}
@@ -80,58 +99,56 @@ export function RunsList() {
   )
 }
 
-export function RunDetail() {
-  const { id = "" } = useParams()
+/** Per-PAM jobs, paged on the server (a run can span 5,000 PAMs). */
+function PamJobsCard({ runId }: { runId: string }) {
   const { user } = useSession()
-  const run = useRun(id)
-  const results = useResults(id)
-  const pams = usePams()
-  const companies = useCompanies()
   const resend = useResend()
-
-  if (run.isLoading || !pams.data || !companies.data) return <Skeleton className="h-96" />
-  if (!run.data) return <p className="text-sm text-muted-foreground">Run not found.</p>
-  const r = run.data
-  const pamName = (pid: string) => pams.data!.find((p) => p.id === pid)?.name ?? pid
-  const failed = results.data?.filter((x) => x.status === "failed") ?? []
-  const avgLatency = results.data?.length
-    ? Math.round(results.data.filter((x) => x.latencyMs).reduce((s, x) => s + x.latencyMs, 0) / Math.max(1, results.data.filter((x) => x.latencyMs).length) / 1000)
-    : 0
+  const [page, setPage] = useState(0)
+  const [filter, setFilter] = useState<"all" | "attention" | "in_progress" | "done">("all")
+  const [search, setSearch] = useState("")
+  const q = useDebounced(search, 250)
+  const jobs = usePamJobs(runId, { page, pageSize: 10, filter, search: q })
+  const data = jobs.data
+  const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1
   const manage = can.runJobs(user!.role)
 
   return (
-    <div className="space-y-8">
-      <div>
-        <Button variant="ghost" size="sm" asChild className="-ml-2 mb-2">
-          <Link to="/runs">
-            <ArrowLeft /> All runs
-          </Link>
-        </Button>
-        <PageHeader
-          title={`${r.id} · ${r.label}`}
-          description={
-            <>
-              Window {fmtDate(r.windowStart)} – {fmtDate(r.windowEnd)} · {r.provider} <code className="text-xs">{r.model}</code> · template v{r.templateVersion} ·
-              triggered by {r.triggeredBy}
-            </>
-          }
-          actions={<StatusBadge status={r.status} className="h-6 px-2.5 text-sm" />}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
-        <StatCard icon={Users} label="Companies researched" value={`${r.done}/${r.companies}`} hint={`${r.pamJobs.length} PAM jobs`} />
-        <StatCard icon={Zap} tone="info" label="Actionable signals" value={r.withSignal} hint={`${pct(r.withSignal, Math.max(r.done, 1))}% hit rate · ${r.failed} failed`} />
-        <StatCard icon={Coins} tone="warning" label="Cost" value={fmtUsd(r.cost)} hint={`Estimate was ${fmtUsd(r.estimatedCost)}`} />
-        <StatCard icon={Database} tone="success" label="Cache hits" value={r.cacheHits} hint={`Avg latency ${avgLatency}s · ${durationMin(r.startedAt, r.finishedAt)}`} />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Jobs by PAM</CardTitle>
-          <CardDescription>Each PAM's digest is prioritized and delivered once their companies finish. Delivery uses a transactional outbox, so resends are safe.</CardDescription>
-        </CardHeader>
-        <CardContent className="overflow-x-auto px-0">
+    <Card>
+      <CardHeader>
+        <CardTitle>Jobs by PAM</CardTitle>
+        <CardDescription>Each PAM's digest is prioritized and delivered as soon as their logos finish. Resends go through the outbox, so they are safe to repeat.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4 px-0">
+        <div className="flex flex-col gap-3 px-6 sm:flex-row sm:items-center">
+          <Tabs
+            value={filter}
+            onValueChange={(v) => {
+              setFilter(v as typeof filter)
+              setPage(0)
+            }}
+          >
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="attention">Needs attention</TabsTrigger>
+              <TabsTrigger value="in_progress">In progress</TabsTrigger>
+              <TabsTrigger value="done">Done</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="relative sm:ml-auto sm:w-64">
+            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="Search PAMs in this run"
+              placeholder="Search PAM"
+              className="h-9 pl-8"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setPage(0)
+              }}
+            />
+          </div>
+        </div>
+        <div className={cn("overflow-x-auto transition-opacity", jobs.isPlaceholderData && "opacity-60")}>
           <Table className="min-w-[46rem]">
             <TableHeader>
               <TableRow>
@@ -145,9 +162,12 @@ export function RunDetail() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {r.pamJobs.map((j) => (
+              {data?.rows.map((j) => (
                 <TableRow key={j.pamId}>
-                  <TableCell className="pl-6 font-medium">{pamName(j.pamId)}</TableCell>
+                  <TableCell className="pl-6">
+                    <span className="font-medium">{j.pamName}</span>
+                    <p className="text-xs text-muted-foreground">{j.region}</p>
+                  </TableCell>
                   <TableCell>
                     <StatusBadge status={j.status} />
                   </TableCell>
@@ -173,8 +193,8 @@ export function RunDetail() {
                         size="sm"
                         disabled={resend.isPending}
                         onClick={async () => {
-                          await resend.mutateAsync({ runId: r.id, pamId: j.pamId, actor: user!.username })
-                          toast.success(`Digest re-sent to ${pamName(j.pamId)}`, { description: "Email + WhatsApp re-queued via outbox" })
+                          await resend.mutateAsync({ runId, pamId: j.pamId, actor: user!.username })
+                          toast.success(`Digest re-sent to ${j.pamName}`, { description: "Email + WhatsApp re-queued via outbox" })
                         }}
                       >
                         <RefreshCw /> Resend
@@ -183,61 +203,87 @@ export function RunDetail() {
                   </TableCell>
                 </TableRow>
               ))}
+              {data && data.rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center text-sm text-muted-foreground">
+                    No PAMs match.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="flex items-center justify-between px-6 text-[0.8125rem] text-muted-foreground">
+          <span className="tabular">{data ? `${n(data.total)} PAMs` : "…"}</span>
+          <div className="flex items-center gap-3">
+            <span className="tabular">
+              Page {n(page + 1)} of {n(pages)}
+            </span>
+            <Button variant="outline" size="icon-sm" aria-label="Previous page" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+              <ChevronLeft />
+            </Button>
+            <Button variant="outline" size="icon-sm" aria-label="Next page" disabled={page + 1 >= pages} onClick={() => setPage((p) => p + 1)}>
+              <ChevronRight />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
-      {failed.length > 0 && (
+export function RunDetail() {
+  const { id = "" } = useParams()
+  const run = useRun(id)
+  const [openCompany, setOpenCompany] = useState<string | null>(null)
+  const [reassign, setReassign] = useState<string[]>([])
+
+  if (run.isLoading) return <Skeleton className="h-96" />
+  if (!run.data) return <p className="text-sm text-muted-foreground">Run not found.</p>
+  const r = run.data
+
+  return (
+    <div className="space-y-8">
+      <PageHeader
+        back={{ to: "/runs", label: "All runs" }}
+        title={`${r.id} · ${r.label}`}
+        description={
+          <>
+            Window {fmtDate(r.windowStart)} – {fmtDate(r.windowEnd)} · {r.provider} <code className="text-xs">{r.model}</code> · template v{r.templateVersion} · triggered by {r.triggeredBy}
+          </>
+        }
+      />
+
+      {/* While a run is live, the streamed panel below is the single source of truth for progress. */}
+      {r.status !== "running" && (
+        <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
+          <StatCard icon={Users} label="Companies researched" value={`${n(r.done)}/${n(r.companies)}`} hint={`${n(r.pamJobsTotal)} PAM jobs · ${n(r.pamJobsDone)} done`} />
+          <StatCard icon={Zap} tone="info" label="Actionable signals" value={n(r.withSignal)} hint={`${pct(r.withSignal, Math.max(r.done, 1))}% hit rate · ${n(r.failed)} failed`} />
+          <StatCard icon={Coins} tone="warning" label="Cost" value={fmtUsd(r.cost)} hint={`Estimate was ${fmtUsd(r.estimatedCost)}`} />
+          <StatCard icon={Database} tone="success" label="Cache hits" value={n(r.cacheHits)} hint={r.finishedAt ? `Took ${durationMin(r.startedAt, r.finishedAt)}` : "Still running"} />
+        </div>
+      )}
+
+      <LiveRunPanel runId={r.id} finishedAt={r.finishedAt} onOpenCompany={setOpenCompany} />
+
+      <PamJobsCard runId={r.id} />
+
+      {r.failed > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Failed companies</CardTitle>
-            <CardDescription>Retried 5 times with exponential backoff before being marked failed.</CardDescription>
+            <CardDescription>{n(r.failed)} logos failed after 5 retries with exponential backoff. They are retried automatically in the next cycle.</CardDescription>
+            <CardAction>
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/signals">Review in signals feed</Link>
+              </Button>
+            </CardAction>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {failed.map((f) => (
-              <div key={f.id} className="flex flex-wrap items-center gap-3 rounded-lg border p-3 text-sm">
-                <span className="font-medium">{companies.data!.find((c) => c.id === f.companyId)?.name}</span>
-                <span className="text-muted-foreground">{f.error}</span>
-                {manage && (
-                  <Button variant="outline" size="sm" className="ml-auto" onClick={() => toast.success("Retry queued")}>
-                    <RotateCcw /> Retry
-                  </Button>
-                )}
-              </div>
-            ))}
-          </CardContent>
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Pipeline</CardTitle>
-          <CardDescription>How this run was processed</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ol className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
-            {[
-              [Clock, "Dispatch", "Schedule picked up, budget pre-check passed, PAM assignments snapshotted"],
-              [Zap, "Research", `${r.companies} companies through rate limiter (45 rps), retries with backoff`],
-              [Users, "Prioritize", "One ranking pass per PAM on their signals only"],
-              [Mail, "Email", "HTML digest + Excel attachment per PAM"],
-              [MessageCircle, "WhatsApp", "Approved template + document header"],
-            ].map(([Icon, title, text], i) => {
-              const I = Icon as typeof Clock
-              return (
-                <li key={i} className="rounded-lg border p-3">
-                  <p className="flex items-center gap-2 font-medium">
-                    <span className="tabular flex size-5 items-center justify-center rounded-full bg-muted text-[11px] text-muted-foreground">{i + 1}</span>
-                    <I className="size-3.5 text-muted-foreground" /> {title as string}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">{text as string}</p>
-                </li>
-              )
-            })}
-          </ol>
-        </CardContent>
-      </Card>
+      <CompanyDrawer companyId={openCompany} onOpenChange={(o) => !o && setOpenCompany(null)} onReassign={(cid) => setReassign([cid])} />
+      <ReassignDialog companyIds={reassign} open={reassign.length > 0} onOpenChange={(o) => !o && setReassign([])} />
     </div>
   )
 }

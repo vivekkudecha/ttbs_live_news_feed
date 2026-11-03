@@ -13,7 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { useCompanies, useTemplates } from "@/api/hooks"
+import { useTemplates } from "@/api/hooks"
+import { CompanyPicker } from "@/components/pickers/Pickers"
+import type { CompanyOption } from "@/api/types"
 import { can, useSession } from "@/context/session"
 import { fmtDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -31,13 +33,12 @@ const sampleText: Record<string, string> = {
 export default function Templates() {
   const { user } = useSession()
   const templates = useTemplates()
-  const companies = useCompanies()
   const editable = can.runJobs(user!.role)
   const [tid, setTid] = useState("t1")
   const [draft, setDraft] = useState<TemplateVersion | null>(null)
   const [testOpen, setTestOpen] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [testCompany, setTestCompany] = useState("c21")
+  const [testCompany, setTestCompany] = useState<CompanyOption>({ id: "c21", name: "Udaan Air Cargo Services Pvt Ltd", industry: "Logistics" })
 
   const tpl = templates.data?.find((t) => t.id === tid)
   const active = tpl?.versions.find((v) => v.version === tpl.activeVersion)
@@ -273,18 +274,13 @@ export default function Templates() {
             <DialogTitle>Test run · draft template</DialogTitle>
             <DialogDescription>Runs the draft against one company without saving or notifying anyone. Cost is logged as "test".</DialogDescription>
           </DialogHeader>
-          <Select value={testCompany} onValueChange={(v) => { setTestCompany(v); runTest() }}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {companies.data?.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CompanyPicker
+            value={testCompany}
+            onChange={(c) => {
+              setTestCompany(c)
+              runTest()
+            }}
+          />
           <div className="min-h-40 rounded-lg border bg-muted/30 p-4 text-sm">
             {testing ? (
               <div className="flex h-32 items-center justify-center gap-2 text-muted-foreground">
@@ -292,7 +288,7 @@ export default function Templates() {
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="font-semibold uppercase tracking-wide">{companies.data?.find((c) => c.id === testCompany)?.name}</p>
+                <p className="font-semibold uppercase tracking-wide">{testCompany.name}</p>
                 {draft.sections.map((s) => (
                   <p key={s.key} className="text-muted-foreground">
                     <span className="font-medium text-foreground">{s.label}:</span>{" "}

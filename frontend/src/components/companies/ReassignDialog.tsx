@@ -1,51 +1,47 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
+import { PamPicker } from "@/components/pickers/Pickers"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useCompanies, usePams, useReassign } from "@/api/hooks"
+import { useCompanyDetail, useReassign } from "@/api/hooks"
 import { useSession } from "@/context/session"
+import type { PamOption } from "@/api/types"
 
 /** Manual reassignment of one or more logos to another active PAM (recorded as reason = manual). */
 export function ReassignDialog({ companyIds, open, onOpenChange, onDone }: { companyIds: string[]; open: boolean; onOpenChange: (o: boolean) => void; onDone?: () => void }) {
   const { user } = useSession()
-  const pams = usePams()
-  const companies = useCompanies()
   const reassign = useReassign()
-  const [target, setTarget] = useState("")
+  const [target, setTarget] = useState<{ id: string; pam?: PamOption }>({ id: "" })
+  // For a single logo, show its name and exclude its current PAM from the picker.
+  const single = useCompanyDetail(open && companyIds.length === 1 ? companyIds[0] : null)
+  const company = single.data?.company
 
-  const selected = companies.data?.filter((c) => companyIds.includes(c.id)) ?? []
-  const load = (pid: string) => companies.data?.filter((c) => c.pamId === pid).length ?? 0
-  const single = selected.length === 1 ? selected[0] : null
+  const close = (o: boolean) => {
+    if (!o) setTarget({ id: "" })
+    onOpenChange(o)
+  }
 
   const submit = async () => {
-    await reassign.mutateAsync({ companyIds, toPamId: target, actor: user!.username })
-    const name = pams.data?.find((p) => p.id === target)?.name
-    toast.success(single ? `${single.name} reassigned to ${name}` : `${companyIds.length} logos reassigned to ${name}`, {
+    await reassign.mutateAsync({ companyIds, toPamId: target.id, actor: user!.username })
+    const name = target.pam?.name ?? "the new PAM"
+    toast.success(company ? `${company.name} reassigned to ${name}` : `${companyIds.length} logos reassigned to ${name}`, {
       description: "History is kept; the new PAM receives these logos from the next cycle.",
     })
-    setTarget("")
-    onOpenChange(false)
+    close(false)
     onDone?.()
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) setTarget("")
-        onOpenChange(o)
-      }}
-    >
+    <Dialog open={open} onOpenChange={close}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Reassign PAM</DialogTitle>
           <DialogDescription>
-            {single ? (
+            {company ? (
               <>
-                Move <span className="font-medium text-foreground">{single.name}</span> to another PAM.
+                Move <span className="font-medium text-foreground">{company.name}</span> to another PAM.
               </>
             ) : (
               `Move ${companyIds.length} logos to another PAM.`
@@ -55,29 +51,18 @@ export function ReassignDialog({ companyIds, open, onOpenChange, onDone }: { com
         </DialogHeader>
         <div className="grid gap-2 py-2">
           <Label htmlFor="reassign-pam">New PAM</Label>
-          <Select value={target} onValueChange={setTarget}>
-            <SelectTrigger id="reassign-pam" className="h-10 w-full">
-              <SelectValue placeholder="Choose a PAM" />
-            </SelectTrigger>
-            <SelectContent>
-              {pams.data
-                ?.filter((p) => p.active && (!single || p.id !== single.pamId))
-                .map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <span>{p.name}</span>
-                    <span className="text-muted-foreground">
-                      · {p.region} · {load(p.id)}/{p.capacity}
-                    </span>
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+          <PamPicker id="reassign-pam" className="h-10 w-full" value={target.id} onChange={(id, pam) => setTarget({ id, pam })} activeOnly excludeId={company?.pamId ?? undefined} />
+          {target.pam && (
+            <p className="text-xs text-muted-foreground">
+              {target.pam.region} · {target.pam.segment} · currently {target.pam.load}/{target.pam.capacity} logos
+            </p>
+          )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => close(false)}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={!target || reassign.isPending}>
+          <Button onClick={submit} disabled={!target.id || reassign.isPending}>
             {reassign.isPending && <Loader2 className="animate-spin" />}
             Reassign
           </Button>

@@ -130,7 +130,15 @@ export interface Run {
   cacheHits: number
   cost: number
   estimatedCost: number
-  pamJobs: PamJob[]
+  /** Per-PAM jobs are paged separately (5,000+ PAMs); these are the roll-ups. */
+  pamJobsTotal: number
+  pamJobsDone: number
+  emailSent: number
+  emailFailed: number
+  whatsappSent: number
+  whatsappEligible: number
+  /** Completions per second while running (rolling), for ETA. */
+  ratePerSec?: number
 }
 
 export interface OutputSection {
@@ -272,4 +280,201 @@ export interface RebalanceMove {
 export interface RebalanceResult {
   pamId: string
   moves: RebalanceMove[]
+}
+
+// ---------------------------------------------------------------------------
+// Scale contracts: everything list-shaped is paged, filtered, sorted and joined
+// on the server. The UI never receives or scans the full 10k / 5k datasets.
+// ---------------------------------------------------------------------------
+
+export interface Page<T> {
+  rows: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export type SortDir = { id: string; desc: boolean }
+export type LatestStatus = ResearchStatus | "none"
+
+export interface CompanyQuery {
+  page: number
+  pageSize: number
+  search?: string
+  regions?: string[]
+  segments?: string[]
+  pamIds?: string[]
+  latest?: LatestStatus[]
+  sort?: SortDir
+  /** Row-level scope: a PAM only ever receives their own logos. */
+  scopePamId?: string
+}
+
+export interface CompanyListRow {
+  id: string
+  name: string
+  industry: string
+  region: Region
+  segment: Segment
+  pamId: string | null
+  pamName: string
+  latestStatus: LatestStatus
+  latestCategory?: SignalCategory
+  signals: number
+  lastSignal: string | null
+  cycles: { runId: string; status: ResearchStatus }[]
+}
+
+export interface CompanyPage extends Page<CompanyListRow> {
+  facets: { region: Record<string, number>; segment: Record<string, number>; latest: Record<string, number> }
+  tookMs: number
+}
+
+export interface PamOption {
+  id: string
+  name: string
+  email: string
+  region: Region
+  segment: Segment
+  active: boolean
+  load: number
+  capacity: number
+}
+
+export interface PamCard extends Pam {
+  load: number
+}
+
+export interface CompanyOption {
+  id: string
+  name: string
+  industry: string
+}
+
+export interface RunMeta {
+  id: string
+  windowStart: string
+  windowEnd: string
+  templateVersion: number
+}
+
+export interface CompanyDetail {
+  company: CompanyListRow
+  pam: PamOption | null
+  cycles: { result: ResearchResult; run: RunMeta }[]
+  assignments: (Assignment & { pamName: string })[]
+}
+
+export interface SignalRow extends ResearchResult {
+  companyName: string
+  industry: string
+  region: Region
+  pamName: string
+  priority?: { rank: number; whyNow: string; action: string }
+}
+
+export interface SignalQuery {
+  runId: string
+  page: number
+  pageSize: number
+  status?: ResearchStatus | "all"
+  category?: string
+  pamId?: string
+  search?: string
+}
+
+export interface SignalPage extends Page<SignalRow> {
+  counts: { signal: number; no_signal: number; failed: number; pending: number; all: number }
+}
+
+export interface PamJobRow extends PamJob {
+  pamName: string
+  region: Region
+}
+
+export interface DashboardSummary {
+  latestRun: Run
+  logos: number
+  activePams: number
+  scoped: number
+  signals: number
+  emailSent: number
+  emailTotal: number
+  whatsappSent: number
+  whatsappTotal: number
+  topPriority: (PriorityAction & { companyName: string; category?: SignalCategory; pamName: string })[]
+  byCategory: { category: string; count: number }[]
+  deliveryAttention: PamJobRow[]
+  recentRuns: Run[]
+  nextSchedule: Schedule | null
+  monthSpend: number
+  monthBudget: number
+}
+
+export interface DigestData {
+  run: Run
+  pam: PamOption
+  rows: SignalRow[]
+  job: PamJob | null
+}
+
+/** Live research stream (SSE in production, Worker messages in the mock). */
+export interface LiveSnapshot {
+  runId: string
+  /** Grid order: grouped by PAM so each PAM's logos sit together. */
+  companyIds: string[]
+  names: string[]
+  pamNames: string[]
+  /** 0 pending · 1 signal · 2 no signal · 3 failed */
+  statuses: Uint8Array
+  total: number
+  done: number
+  signals: number
+  failed: number
+  pamsTotal: number
+  pamsDone: number
+  startedAt: string
+  status: RunStatus
+}
+
+export interface LiveItem {
+  /** Index into the snapshot grid. */
+  i: number
+  s: 1 | 2 | 3
+  category?: SignalCategory
+  at: number
+}
+
+export interface LiveBatch {
+  runId: string
+  items: LiveItem[]
+  pamsCompleted: { pamId: string; pamName: string; withSignal: number; total: number }[]
+  done: number
+  signals: number
+  failed: number
+  pamsDone: number
+  ratePerSec: number
+  status: RunStatus
+}
+
+export interface ScopeOption {
+  key: string
+  label: string
+  count: number
+}
+
+export interface PamQuery {
+  page: number
+  pageSize: number
+  search?: string
+  regions?: string[]
+  segments?: string[]
+  status?: ("active" | "inactive")[]
+  sort?: SortDir
+}
+
+export interface PamPage extends Page<PamCard> {
+  facets: { region: Record<string, number>; segment: Record<string, number>; status: Record<string, number> }
+  activeTotal: number
+  tookMs: number
 }

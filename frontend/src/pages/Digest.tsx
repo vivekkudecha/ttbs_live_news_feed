@@ -9,21 +9,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useCompanies, usePams, usePriority, useResults, useRuns } from "@/api/hooks"
+import { useDigest, useRuns } from "@/api/hooks"
+import { PamPicker } from "@/components/pickers/Pickers"
 import { useSession } from "@/context/session"
 import { fmtDate } from "@/lib/format"
-import type { Company, Pam, PriorityAction, ResearchResult, Run } from "@/api/types"
+import type { PamOption, PriorityAction, ResearchResult, Run } from "@/api/types"
 
 const plain = (s?: string) => (s ?? "").replace(/\*\*/g, "")
 
+/** View model for the three previews, built from one server call (`digest(runId, pamId)`). */
 interface DigestData {
   run: Run
-  pam: Pam
+  pam: PamOption
   mine: ResearchResult[]
   signals: ResearchResult[]
   priority: PriorityAction[]
   name: (id: string) => string
-  company: (id: string) => Company | undefined
 }
 
 function EmailPreview({ d }: { d: DigestData }) {
@@ -216,29 +217,27 @@ export default function Digest() {
   const { user } = useSession()
   const isPam = user!.role === "pam"
   const runs = useRuns()
-  const pams = usePams()
-  const companies = useCompanies()
   const completed = runs.data?.filter((r) => r.status === "completed" || r.status === "partial") ?? []
   const [runId, setRunId] = useState("")
   const [pamSel, setPamSel] = useState("p1")
   const activeRun = completed.find((r) => r.id === runId) ?? completed[0]
   const pamId = isPam ? user!.pamId! : pamSel
-  const results = useResults(activeRun?.id ?? "")
-  const priority = usePriority(activeRun?.id ?? "", pamId)
+  const digest = useDigest(activeRun?.id ?? "", pamId)
 
-  const pam = pams.data?.find((p) => p.id === pamId)
-  if (!activeRun || !pam || !results.data || !priority.data || !companies.data) return <Skeleton className="h-96" />
+  if (!activeRun || !digest.data) return <Skeleton className="h-96" />
 
-  const mine = results.data.filter((r) => r.pamId === pamId)
-  const job = activeRun.pamJobs.find((j) => j.pamId === pamId)
+  const { rows, pam, job } = digest.data
+  const names = new Map(rows.map((r) => [r.companyId, r.companyName]))
   const d: DigestData = {
-    run: activeRun,
+    run: digest.data.run,
     pam,
-    mine,
-    signals: mine.filter((r) => r.status === "signal"),
-    priority: priority.data,
-    name: (id) => companies.data!.find((c) => c.id === id)?.name ?? id,
-    company: (id) => companies.data!.find((c) => c.id === id),
+    mine: rows,
+    signals: rows.filter((r) => r.status === "signal"),
+    priority: rows
+      .filter((r) => r.priority)
+      .map((r) => ({ runId: r.runId, pamId: r.pamId, companyId: r.companyId, rank: r.priority!.rank, whyNow: r.priority!.whyNow, action: r.priority!.action }))
+      .sort((a, b) => a.rank - b.rank),
+    name: (id) => names.get(id) ?? id,
   }
 
   return (
@@ -260,20 +259,7 @@ export default function Digest() {
             ))}
           </SelectContent>
         </Select>
-        {!isPam && (
-          <Select value={pamSel} onValueChange={setPamSel}>
-            <SelectTrigger className="w-52">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {pams.data!.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        {!isPam && <PamPicker value={pamSel} onChange={(id) => id && setPamSel(id)} className="w-64" />}
         {job && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground sm:ml-auto">
             <Mail className="size-3.5" /> <StatusBadge status={job.email} />

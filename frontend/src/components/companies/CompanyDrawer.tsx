@@ -1,4 +1,3 @@
-import { useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { AlertTriangle, ArrowRightLeft, Building2, CircleSlash, FileSpreadsheet, MapPin, Play, Shuffle, UserRound, Zap } from "lucide-react"
@@ -12,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useAssignments, useCompanies, useCompanyResults, usePams, useRuns } from "@/api/hooks"
+import { useCompanyDetail } from "@/api/hooks"
 import { can, useSession } from "@/context/session"
 import { fmtDate, fmtUsd, initials } from "@/lib/format"
 import type { AssignmentReason } from "@/api/types"
@@ -43,24 +42,14 @@ export function CompanyDrawer({
 }) {
   const { user } = useSession()
   const navigate = useNavigate()
-  const companies = useCompanies()
-  const pams = usePams()
-  const runs = useRuns()
-  const results = useCompanyResults(companyId ?? "")
-  const assignments = useAssignments(companyId ?? "")
+  // One server call returns the company, its PAM, every research cycle and ownership history.
+  const detail = useCompanyDetail(companyId)
   const manage = can.manageData(user!.role)
-
-  const company = companies.data?.find((c) => c.id === companyId)
-  const pam = pams.data?.find((p) => p.id === company?.pamId)
-  const pamName = (id: string) => pams.data?.find((p) => p.id === id)?.name ?? id
-
-  const cycles = useMemo(() => {
-    if (!results.data || !runs.data) return []
-    return results.data
-      .filter((r) => r.status !== "pending")
-      .map((r) => ({ r, run: runs.data!.find((x) => x.id === r.runId)! }))
-      .sort((a, b) => b.run.windowEnd.localeCompare(a.run.windowEnd))
-  }, [results.data, runs.data])
+  const company = detail.data?.company
+  const pam = detail.data?.pam
+  const cycles = detail.data?.cycles.map(({ result, run }) => ({ r: result, run })) ?? []
+  const names = new Map((detail.data?.assignments ?? []).map((a) => [a.pamId, a.pamName]))
+  const pamName = (id: string) => names.get(id) ?? (pam?.id === id ? pam.name : id)
 
   const signals = cycles.filter((c) => c.r.status === "signal")
   const totalCost = cycles.reduce((s, c) => s + c.r.cost, 0)
@@ -105,7 +94,7 @@ export function CompanyDrawer({
       ) : undefined,
   }))
 
-  const history = [...(assignments.data ?? [])].sort((a, b) => b.validFrom.localeCompare(a.validFrom))
+  const history = [...(detail.data?.assignments ?? [])].sort((a, b) => b.validFrom.localeCompare(a.validFrom))
   const ownershipItems: TimelineItem[] = history.map((a) => {
     const R = reasonLabel[a.reason]
     return {
@@ -123,7 +112,7 @@ export function CompanyDrawer({
     }
   })
 
-  const ready = company && cycles && assignments.data && pams.data
+  const ready = company && detail.data
   const restricted = company && user!.role === "pam" && company.pamId !== user!.pamId
 
   return (
@@ -209,7 +198,7 @@ export function CompanyDrawer({
                         ["Industry", company.industry],
                         ["Region", company.region],
                         ["Segment", company.segment],
-                        ["Tracking", company.active ? "Active" : "Paused"],
+                        ["Tracking", "Active"],
                         ["Company ID", company.id.toUpperCase()],
                       ].map(([k, v]) => (
                         <div key={k} className="min-w-0">

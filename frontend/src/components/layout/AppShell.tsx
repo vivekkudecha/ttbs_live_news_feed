@@ -1,5 +1,5 @@
 import { Suspense, useState } from "react"
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
+import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { useTheme } from "next-themes"
 import { ChevronsUpDown, FlaskConical, LogOut, Menu, Monitor, Moon, Sun, UserCog } from "lucide-react"
 import { Logo } from "@/components/common/Logo"
@@ -19,6 +19,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { roleLabel, useSession } from "@/context/session"
 import { navGroups } from "./nav"
+import { TopbarProvider, useTopbarSlots } from "./topbar"
 import { cn } from "@/lib/utils"
 import { initials } from "@/lib/format"
 import type { Role } from "@/api/types"
@@ -107,11 +108,18 @@ function ThemeToggle() {
 }
 
 export function AppShell() {
+  return (
+    <TopbarProvider>
+      <Shell />
+    </TopbarProvider>
+  )
+}
+
+function Shell() {
+  const slots = useTopbarSlots()
   const { user, signOut, switchRole } = useSession()
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
-  const { pathname } = useLocation()
-  const current = navGroups.flatMap((g) => g.items).find((i) => (i.to === "/" ? pathname === "/" : pathname.startsWith(i.to)))
 
   return (
     <div className="flex min-h-svh bg-background">
@@ -130,13 +138,16 @@ export function AppShell() {
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setOpen(true)} aria-label="Open navigation">
             <Menu />
           </Button>
-          <p className="truncate text-[0.8125rem] text-muted-foreground">{current?.label ?? "TTBS Signals"}</p>
-          <div className="ml-auto flex items-center gap-1.5">
+          {/* Pages render their title/description and actions into these slots (PageHeader). */}
+          <div ref={slots.setTitle} className="min-w-0 flex-1" />
+          <div ref={slots.setActions} className="flex shrink-0 items-center gap-2" />
+          <span className="mx-1 hidden h-6 w-px bg-border md:block" aria-hidden="true" />
+          <div className="flex shrink-0 items-center gap-1.5">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="hidden gap-1.5 sm:inline-flex">
                   <UserCog />
-                  View as: {roleLabel[user!.role]}
+                  <span className="hidden xl:inline">View as:</span> {roleLabel[user!.role]}
                   <ChevronsUpDown className="opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
@@ -194,7 +205,7 @@ export function AppShell() {
             </DropdownMenu>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-8 lg:px-10 lg:py-10">
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-8 lg:px-10 lg:py-8">
           <Suspense fallback={<Skeleton className="h-96" />}>
             <Outlet />
           </Suspense>

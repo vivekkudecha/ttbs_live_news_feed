@@ -44,13 +44,8 @@ export default function Audit() {
       <PageHeader
         title="Audit log"
         description="Append-only and hash-chained: entries cannot be edited or deleted, and tampering is detectable."
-        actions={
-          <Button variant="outline" onClick={() => toast.success("Audit export prepared (CSV, signed)")}>
-            <Download /> Export
-          </Button>
-        }
       />
-      <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto]">
+      <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search actor, action, entity…" className="pl-8" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -68,6 +63,9 @@ export default function Audit() {
             ))}
           </SelectContent>
         </Select>
+        <Button variant="outline" className="h-9" onClick={() => toast.success("Audit export prepared (CSV, signed)")}>
+          <Download /> Export
+        </Button>
       </div>
       <Card className="py-0">
         <CardContent className="overflow-x-auto p-0">

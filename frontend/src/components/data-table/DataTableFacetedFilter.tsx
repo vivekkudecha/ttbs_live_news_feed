@@ -1,4 +1,3 @@
-import type { Column } from "@tanstack/react-table"
 import { Check, PlusCircle } from "lucide-react"
 import type { ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
@@ -15,18 +14,29 @@ export interface FacetOption {
 }
 
 /**
- * Multi-select column filter with live counts (TanStack faceting).
- * The column must use `filterFn: "arrIncludesSome"`.
+ * Multi-select filter with live counts. Controlled: the server computes `counts`
+ * (each facet counts rows matching every *other* active filter).
  */
-export function DataTableFacetedFilter<T>({ column, title, options }: { column?: Column<T>; title: string; options: FacetOption[] }) {
-  const facets = column?.getFacetedUniqueValues()
-  const selected = new Set((column?.getFilterValue() as string[] | undefined) ?? [])
+export function DataTableFacetedFilter({
+  title,
+  options,
+  value,
+  onChange,
+  counts,
+}: {
+  title: string
+  options: FacetOption[]
+  value: string[]
+  onChange: (next: string[]) => void
+  counts?: Record<string, number>
+}) {
+  const selected = new Set(value)
 
-  const toggle = (value: string) => {
+  const toggle = (v: string) => {
     const next = new Set(selected)
-    if (next.has(value)) next.delete(value)
-    else next.add(value)
-    column?.setFilterValue(next.size ? [...next] : undefined)
+    if (next.has(v)) next.delete(v)
+    else next.add(v)
+    onChange([...next])
   }
 
   return (
@@ -75,7 +85,7 @@ export function DataTableFacetedFilter<T>({ column, title, options }: { column?:
                     </span>
                     {o.icon}
                     <span className="truncate">{o.label}</span>
-                    <span className="tabular ml-auto text-xs text-muted-foreground">{facets?.get(o.value) ?? 0}</span>
+                    <span className="tabular ml-auto text-xs text-muted-foreground">{(counts?.[o.value] ?? 0).toLocaleString("en-IN")}</span>
                   </CommandItem>
                 )
               })}
@@ -84,7 +94,7 @@ export function DataTableFacetedFilter<T>({ column, title, options }: { column?:
               <>
                 <CommandSeparator />
                 <CommandGroup>
-                  <CommandItem onSelect={() => column?.setFilterValue(undefined)} className="justify-center text-center">
+                  <CommandItem onSelect={() => onChange([])} className="justify-center text-center">
                     Clear filter
                   </CommandItem>
                 </CommandGroup>

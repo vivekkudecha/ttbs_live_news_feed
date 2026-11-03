@@ -3,20 +3,14 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-r
 import { toast } from "sonner"
 import {
   getCoreRowModel,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
   useReactTable,
   type ColumnDef,
-  type ColumnFiltersState,
-  type FilterFn,
+  type PaginationState,
   type RowSelectionState,
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table"
-import { Building2, Copy, Download, MoreHorizontal, PanelRightOpen, Play, Search, Trash2, UserRound, X, Zap } from "lucide-react"
+import { Building2, Copy, Download, Gauge, Upload, MoreHorizontal, PanelRightOpen, Play, Search, Trash2, UserRound, X, Zap } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { EmptyState } from "@/components/common/EmptyState"
 import { StatusBadge } from "@/components/common/StatusBadge"
@@ -25,9 +19,11 @@ import { DataTable } from "@/components/data-table/DataTable"
 import { DataTableColumnHeader } from "@/components/data-table/DataTableColumnHeader"
 import { DataTableFacetedFilter } from "@/components/data-table/DataTableFacetedFilter"
 import { DataTablePagination } from "@/components/data-table/DataTablePagination"
+import { DataTableCompactPager } from "@/components/data-table/DataTableCompactPager"
 import { DataTableViewOptions } from "@/components/data-table/DataTableViewOptions"
 import { CompanyDrawer } from "@/components/companies/CompanyDrawer"
 import { ReassignDialog } from "@/components/companies/ReassignDialog"
+import { PamMultiFilter } from "@/components/pickers/Pickers"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -42,22 +38,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useAllResults, useCompanies, usePams, useRuns } from "@/api/hooks"
+import { useCompanyPage } from "@/api/hooks"
 import { can, useSession } from "@/context/session"
+import { useDebounced } from "@/lib/use-debounced"
 import { fmtDate, initials } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { Company, ResearchStatus, SignalCategory } from "@/api/types"
-
-type CycleMark = { runId: string; status: ResearchStatus; windowEnd: string }
-
-interface CompanyRow extends Company {
-  pamName: string
-  latestStatus: ResearchStatus | "none"
-  latestCategory?: SignalCategory
-  signals: number
-  lastSignal: string | null
-  cycles: CycleMark[]
-}
+import type { CompanyListRow, LatestStatus } from "@/api/types"
 
 const latestStatusOptions = [
   { value: "signal", label: "Signal" },
@@ -65,13 +51,6 @@ const latestStatusOptions = [
   { value: "failed", label: "Failed" },
   { value: "none", label: "Not researched" },
 ]
-
-const globalSearch: FilterFn<CompanyRow> = (row, _id, value: string) => {
-  const q = value.trim().toLowerCase()
-  if (!q) return true
-  const r = row.original
-  return `${r.name} ${r.industry} ${r.pamName} ${r.region}`.toLowerCase().includes(q)
-}
 
 /** Copies text when the browser allows it; never throws. */
 async function copy(text: string) {
@@ -84,17 +63,11 @@ async function copy(text: string) {
 }
 
 /** One dot per research cycle, oldest → newest. Filled = signal found. */
-function CycleDots({ cycles }: { cycles: CycleMark[] }) {
+function CycleDots({ cycles }: { cycles: CompanyListRow["cycles"] }) {
   return (
     <span className="flex items-center gap-1" aria-hidden="true">
       {cycles.map((c) => (
-        <span
-          key={c.runId}
-          className={cn(
-            "size-2 rounded-full",
-            c.status === "signal" ? "bg-brand" : c.status === "failed" ? "bg-destructive/60" : "bg-border",
-          )}
-        />
+        <span key={c.runId} className={cn("size-2 rounded-full", c.status === "signal" ? "bg-brand" : c.status === "failed" ? "bg-destructive/60" : "bg-border")} />
       ))}
     </span>
   )
@@ -105,52 +78,43 @@ export function CompaniesList() {
   const navigate = useNavigate()
   const isPam = user!.role === "pam"
   const manage = can.manageData(user!.role)
-  const companies = useCompanies()
-  const pams = usePams()
-  const runs = useRuns()
-  const allResults = useAllResults()
   const [params, setParams] = useSearchParams()
   const openId = params.get("company")
 
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ segment: false })
+  // All of this is sent to the server; the browser only ever holds one page.
+  const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }])
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 20 })
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
-  const [globalFilter, setGlobalFilter] = useState("")
+  const [search, setSearch] = useState("")
+  const [regions, setRegions] = useState<string[]>([])
+  const [segments, setSegments] = useState<string[]>([])
+  // Arriving from the PAMs table (?pam=ID) pre-filters to that PAM's logos.
+  const [pamIds, setPamIds] = useState<string[]>(() => (params.get("pam") ? [params.get("pam")!] : []))
+  const [latest, setLatest] = useState<string[]>([])
   const [reassignIds, setReassignIds] = useState<string[]>([])
+  const debouncedSearch = useDebounced(search, 250)
 
+  const resetPage = () => setPagination((p) => ({ ...p, pageIndex: 0 }))
   const openDrawer = (id: string) => setParams((p) => (p.set("company", id), p))
   const closeDrawer = () => setParams((p) => (p.delete("company"), p))
 
-  const data = useMemo<CompanyRow[]>(() => {
-    if (!companies.data || !pams.data || !runs.data || !allResults.data) return []
-    const finished = runs.data.filter((r) => r.status !== "queued")
-    const latestDone = runs.data.find((r) => r.status === "completed")
-    const runEnd = new Map(finished.map((r) => [r.id, r.windowEnd]))
-    return companies.data
-      .filter((c) => !isPam || c.pamId === user!.pamId)
-      .map((c) => {
-        const mine = allResults.data!.filter((r) => r.companyId === c.id && r.status !== "pending" && runEnd.has(r.runId))
-        const cycles = mine
-          .map((r) => ({ runId: r.runId, status: r.status, windowEnd: runEnd.get(r.runId)! }))
-          .sort((a, b) => a.windowEnd.localeCompare(b.windowEnd))
-        const latest = mine.find((r) => r.runId === latestDone?.id)
-        const signalCycles = cycles.filter((x) => x.status === "signal")
-        return {
-          ...c,
-          pamName: pams.data!.find((p) => p.id === c.pamId)?.name ?? "Unassigned",
-          latestStatus: latest?.status ?? "none",
-          latestCategory: latest?.category,
-          signals: signalCycles.length,
-          lastSignal: signalCycles.at(-1)?.windowEnd ?? null,
-          cycles,
-        }
-      })
-  }, [companies.data, pams.data, runs.data, allResults.data, isPam, user])
+  const query = useCompanyPage({
+    page: pagination.pageIndex,
+    pageSize: pagination.pageSize,
+    search: debouncedSearch,
+    regions,
+    segments,
+    pamIds,
+    latest: latest as LatestStatus[],
+    sort: sorting[0],
+    scopePamId: isPam ? user!.pamId : undefined,
+  })
+  const page = query.data
 
-  const columns = useMemo<ColumnDef<CompanyRow>[]>(() => {
-    const cols: ColumnDef<CompanyRow>[] = []
-    if (manage) {
+  const columns = useMemo<ColumnDef<CompanyListRow>[]>(() => {
+    const cols: ColumnDef<CompanyListRow>[] = []
+    if (manage)
       cols.push({
         id: "select",
         size: 40,
@@ -169,18 +133,16 @@ export function CompaniesList() {
           </div>
         ),
       })
-    }
     cols.push(
       {
+        id: "name",
         accessorKey: "name",
         meta: { label: "Company" },
         enableHiding: false,
         header: ({ column }) => <DataTableColumnHeader column={column} title="Company" />,
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-medium text-muted-foreground">
-              {initials(row.original.name)}
-            </span>
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-medium text-muted-foreground">{initials(row.original.name)}</span>
             <div className="min-w-0">
               <button
                 type="button"
@@ -198,9 +160,9 @@ export function CompaniesList() {
         ),
       },
       {
+        id: "region",
         accessorKey: "region",
         meta: { label: "Region" },
-        filterFn: "arrIncludesSome",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Region" />,
         cell: ({ row }) => (
           <span className="text-muted-foreground">
@@ -208,15 +170,12 @@ export function CompaniesList() {
           </span>
         ),
       },
-      { accessorKey: "segment", meta: { label: "Segment" }, filterFn: "arrIncludesSome", header: "Segment" },
     )
-    if (!isPam) {
+    if (!isPam)
       cols.push({
         id: "pam",
-        accessorFn: (r) => r.pamId ?? "",
+        accessorKey: "pamName",
         meta: { label: "PAM" },
-        filterFn: "arrIncludesSome",
-        sortingFn: (a, b) => a.original.pamName.localeCompare(b.original.pamName),
         header: ({ column }) => <DataTableColumnHeader column={column} title="PAM" />,
         cell: ({ row }) => (
           <span className="flex items-center gap-2">
@@ -227,12 +186,11 @@ export function CompaniesList() {
           </span>
         ),
       })
-    }
     cols.push(
       {
+        id: "latestStatus",
         accessorKey: "latestStatus",
         meta: { label: "Latest cycle" },
-        filterFn: "arrIncludesSome",
         enableSorting: false,
         header: "Latest cycle",
         cell: ({ row }) =>
@@ -245,6 +203,7 @@ export function CompaniesList() {
           ),
       },
       {
+        id: "signals",
         accessorKey: "signals",
         meta: { label: "Signals" },
         header: ({ column }) => <DataTableColumnHeader column={column} title="Signals" />,
@@ -263,10 +222,9 @@ export function CompaniesList() {
         ),
       },
       {
+        id: "lastSignal",
         accessorKey: "lastSignal",
         meta: { label: "Last signal" },
-        sortUndefined: "last",
-        sortingFn: (a, b) => (a.original.lastSignal ?? "").localeCompare(b.original.lastSignal ?? ""),
         header: ({ column }) => <DataTableColumnHeader column={column} title="Last signal" />,
         cell: ({ row }) => <span className="tabular text-muted-foreground">{row.original.lastSignal ? fmtDate(row.original.lastSignal) : "—"}</span>,
       },
@@ -329,105 +287,101 @@ export function CompaniesList() {
   }, [manage, isPam, user])
 
   const table = useReactTable({
-    data,
+    data: page?.rows ?? [],
     columns,
-    state: { sorting, columnFilters, columnVisibility, rowSelection, globalFilter },
     getRowId: (r) => r.id,
+    state: { sorting, pagination, columnVisibility, rowSelection },
+    // Server mode: TanStack only renders; the server sorts, filters and pages.
+    manualPagination: true,
+    manualSorting: true,
+    manualFiltering: true,
+    rowCount: page?.total ?? 0,
     enableRowSelection: manage,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
+    enableSortingRemoval: false,
+    onSortingChange: (u) => {
+      setSorting(u)
+      resetPage()
+    },
+    onPaginationChange: setPagination,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    onGlobalFilterChange: setGlobalFilter,
-    globalFilterFn: globalSearch,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getFacetedRowModel: getFacetedRowModel(),
-    getFacetedUniqueValues: getFacetedUniqueValues(),
-    initialState: { pagination: { pageSize: 10 } },
   })
 
-  const selectedIds = table.getSelectedRowModel().rows.map((r) => r.original.id)
-  const filtered = columnFilters.length > 0 || globalFilter !== ""
-  const loading = !companies.data || !pams.data || !runs.data || !allResults.data
+  const selectedIds = Object.keys(rowSelection)
+  const filtered = regions.length + segments.length + pamIds.length + latest.length > 0 || search !== ""
+  const setFilter = (fn: (v: string[]) => void) => (v: string[]) => {
+    fn(v)
+    resetPage()
+  }
 
   return (
     <div>
       <PageHeader
         title={isPam ? "My companies" : "Companies"}
         description="Every logo being tracked, its PAM and its signal history. Select a company to see its full timeline."
-        actions={
-          <>
-            <Button variant="outline" onClick={() => toast.success(`Exported ${table.getFilteredRowModel().rows.length} companies to Excel`)}>
-              <Download /> Export
-            </Button>
-            {manage && (
-              <Button variant="outline" asChild>
-                <Link to="/imports">Import Excel / CSV</Link>
-              </Button>
-            )}
-          </>
-        }
       />
 
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="relative lg:w-72">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             aria-label="Search companies"
-            placeholder="Search company, industry or PAM"
+            placeholder="Search company or PAM"
             className="h-9 pl-9 pr-8"
-            value={globalFilter}
+            value={search}
             onChange={(e) => {
-              setGlobalFilter(e.target.value)
-              table.setPageIndex(0)
+              setSearch(e.target.value)
+              resetPage()
             }}
           />
-          {globalFilter && (
-            <button
-              type="button"
-              aria-label="Clear search"
-              onClick={() => setGlobalFilter("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
-            >
+          {search && (
+            <button type="button" aria-label="Clear search" onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground">
               <X className="size-3.5" />
             </button>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <DataTableFacetedFilter column={table.getColumn("region")} title="Region" options={["North", "South", "East", "West"].map((v) => ({ value: v, label: v }))} />
-          <DataTableFacetedFilter
-            column={table.getColumn("segment")}
-            title="Segment"
-            options={["Enterprise", "Mid-market", "Emerging"].map((v) => ({ value: v, label: v }))}
-          />
-          {!isPam && (
-            <DataTableFacetedFilter column={table.getColumn("pam")} title="PAM" options={(pams.data ?? []).map((p) => ({ value: p.id, label: p.name }))} />
-          )}
-          <DataTableFacetedFilter column={table.getColumn("latestStatus")} title="Latest cycle" options={latestStatusOptions} />
+          <DataTableFacetedFilter title="Region" value={regions} onChange={setFilter(setRegions)} counts={page?.facets.region} options={["North", "South", "East", "West"].map((v) => ({ value: v, label: v }))} />
+          <DataTableFacetedFilter title="Segment" value={segments} onChange={setFilter(setSegments)} counts={page?.facets.segment} options={["Enterprise", "Mid-market", "Emerging"].map((v) => ({ value: v, label: v }))} />
+          {!isPam && <PamMultiFilter value={pamIds} onChange={setFilter(setPamIds)} />}
+          <DataTableFacetedFilter title="Latest cycle" value={latest} onChange={setFilter(setLatest)} counts={page?.facets.latest} options={latestStatusOptions} />
           {filtered && (
             <Button
               variant="ghost"
               size="sm"
               className="h-9 text-muted-foreground"
               onClick={() => {
-                table.resetColumnFilters()
-                setGlobalFilter("")
+                setRegions([])
+                setSegments([])
+                setPamIds([])
+                setLatest([])
+                setSearch("")
+                resetPage()
               }}
             >
               Reset <X />
             </Button>
           )}
         </div>
-        <div className="lg:ml-auto">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {page && <DataTableCompactPager table={table} totalRows={page.total} />}
           <DataTableViewOptions table={table} />
+          <Button variant="outline" className="h-9" onClick={() => toast.success(`Export of ${(page?.total ?? 0).toLocaleString("en-IN")} companies started`, { description: "Large exports are generated on the server and emailed as a link." })}>
+            <Download /> Export
+          </Button>
+          {manage && (
+            <Button variant="outline" className="h-9" asChild>
+              <Link to="/imports">
+                <Upload /> Import
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 
       {selectedIds.length > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-blue/30 bg-accent/60 px-4 py-2.5 text-sm">
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-blue/30 bg-brand-blue/[0.06] px-4 py-2.5 text-sm">
           <span className="font-medium">{selectedIds.length} selected</span>
           <span className="mx-1 h-4 w-px bg-border" />
           <Button variant="ghost" size="sm" onClick={() => setReassignIds(selectedIds)}>
@@ -439,18 +393,19 @@ export function CompaniesList() {
           <Button variant="ghost" size="sm" onClick={() => toast.success(`Exported ${selectedIds.length} companies`)}>
             <Download /> Export
           </Button>
-          <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground" onClick={() => table.resetRowSelection()}>
+          <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground" onClick={() => setRowSelection({})}>
             Clear selection
           </Button>
         </div>
       )}
 
-      {loading ? (
-        <Skeleton className="h-[32rem]" />
+      {!page ? (
+        <Skeleton className="h-[40rem]" />
       ) : (
-        <>
+        <div className={cn("transition-opacity", query.isPlaceholderData && "opacity-60")} aria-busy={query.isFetching}>
           <DataTable
             table={table}
+            stickyHeader
             onRowClick={(r) => openDrawer(r.id)}
             activeRowId={openId ?? undefined}
             empty={
@@ -459,17 +414,15 @@ export function CompaniesList() {
               </EmptyState>
             }
           />
-          <DataTablePagination table={table} />
-        </>
+          <DataTablePagination table={table} totalRows={page.total} pageSizes={[20, 50, 100]} />
+            <p className="flex items-center gap-1 px-1 pt-1 text-xs text-muted-foreground" title="Server query time for this page">
+              <Gauge className="size-3.5" /> Loaded in {page.tookMs} ms
+            </p>
+        </div>
       )}
 
       <CompanyDrawer companyId={openId} onOpenChange={(o) => !o && closeDrawer()} onReassign={(id) => setReassignIds([id])} />
-      <ReassignDialog
-        companyIds={reassignIds}
-        open={reassignIds.length > 0}
-        onOpenChange={(o) => !o && setReassignIds([])}
-        onDone={() => table.resetRowSelection()}
-      />
+      <ReassignDialog companyIds={reassignIds} open={reassignIds.length > 0} onOpenChange={(o) => !o && setReassignIds([])} onDone={() => setRowSelection({})} />
     </div>
   )
 }

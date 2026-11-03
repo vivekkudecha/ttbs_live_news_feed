@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { usePams, useUsers } from "@/api/hooks"
+import { useUsers } from "@/api/hooks"
+import { PamPicker } from "@/components/pickers/Pickers"
 import { can, roleLabel, useSession } from "@/context/session"
 import { fmtDateTime, initials } from "@/lib/format"
 import type { Role } from "@/api/types"
@@ -29,8 +30,8 @@ const perms: [string, Role[]][] = [
 export default function Users() {
   const { user } = useSession()
   const users = useUsers()
-  const pams = usePams()
   const [open, setOpen] = useState(false)
+  const [linkPam, setLinkPam] = useState("")
   const editable = can.admin(user!.role)
   const roles = Object.keys(roleLabel) as Role[]
 
@@ -172,18 +173,7 @@ export default function Users() {
               </div>
               <div className="grid gap-1.5">
                 <Label>Link to PAM (optional)</Label>
-                <Select>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="None" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pams.data?.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <PamPicker value={linkPam} onChange={(id) => setLinkPam(id)} allLabel="None" className="w-full" />
               </div>
             </div>
           </div>

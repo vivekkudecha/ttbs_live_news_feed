@@ -7,6 +7,8 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss()],
+  // Module workers with code-splitting (the mock API server runs in a Web Worker).
+  worker: { format: "es" },
   build: {
     rollupOptions: {
       output: {
