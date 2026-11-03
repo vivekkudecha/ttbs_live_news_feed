@@ -1,4 +1,4 @@
-"""End-to-end: upload → preview → commit + schedule → research → results → notifications → audit."""
+"""End-to-end: upload dataset (background save) → research → results → notifications → audit."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -9,7 +9,7 @@ from app.db.models import Notification, ResearchResult, Run
 from app.db.session import unit_of_work
 from app.research import providers
 from app.services import maintenance
-from tests.conftest import GOOD_ROWS, upload
+from tests.conftest import GOOD_ROWS, research, upload
 
 
 def test_preview_validates_and_ignores_region(client):
@@ -19,17 +19,19 @@ def test_preview_validates_and_ignores_region(client):
         ["PINE LABS PVT. LTD", "Fintech", "Enterprise", "", "Aarav Mehta", "aarav@ttbs.example", "9810011001"],
         ["", "", "", "", "", "", ""],  # blank row skipped
     ]
-    r = upload(client, rows)
+    r = upload(client, rows, label="Nov logos")
     assert r.status_code == 201, r.text
-    p = r.json()
-    assert p["rows"] == 6
-    assert p["errorRows"] == 2
+    p = client.get(f"/api/v1/imports/{r.json()['id']}").json()  # saved in the background (eager in tests)
+    assert p["label"] == "Nov logos" and p["displayLabel"].startswith("Nov logos · ")
+    assert p["status"] == "completed" and p["progress"] == 100
+    assert p["rowsTotal"] == 6 and p["errorRows"] == 2 and p["validRows"] == 3 and p["saved"] == 3 and p["companies"] == 3
     assert p["newCompanies"] == 3 and p["newPams"] == 2
     assert p["duplicatesMerged"] == 1
     fields = {(i["field"], i["severity"]) for i in p["issues"]}
     assert ("PAM WhatsApp", "error") in fields and ("PAM Email", "error") in fields
-    assert all("region" not in s for s in p["sample"])
-    assert {s["whatsapp"] for s in p["sample"]} == {"+919810011001", "+919845022002"}
+    grid = client.get(f"/api/v1/imports/{p['id']}/rows?pageSize=50").json()
+    assert {row["pamWhatsapp"] for row in grid["rows"]} == {"+919810011001", "+919845022002"}
+    assert all("region" not in row for row in grid["rows"])
 
 
 def test_upload_errors_use_envelope(client):
@@ -44,9 +46,9 @@ def test_upload_errors_use_envelope(client):
 
 def test_commit_schedule_now_runs_full_pipeline(client):
     imp = upload(client).json()
-    r = client.post(f"/api/v1/imports/{imp['id']}/commit", json={"schedule": {"mode": "now", "channels": ["email", "whatsapp"]}})
-    assert r.status_code == 200, r.text
-    run_id = r.json()["run"]["id"]
+    r = research(client, imp["id"], ["email", "whatsapp"])
+    assert r.status_code == 201, r.text
+    run_id = r.json()["id"]
 
     run = client.get(f"/api/v1/runs/{run_id}").json()
     assert run["status"] == "completed"
@@ -57,19 +59,18 @@ def test_commit_schedule_now_runs_full_pipeline(client):
     assert res["total"] == 3 and res["counts"] == {"signal": 3}
     assert all(x["keySignals"] and x["category"] and x["sources"] for x in res["rows"])
 
-    # Committing twice is a conflict, not a duplicate import.
-    again = client.post(f"/api/v1/imports/{imp['id']}/commit", json={})
-    assert again.status_code == 409
+    # A saved dataset cannot be "resumed" again.
+    assert client.post(f"/api/v1/imports/{imp['id']}/resume").status_code == 409
 
     actions = [a["action"] for a in client.get("/api/v1/audit?pageSize=200").json()["rows"]]
-    for expected in ("import.preview", "import.commit", "run.queue", "run.start", "run.finish", "notify.queue", "notify.sent"):
+    for expected in ("dataset.upload", "dataset.saved", "run.queue", "run.start", "run.finish", "notify.queue", "notify.sent"):
         assert expected in actions
     assert client.get("/api/v1/audit/verify").json()["ok"] is True
 
 
 def test_second_run_uses_result_cache(client):
     imp = upload(client).json()
-    client.post(f"/api/v1/imports/{imp['id']}/commit", json={"schedule": {"mode": "now"}})
+    research(client, imp["id"])
     run2 = client.post("/api/v1/runs", json={"scopeKey": "all", "channels": []}).json()
     run2 = client.get(f"/api/v1/runs/{run2['id']}").json()
     assert run2["status"] == "completed" and run2["cacheHits"] == 3 and run2["cost"] == 0
@@ -87,7 +88,7 @@ def test_transient_errors_are_retried_then_succeed(client, monkeypatch):
 
     monkeypatch.setattr(providers.FakeProvider, "research", flaky)
     imp = upload(client, GOOD_ROWS[:1]).json()
-    run_id = client.post(f"/api/v1/imports/{imp['id']}/commit", json={"schedule": {"mode": "now", "channels": []}}).json()["run"]["id"]
+    run_id = research(client, imp["id"], []).json()["id"]
     with unit_of_work() as uow:
         res = uow.session.scalars(select(ResearchResult).where(ResearchResult.run_id == int(run_id))).one()
         assert res.status == "signal" and res.attempts == 3
@@ -103,7 +104,7 @@ def test_permanent_error_fails_company_and_run_is_partial(client, monkeypatch):
 
     monkeypatch.setattr(providers.FakeProvider, "research", picky)
     imp = upload(client).json()
-    run_id = client.post(f"/api/v1/imports/{imp['id']}/commit", json={"schedule": {"mode": "now", "channels": []}}).json()["run"]["id"]
+    run_id = research(client, imp["id"], []).json()["id"]
     run = client.get(f"/api/v1/runs/{run_id}").json()
     assert run["status"] == "partial" and run["failed"] == 1
 
@@ -117,7 +118,7 @@ def test_permanent_error_fails_company_and_run_is_partial(client, monkeypatch):
 def test_retries_give_up_after_max(client, monkeypatch):
     monkeypatch.setattr(providers.FakeProvider, "research", lambda *a: (_ for _ in ()).throw(RetryableProviderError("down")))
     imp = upload(client, GOOD_ROWS[:1]).json()
-    run_id = client.post(f"/api/v1/imports/{imp['id']}/commit", json={"schedule": {"mode": "now", "channels": []}}).json()["run"]["id"]
+    run_id = research(client, imp["id"], []).json()["id"]
     run = client.get(f"/api/v1/runs/{run_id}").json()
     assert run["status"] == "failed"
     res = client.get(f"/api/v1/runs/{run_id}/results").json()["rows"][0]
@@ -127,7 +128,7 @@ def test_retries_give_up_after_max(client, monkeypatch):
 def test_scheduled_for_later_then_dispatcher_starts_it(client):
     imp = upload(client).json()
     at = (datetime.now(UTC) + timedelta(hours=2)).isoformat()
-    run = client.post(f"/api/v1/imports/{imp['id']}/commit", json={"schedule": {"mode": "at", "runAt": at}}).json()["run"]
+    run = research(client, imp["id"], runAt=at).json()
     assert run["status"] == "scheduled"
     assert maintenance.promote_scheduled_runs() == []  # not due yet
 
@@ -138,8 +139,7 @@ def test_scheduled_for_later_then_dispatcher_starts_it(client):
 
 
 def test_recurring_schedule_fires_and_advances(client):
-    imp = upload(client).json()
-    client.post(f"/api/v1/imports/{imp['id']}/commit", json={})
+    upload(client).json()
     s = client.post("/api/v1/schedules", json={"name": "10-day cycle", "intervalDays": 10, "runAtTime": "06:00", "channels": ["email"]})
     assert s.status_code == 201, s.text
     sid = s.json()["id"]
@@ -165,7 +165,7 @@ def test_sweeper_recovers_lost_notifications(client, monkeypatch):
 
     monkeypatch.setattr(tasks.send_notification, "apply_async", lambda *a, **k: None)  # messages "lost"
     imp = upload(client, GOOD_ROWS[:1]).json()
-    run_id = client.post(f"/api/v1/imports/{imp['id']}/commit", json={"schedule": {"mode": "now", "channels": ["email"]}}).json()["run"]["id"]
+    run_id = research(client, imp["id"], ["email"]).json()["id"]
     with unit_of_work() as uow:
         note = uow.session.scalars(select(Notification).where(Notification.run_id == int(run_id))).one()
         assert note.status == "pending"
@@ -192,9 +192,9 @@ def test_cache_fails_open_when_redis_down(client, monkeypatch):
 
     monkeypatch.setattr(ratelimit, "get_redis", lambda: Down())
     imp = upload(client, GOOD_ROWS[:1]).json()
-    r = client.post(f"/api/v1/imports/{imp['id']}/commit", json={"schedule": {"mode": "now", "channels": []}})
-    assert r.status_code == 200
-    assert client.get(f"/api/v1/runs/{r.json()['run']['id']}").json()["status"] == "completed"
+    r = research(client, imp["id"], [])
+    assert r.status_code == 201
+    assert client.get(f"/api/v1/runs/{r.json()["id"]}").json()["status"] == "completed"
     assert client.get("/api/v1/health").json()["redis"].startswith("error")
 
 

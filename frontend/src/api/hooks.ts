@@ -1,7 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "./client"
 import { backend } from "./http"
-import type { AiProvider, CompanyQuery, PamQuery, RunPlan, ScheduleInput, SignalQuery } from "./types"
+import type { AiProvider, CompanyQuery, DatasetRowPatch, DeliveryChannel, DatasetRowQuery, PamQuery, ScheduleInput, SignalQuery } from "./types"
 
 /*
  * Data hooks. Rules that keep the UI smooth at 10k+ rows:
@@ -54,7 +54,6 @@ export const useChannels = () => useQuery({ queryKey: ["channels"], queryFn: () 
 export const useUsers = () => useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() })
 export const useAudit = () => useQuery({ queryKey: ["audit"], queryFn: () => api.listAudit() })
 export const useFinops = () => useQuery({ queryKey: ["finops"], queryFn: () => api.finops() })
-export const useImports = () => useQuery({ queryKey: ["imports"], queryFn: () => backend.listImports() })
 
 // ---- Mutations --------------------------------------------------------------------------
 function useInvalidate(keys: string[][]) {
@@ -71,10 +70,10 @@ export const useReassign = () => {
   return useMutation({ mutationFn: (v: { companyIds: string[]; toPamId: string; actor: string }) => api.reassignCompanies(v.companyIds, v.toPamId), onSuccess: inv })
 }
 export const useStartRun = () => {
-  const inv = useInvalidate([["runs"], ["jobs"], ["audit"]])
+  const inv = useInvalidate([["runs"], ["jobs"], ["schedules"], ["audit"]])
   return useMutation({
-    mutationFn: (v: { label: string; templateId: string; scopeKey: string; actor: string }): Promise<{ id: string }> =>
-      backend.startRun({ scopeKey: v.scopeKey, label: v.label, templateId: v.templateId }),
+    mutationFn: (v: { label: string; templateId: string; scopeKey: string; actor?: string; runAt?: string; channels?: DeliveryChannel[] }): Promise<{ id: string }> =>
+      backend.startRun({ scopeKey: v.scopeKey, label: v.label, templateId: v.templateId, runAt: v.runAt, channels: v.channels }),
     onSuccess: inv,
   })
 }
@@ -93,10 +92,6 @@ export const useToggleSchedule = () => {
 // ---- Jobs, queues, schedules ------------------------------------------------------------------
 const ACTIVE = new Set(["scheduled", "queued", "running"])
 
-export const useCommitBackendImport = () => {
-  const inv = useInvalidate([["imports"], ["jobs"], ["scopes"]])
-  return useMutation({ mutationFn: (v: { id: string; schedule: RunPlan }) => backend.commitImport(v.id, v.schedule), onSuccess: inv })
-}
 export const useJobs = (q: { page: number; pageSize: number; status?: string; q?: string }) =>
   useQuery({
     queryKey: ["jobs", q],
@@ -149,3 +144,35 @@ export const useRemoveLlmConfig = () => {
   const qc = useQueryClient()
   return useMutation({ mutationFn: (p: AiProvider) => backend.removeLlmConfig(p), onSuccess: () => qc.invalidateQueries({ queryKey: ["llmSettings"] }) })
 }
+// ---- Datasets ------------------------------------------------------------------------------
+const SAVING = new Set(["queued", "processing"])
+
+/** All datasets; polls every 2 s while any is still being saved. */
+export const useDatasets = () =>
+  useQuery({
+    queryKey: ["datasets"],
+    queryFn: () => backend.listDatasets(),
+    refetchInterval: (q) => (q.state.data?.some((d) => SAVING.has(d.status)) ? 2_000 : false),
+  })
+/** One dataset; polls every second while it is being saved (progress bar). */
+export const useDataset = (id: string | null) =>
+  useQuery({
+    queryKey: ["dataset", id],
+    queryFn: () => backend.getDataset(id!),
+    enabled: !!id,
+    refetchInterval: (q) => (q.state.data && SAVING.has(q.state.data.status) ? 1_000 : false),
+  })
+export const useDatasetRows = (id: string | null, q: DatasetRowQuery) =>
+  useQuery({ queryKey: ["datasetRows", id, q], queryFn: () => backend.datasetRows(id!, q), enabled: !!id, placeholderData: keepPreviousData })
+
+const useDatasetInvalidate = () => useInvalidate([["datasets"], ["dataset"], ["datasetRows"], ["scopes"], ["companies"], ["pams"], ["audit"]])
+export const useUploadDataset = () => {
+  const inv = useInvalidate([["datasets"], ["audit"]])
+  return useMutation({ mutationFn: (v: { file: File; label?: string }) => backend.uploadDataset(v.file, v.label), onSuccess: inv })
+}
+export const useRenameDataset = () => useMutation({ mutationFn: (v: { id: string; label: string }) => backend.renameDataset(v.id, v.label), onSuccess: useDatasetInvalidate() })
+export const useResumeDataset = () => useMutation({ mutationFn: (id: string) => backend.resumeDataset(id), onSuccess: useDatasetInvalidate() })
+export const useUpdateDatasetRow = () =>
+  useMutation({ mutationFn: (v: { id: string; companyId: string; patch: DatasetRowPatch }) => backend.updateDatasetRow(v.id, v.companyId, v.patch), onSuccess: useDatasetInvalidate() })
+export const useDeleteDatasetRows = () =>
+  useMutation({ mutationFn: (v: { id: string; companyIds: string[] }) => backend.deleteDatasetRows(v.id, v.companyIds), onSuccess: useDatasetInvalidate() })

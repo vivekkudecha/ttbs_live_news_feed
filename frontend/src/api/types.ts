@@ -241,28 +241,6 @@ export interface ImportRowIssue {
   severity: "error" | "warning"
 }
 
-export interface ImportPreview {
-  fileName: string
-  rows: number
-  newCompanies: number
-  updatedCompanies: number
-  newPams: number
-  reassignments: number
-  duplicatesMerged: number
-  issues: ImportRowIssue[]
-  sample: { company: string; pam: string; email: string; whatsapp: string; segment?: string | null; change: "new" | "updated" | "reassigned" | "unchanged" }[]
-}
-
-export interface ImportRecord {
-  id: string
-  fileName: string
-  uploadedBy: string
-  uploadedAt: string
-  rows: number
-  status: "committed" | "previewed" | "failed"
-  summary: string
-}
-
 export interface RebalanceMove {
   companyId: string
   fromPamId: string
@@ -473,19 +451,6 @@ export interface PamPage extends Page<PamCard> {
 
 export type DeliveryChannel = "email" | "whatsapp"
 
-/** How research is scheduled after an import commit. */
-export interface RunPlan {
-  mode: "none" | "now" | "at"
-  runAt?: string
-  channels: DeliveryChannel[]
-}
-
-export interface BackendImportPreview extends ImportPreview {
-  id: string
-  validRows: number
-  errorRows: number
-}
-
 export interface Job {
   id: string
   label: string
@@ -612,3 +577,64 @@ export interface LlmModelList {
 export interface JobPage extends Page<Job> {
   groups: { all: number; active: number; finished: number; attention: number }
 }
+
+// ---- Uploaded datasets (Excel → saved in the background, resumable) -------------------------------
+export type DatasetStatus = "queued" | "processing" | "completed" | "failed"
+
+export interface Dataset {
+  id: string
+  label: string
+  /** "Nov logos · 03 Nov 2026, 14:20" (IST) */
+  displayLabel: string
+  fileName: string
+  uploadedBy: string
+  uploadedAt: string
+  status: DatasetStatus
+  rowsTotal: number
+  validRows: number
+  errorRows: number
+  /** Valid rows saved so far (the resumable cursor). */
+  saved: number
+  progress: number
+  companies: number | null
+  newCompanies: number
+  updatedCompanies: number
+  reassignments: number
+  newPams: number
+  duplicatesMerged: number
+  startedAt: string | null
+  finishedAt: string | null
+  error: string | null
+  summary: string
+  issues?: ImportRowIssue[]
+}
+
+export interface DatasetRow {
+  companyId: string
+  rowNo: number
+  company: string
+  industry: string
+  segment: Segment | null
+  active: boolean
+  pamId: string | null
+  pamName: string
+  pamEmail: string
+  pamWhatsapp: string
+}
+
+export interface DatasetRowPage extends Page<DatasetRow> {
+  facets: { segment: Record<string, number>; pams: { id: string; name: string; count: number }[] }
+}
+
+export interface DatasetRowQuery {
+  page: number
+  pageSize: number
+  q?: string
+  segment?: string
+  pamId?: string
+  sort?: "company" | "pam" | "segment" | "industry" | "row"
+  desc?: boolean
+}
+
+/** Only the fields sent change; edits update the real company / PAM records. */
+export type DatasetRowPatch = Partial<Pick<DatasetRow, "company" | "industry" | "pamName" | "pamEmail" | "pamWhatsapp">> & { segment?: string | null }

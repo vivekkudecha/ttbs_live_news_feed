@@ -4,14 +4,15 @@ work → serialise. Sync handlers run in FastAPI's threadpool (SQLAlchemy is syn
 from typing import Any, Literal
 
 import redis
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy import case, func, select, text
 
+from app.api import read_models as rm
 from app.api import schemas as sch
 from app.api.deps import current_actor
 from app.core import cache
 from app.core.config import get_settings
-from app.core.errors import NotFound, PayloadTooLarge, ValidationFailed
+from app.core.errors import PayloadTooLarge, ValidationFailed
 from app.db.models import (
     NOTE_PENDING,
     RES_PENDING,
@@ -19,6 +20,7 @@ from app.db.models import (
     RUN_ACTIVE,
     AuditLog,
     Company,
+    DatasetCompany,
     ImportBatch,
     Notification,
     ResearchResult,
@@ -63,11 +65,13 @@ def health() -> dict[str, Any]:
     return out
 
 
-# --- Imports -----------------------------------------------------------------------------------
+# --- Datasets (uploaded Excel files) ------------------------------------------------------------
+# Upload → 201 immediately with status "queued"; rows are saved by a background job in resumable
+# chunks. Poll GET /imports/{id} for progress. Row edits/deletes change master company/PAM data.
 
 
 @router.post("/imports", status_code=201)
-async def upload_import(file: UploadFile = File(...), actor: str = Depends(current_actor)) -> dict[str, Any]:
+async def upload_dataset(file: UploadFile = File(...), label: str | None = Form(None), actor: str = Depends(current_actor)) -> dict[str, Any]:
     limit = get_settings().import_max_bytes
     data = await file.read(limit + 1)
     if len(data) > limit:
@@ -76,9 +80,9 @@ async def upload_import(file: UploadFile = File(...), actor: str = Depends(curre
 
     def work():
         with unit_of_work() as uow:
-            batch = imports.preview(uow, name, data, actor)
+            batch = imports.create(uow, name, data, label, actor)
             uow.after_commit(lambda: cache.bump("imports"))
-            return sch.import_preview(batch)
+            return sch.dataset_out(batch, companies=0, with_issues=True)
 
     from starlette.concurrency import run_in_threadpool
 
@@ -86,42 +90,67 @@ async def upload_import(file: UploadFile = File(...), actor: str = Depends(curre
 
 
 @router.get("/imports")
-def list_imports(actor: str = Depends(current_actor)) -> list[dict[str, Any]]:
-    def load():
-        with unit_of_work() as uow:
-            rows = uow.session.scalars(select(ImportBatch).order_by(ImportBatch.id.desc()).limit(100))
-            return [sch.import_record(b) for b in rows]
-
-    return cache.cached("imports", "list", get_settings().cache_ttl_lists, load)
+def list_datasets() -> list[dict[str, Any]]:
+    with unit_of_work() as uow:
+        batches = list(uow.session.scalars(select(ImportBatch).order_by(ImportBatch.id.desc()).limit(200)))
+        counts = dict(uow.session.execute(
+            select(DatasetCompany.import_id, func.count(DatasetCompany.id))
+            .where(DatasetCompany.import_id.in_([b.id for b in batches])).group_by(DatasetCompany.import_id)
+        ).all()) if batches else {}
+        return [sch.dataset_out(b, companies=counts.get(b.id, 0)) for b in batches]
 
 
 @router.get("/imports/{import_id}")
-def get_import(import_id: int) -> dict[str, Any]:
+def get_dataset(import_id: int) -> dict[str, Any]:
     with unit_of_work() as uow:
-        b = uow.session.get(ImportBatch, import_id)
-        if b is None:
-            raise NotFound(f"Import {import_id} not found")
-        return sch.import_preview(b) | {"status": b.status}
+        b = imports.get_dataset(uow, import_id)
+        return sch.dataset_out(b, companies=imports.member_count(uow, b.id), with_issues=True)
 
 
-@router.post("/imports/{import_id}/commit")
-def commit_import(import_id: int, body: sch.CommitIn | None = None, actor: str = Depends(current_actor)) -> dict[str, Any]:
-    body = body or sch.CommitIn()
-    plan = body.schedule
-    if plan.mode == "at" and plan.run_at is None:
-        raise ValidationFailed("schedule.runAt is required when mode is 'at'")
+@router.patch("/imports/{import_id}")
+def rename_dataset(import_id: int, body: sch.DatasetPatch, actor: str = Depends(current_actor)) -> dict[str, Any]:
     with unit_of_work() as uow:
-        batch = imports.commit(uow, import_id, actor)
-        run = None
-        if plan.mode != "none":
-            uow.session.flush()
-            run = runs.create_run(
-                uow, scope_key=f"import:{batch.id}", actor=actor, trigger="import",
-                label=f"Import · {batch.file_name}", run_at=plan.run_at if plan.mode == "at" else None,
-                channels=list(plan.channels), import_id=batch.id,
-            )
+        b = imports.rename(uow, import_id, body.label, actor)
         uow.after_commit(lambda: cache.bump("imports", "runs"))
-        return {"import": sch.import_record(batch), "run": sch.run_out(run) if run else None}
+        return sch.dataset_out(b, companies=imports.member_count(uow, b.id))
+
+
+@router.post("/imports/{import_id}/resume")
+def resume_dataset(import_id: int, actor: str = Depends(current_actor)) -> dict[str, Any]:
+    with unit_of_work() as uow:
+        b = imports.resume(uow, import_id, actor)
+        return sch.dataset_out(b, companies=imports.member_count(uow, b.id))
+
+
+@router.get("/imports/{import_id}/rows")
+def dataset_rows(
+    import_id: int, pg: tuple[int, int] = Depends(_page), q: str | None = None, segment: str | None = None,
+    pam_id: str | None = Query(None, alias="pamId"), sort: str = "company", desc: bool = False,
+) -> dict[str, Any]:
+    page, size = pg
+    with unit_of_work() as uow:
+        imports.get_dataset(uow, import_id)
+        return rm.dataset_rows(uow, import_id, page, size, q, segment, pam_id, sort, desc)
+
+
+@router.patch("/imports/{import_id}/rows/{company_id}")
+def update_dataset_row(import_id: int, company_id: int, body: sch.RowPatch, actor: str = Depends(current_actor)) -> dict[str, Any]:
+    patch = body.model_dump(exclude_unset=True)
+    if not patch:
+        raise ValidationFailed("Nothing to update")
+    with unit_of_work() as uow:
+        c = imports.update_row(uow, import_id, company_id, patch, actor)
+        uow.session.flush()
+        return rm.dataset_row(uow, import_id, c.id)
+
+
+@router.post("/imports/{import_id}/rows/delete")
+def delete_dataset_rows(import_id: int, body: sch.RowsDelete, actor: str = Depends(current_actor)) -> dict[str, int]:
+    ids = [int(x) for x in body.company_ids if str(x).isdigit()]
+    if not ids:
+        raise ValidationFailed("No valid company ids")
+    with unit_of_work() as uow:
+        return imports.delete_rows(uow, import_id, ids, actor)
 
 
 # --- Scopes & runs -----------------------------------------------------------------------------

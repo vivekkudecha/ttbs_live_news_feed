@@ -3,8 +3,11 @@
  * defaulting to http://localhost:8010.
  */
 import type {
-  BackendImportPreview,
-  ImportRecord,
+  Dataset,
+  DatasetRow,
+  DatasetRowPage,
+  DatasetRowPatch,
+  DatasetRowQuery,
   Job,
   JobNotification,
   JobPage,
@@ -13,7 +16,6 @@ import type {
   LlmModelList,
   LlmSettings,
   QueueStats,
-  RunPlan,
   Schedule,
   ScheduleInput,
   ScopeOption,
@@ -82,14 +84,20 @@ const qs = (params: Record<string, string | number | undefined>) => {
 }
 
 export const backend = {
-  // Imports
-  uploadImport: (file: File) => {
+  // Datasets (uploaded Excel). Upload returns at once; rows are saved by a background job.
+  uploadDataset: (file: File, label?: string) => {
     const fd = new FormData()
     fd.append("file", file)
-    return request<BackendImportPreview>("POST", "/imports", fd)
+    if (label?.trim()) fd.append("label", label.trim())
+    return request<Dataset>("POST", "/imports", fd)
   },
-  commitImport: (id: string, schedule: RunPlan) => request<{ import: ImportRecord; run: Job | null }>("POST", `/imports/${id}/commit`, { schedule }),
-  listImports: () => request<ImportRecord[]>("GET", "/imports"),
+  listDatasets: () => request<Dataset[]>("GET", "/imports"),
+  getDataset: (id: string) => request<Dataset>("GET", `/imports/${id}`),
+  renameDataset: (id: string, label: string) => request<Dataset>("PATCH", `/imports/${id}`, { label }),
+  resumeDataset: (id: string) => request<Dataset>("POST", `/imports/${id}/resume`),
+  datasetRows: (id: string, q: DatasetRowQuery) => request<DatasetRowPage>("GET", `/imports/${id}/rows${qs({ ...q, desc: q.desc ? "true" : undefined })}`),
+  updateDatasetRow: (id: string, companyId: string, patch: DatasetRowPatch) => request<DatasetRow>("PATCH", `/imports/${id}/rows/${companyId}`, patch),
+  deleteDatasetRows: (id: string, companyIds: string[]) => request<{ removed: number; stoppedTracking: number }>("POST", `/imports/${id}/rows/delete`, { companyIds }),
 
   // Runs (jobs)
   scopes: () => request<ScopeOption[]>("GET", "/scopes"),

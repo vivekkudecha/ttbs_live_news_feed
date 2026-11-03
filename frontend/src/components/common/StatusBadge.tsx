@@ -11,12 +11,14 @@ export type AnyStatus =
   | "error"
   | "active"
   | "inactive"
+  | "processing"
 
 type Tone = "neutral" | "success" | "info" | "warning" | "danger" | "brand"
 
 const map: Record<AnyStatus, { label: string; tone: Tone; spin?: boolean }> = {
   scheduled: { label: "Scheduled", tone: "neutral" },
   queued: { label: "Queued", tone: "neutral" },
+  processing: { label: "Processing", tone: "info", spin: true },
   running: { label: "Running", tone: "info", spin: true },
   completed: { label: "Completed", tone: "success" },
   partial: { label: "Partial", tone: "warning" },

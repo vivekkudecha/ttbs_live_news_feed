@@ -28,6 +28,7 @@ from app.db.models import (
     RUN_RUNNING,
     Company,
     CompanyAssignment,
+    DatasetCompany,
     Notification,
     Pam,
     ResearchResult,
@@ -635,6 +636,67 @@ def search_pams(uow: UnitOfWork, q: str, limit: int, active_only: bool, exclude_
 def get_pams(uow: UnitOfWork, ids: list[str]) -> list[dict[str, Any]]:
     wanted = [i for i in (_int(x) for x in ids) if i]
     return pam_options(uow, list(uow.session.scalars(select(Pam).where(Pam.id.in_(wanted))))) if wanted else []
+
+
+# --- Dataset rows (uploaded Excel, editable grid) -----------------------------------------------------
+
+
+def _dataset_stmt(import_id: int):
+    return (
+        select(DatasetCompany.row_no, Company, Pam)
+        .join(Company, Company.id == DatasetCompany.company_id)
+        .outerjoin(Pam, Pam.id == Company.pam_id)
+        .where(DatasetCompany.import_id == import_id)
+    )
+
+
+def _dataset_row(row_no: int, c: Company, p: Pam | None) -> dict[str, Any]:
+    return {"companyId": str(c.id), "rowNo": row_no, "company": c.name, "industry": c.industry or "", "segment": c.segment,
+            "active": c.active, "pamId": str(p.id) if p else None, "pamName": p.name if p else "", "pamEmail": p.email if p else "",
+            "pamWhatsapp": (p.whatsapp or "") if p else ""}
+
+
+def dataset_rows(uow: UnitOfWork, import_id: int, page: int, size: int, q: str | None, segment: str | None,
+                 pam_id: str | None, sort: str, desc: bool) -> dict[str, Any]:
+    """One page of a dataset's rows (current master data), with facets for the grid filters."""
+    base = _dataset_stmt(import_id)
+    conds = []
+    for t in _tokens(q):
+        conds.append(or_(Company.name.ilike(f"%{t}%"), Company.industry.ilike(f"%{t}%"), Pam.name.ilike(f"%{t}%"), Pam.email.ilike(f"%{t}%")))
+    seg_cond = (Company.segment.is_(None) if segment == "none" else Company.segment == segment) if segment else None
+    pam_cond = Company.pam_id == (_int(pam_id) or 0) if pam_id else None
+
+    def counted(group_col, *extra):
+        q_ = (select(group_col, func.count(DatasetCompany.id)).select_from(DatasetCompany)
+              .join(Company, Company.id == DatasetCompany.company_id).outerjoin(Pam, Pam.id == Company.pam_id)
+              .where(DatasetCompany.import_id == import_id, *conds, *[c for c in extra if c is not None]).group_by(group_col))
+        return uow.session.execute(q_).all()
+
+    seg_facet = {(s or "none"): n for s, n in counted(Company.segment, pam_cond)}
+    pam_rows = (select(Pam.id, Pam.name, func.count(DatasetCompany.id)).select_from(DatasetCompany)
+                .join(Company, Company.id == DatasetCompany.company_id).join(Pam, Pam.id == Company.pam_id)
+                .where(DatasetCompany.import_id == import_id, *conds, *([seg_cond] if seg_cond is not None else []))
+                .group_by(Pam.id, Pam.name).order_by(Pam.name))
+    pam_facet = [{"id": str(i), "name": nm, "count": n} for i, nm, n in uow.session.execute(pam_rows)]
+
+    where = conds + [c for c in (seg_cond, pam_cond) if c is not None]
+    order = {"pam": Pam.name, "segment": Company.segment, "row": DatasetCompany.row_no, "industry": Company.industry}.get(sort, Company.name)
+    total = uow.session.scalar(
+        select(func.count(DatasetCompany.id)).select_from(DatasetCompany).join(Company, Company.id == DatasetCompany.company_id)
+        .outerjoin(Pam, Pam.id == Company.pam_id).where(DatasetCompany.import_id == import_id, *where)
+    ) or 0
+    rows = uow.session.execute(
+        base.where(*where).order_by(order.desc() if desc else order.asc(), Company.name, DatasetCompany.id).limit(size).offset(page * size)
+    ).all()
+    return {"rows": [_dataset_row(rn, c, p) for rn, c, p in rows], "total": total, "page": page, "pageSize": size,
+            "facets": {"segment": seg_facet, "pams": pam_facet}}
+
+
+def dataset_row(uow: UnitOfWork, import_id: int, company_id: int) -> dict[str, Any]:
+    row = uow.session.execute(_dataset_stmt(import_id).where(Company.id == company_id)).first()
+    if row is None:
+        raise NotFound(f"Company {company_id} is not in dataset {import_id}")
+    return _dataset_row(*row)
 
 
 # --- Live run grid ----------------------------------------------------------------------------------

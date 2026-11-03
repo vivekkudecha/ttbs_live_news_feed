@@ -83,9 +83,19 @@ def recover_stuck() -> dict[str, int]:
     s_ = get_settings()
     now = utcnow()
     stale = now - timedelta(minutes=s_.stuck_after_minutes)
-    stats = {"runs": 0, "results_running": 0, "results_pending": 0, "notifications": 0}
+    stats = {"runs": 0, "results_running": 0, "results_pending": 0, "notifications": 0, "imports": 0}
     with unit_of_work() as uow:
         s = uow.session
+        # Dataset uploads whose worker died or whose queue message was lost: resume from the cursor.
+        from app.services import imports
+
+        stuck_imports = imports.stalled(uow)
+        if stuck_imports:
+            from app.worker.tasks import process_import
+
+            uow.after_commit(lambda: [process_import.apply_async((i,)) for i in stuck_imports])
+            stats["imports"] = len(stuck_imports)
+
         # Queued runs nobody started.
         for rid in s.scalars(select(Run.id).where(Run.status == RUN_QUEUED, Run.queued_at <= now - timedelta(minutes=2)).limit(BATCH)):
             runs._enqueue_start(uow, rid)

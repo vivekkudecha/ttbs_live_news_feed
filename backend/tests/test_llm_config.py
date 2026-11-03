@@ -13,7 +13,7 @@ from app.core.config import get_settings
 from app.db.models import AuditLog, LlmProviderConfig
 from app.db.session import unit_of_work
 from app.research import providers
-from tests.conftest import GOOD_ROWS, upload
+from tests.conftest import GOOD_ROWS, research, upload
 
 PPLX = "https://api.perplexity.ai"
 GEM = "https://generativelanguage.googleapis.com"
@@ -90,7 +90,7 @@ def _cfg(body, provider):
 
 def _commit_now(client, rows=GOOD_ROWS[:1]):
     imp = upload(client, rows).json()
-    return client.post(f"/api/v1/imports/{imp['id']}/commit", json={"schedule": {"mode": "now", "channels": []}})
+    return research(client, imp["id"], [])
 
 
 # --- Perplexity -----------------------------------------------------------------------------------
@@ -101,10 +101,11 @@ def test_nothing_active_blocks_runs(client):
     assert body["active"] is None and body["mode"] == "perplexity"
     assert [p["provider"] for p in body["providers"]] == ["perplexity", "gemini"]
     imp = upload(client, GOOD_ROWS[:1]).json()
-    r = client.post(f"/api/v1/imports/{imp['id']}/commit", json={"schedule": {"mode": "now", "channels": []}})
+    r = research(client, imp["id"], [])
     assert r.status_code == 422 and r.json()["error"]["code"] == "provider_not_configured"
-    # Nothing half-done: the import was not committed either (one transaction).
-    assert client.get(f"/api/v1/imports/{imp['id']}").json()["status"] == "previewed"
+    # The dataset itself is saved independently of research; no run was created.
+    assert client.get(f"/api/v1/imports/{imp['id']}").json()["status"] == "completed"
+    assert client.get("/api/v1/runs").json()["total"] == 0
 
 
 def test_list_models_with_typed_key(client, ai):
@@ -164,8 +165,8 @@ def test_change_model_keeps_key_then_rotate_key(client, ai):
 def test_research_runs_with_saved_perplexity_key_and_model(client, ai):
     client.put("/api/v1/settings/llm/perplexity", json={"apiKey": KEY, "model": "anthropic/claude-sonnet-5"})
     r = _commit_now(client)
-    assert r.status_code == 200, r.text
-    run = client.get(f"/api/v1/runs/{r.json()['run']['id']}").json()
+    assert r.status_code == 201, r.text
+    run = client.get(f"/api/v1/runs/{r.json()["id"]}").json()
     assert run["status"] == "completed" and run["withSignal"] == 1
 
     research = [c.request for c in ai.calls if c.request.url.path == "/v1/agent" and b"web_search" in c.request.content]
@@ -214,7 +215,7 @@ def test_saving_gemini_switches_perplexity_off_and_research_uses_gemini(client, 
     assert GKEY not in r.text
 
     pplx_calls_before = len([c for c in ai.calls if c.request.url.host == "api.perplexity.ai"])
-    run_id = _commit_now(client).json()["run"]["id"]
+    run_id = _commit_now(client).json()["id"]
     run = client.get(f"/api/v1/runs/{run_id}").json()
     assert run["status"] == "completed" and run["withSignal"] == 1
     assert len([c for c in ai.calls if c.request.url.host == "api.perplexity.ai"]) == pplx_calls_before  # Perplexity untouched

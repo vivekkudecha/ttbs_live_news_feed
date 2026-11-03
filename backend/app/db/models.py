@@ -25,7 +25,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, BigId, TimestampMixin
 
 # --- Status vocabularies (kept as strings: readable in SQL, no enum migrations) ------------
-IMPORT_PREVIEWED, IMPORT_COMMITTED, IMPORT_FAILED = "previewed", "committed", "failed"
+IMPORT_PREVIEWED, IMPORT_COMMITTED, IMPORT_FAILED = "previewed", "committed", "failed"  # previewed/committed: legacy
+# Dataset upload lifecycle: queued → processing (resumable, chunked) → completed | failed
+IMPORT_QUEUED, IMPORT_PROCESSING, IMPORT_COMPLETED = "queued", "processing", "completed"
+IMPORT_ACTIVE = (IMPORT_QUEUED, IMPORT_PROCESSING)
 
 RUN_SCHEDULED = "scheduled"  # waiting for scheduled_for
 RUN_QUEUED = "queued"  # handed to the queue, start_run not yet picked up
@@ -130,8 +133,28 @@ class ImportBatch(TimestampMixin, Base):
     rows: Mapped[list[Any]] = mapped_column(default=list)
     issues: Mapped[list[Any]] = mapped_column(default=list)
     summary: Mapped[dict[str, Any]] = mapped_column(default=dict)
-    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # finished saving
     error: Mapped[str | None] = mapped_column(Text)
+    # Dataset fields: a user label, and a resumable cursor into `rows` (rows_done rows are saved;
+    # each chunk advances it in the same transaction as the rows it saved).
+    label: Mapped[str] = mapped_column(String(200), default="")
+    rows_done: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    worker_token: Mapped[str | None] = mapped_column(String(64))  # owner of the current processing lease
+    failures: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class DatasetCompany(Base):
+    """Membership: which companies an uploaded dataset contains (a company can be in several)."""
+
+    __tablename__ = "dataset_companies"
+    __table_args__ = (UniqueConstraint("import_id", "company_id", name="uq_dataset_companies_import_company"),)
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    import_id: Mapped[int] = mapped_column(ForeignKey("import_batches.id", ondelete="CASCADE"))
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"), index=True)
+    row_no: Mapped[int] = mapped_column(Integer, default=0)  # sheet row, for "row 12" references
 
 
 class Schedule(TimestampMixin, Base):

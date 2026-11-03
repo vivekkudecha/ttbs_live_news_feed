@@ -74,5 +74,12 @@ GOOD_ROWS = [
 ]
 
 
-def upload(client, rows=GOOD_ROWS, name="mapping.xlsx", headers=HEADERS):
-    return client.post("/api/v1/imports", files={"file": (name, xlsx(rows, headers), "application/octet-stream")})
+def upload(client, rows=GOOD_ROWS, name="mapping.xlsx", headers=HEADERS, label=None):
+    """Upload a dataset. Celery is eager in tests, so it is fully saved when this returns."""
+    data = {"label": label} if label else None
+    return client.post("/api/v1/imports", files={"file": (name, xlsx(rows, headers), "application/octet-stream")}, data=data)
+
+
+def research(client, dataset_id, channels=("email", "whatsapp"), **extra):
+    """Start research on a dataset (what the "Research now" step in the upload dialog does)."""
+    return client.post("/api/v1/runs", json={"scopeKey": f"import:{dataset_id}", "channels": list(channels), **extra})

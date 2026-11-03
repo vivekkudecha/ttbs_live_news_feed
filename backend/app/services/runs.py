@@ -34,6 +34,7 @@ from app.db.models import (
     RUN_SCHEDULED,
     SEGMENTS,
     Company,
+    DatasetCompany,
     ImportBatch,
     Notification,
     Pam,
@@ -56,10 +57,22 @@ def _scope_filter(scope_key: str):
     kind, _, value = scope_key.partition(":")
     if kind == "segment" and value in SEGMENTS:
         return and_(base, Company.segment == value)
-    if kind in ("pam", "import") and value.isdigit():
-        col = Company.pam_id if kind == "pam" else Company.last_import_id
-        return and_(base, col == int(value))
+    if kind == "pam" and value.isdigit():
+        return and_(base, Company.pam_id == int(value))
+    if kind == "import" and value.isdigit():  # an uploaded dataset: its member companies
+        return and_(base, Company.id.in_(select(DatasetCompany.company_id).where(DatasetCompany.import_id == int(value))))
     raise ValidationFailed(f"Unknown scope '{scope_key}'", details={"scope": scope_key})
+
+
+def dataset_label(b: ImportBatch) -> str:
+    """'Nov logos · 03 Nov 2026, 14:20' (IST)."""
+    from zoneinfo import ZoneInfo
+
+    from app.core.config import get_settings
+    from app.core.timeutil import as_utc
+
+    ts = as_utc(b.created_at).astimezone(ZoneInfo(get_settings().timezone))
+    return f"{b.label or b.file_name} · {ts:%d %b %Y, %H:%M}"
 
 
 def scope_count(uow: UnitOfWork, scope_key: str) -> int:
@@ -77,19 +90,16 @@ def scope_label(uow: UnitOfWork, scope_key: str) -> str:
         return f"PAM = {p.name if p else value}"
     if kind == "import":
         b = uow.session.get(ImportBatch, int(value))
-        return f"Import · {b.file_name if b else value}"
+        return dataset_label(b) if b else f"Dataset {value}"
     return scope_key
 
 
 def scope_options(uow: UnitOfWork) -> list[dict[str, Any]]:
+    """What a run or schedule can cover: every company, or one saved dataset (newest first)."""
     s = uow.session
     opts = [{"key": "all", "label": "All active companies", "count": scope_count(uow, "all")}]
-    for seg, n in s.execute(
-        select(Company.segment, func.count(Company.id)).where(_scope_filter("all"), Company.segment.is_not(None)).group_by(Company.segment)
-    ):
-        opts.append({"key": f"segment:{seg}", "label": f"Segment = {seg}", "count": n})
-    for b in s.scalars(select(ImportBatch).where(ImportBatch.status == "committed").order_by(ImportBatch.id.desc()).limit(5)):
-        opts.append({"key": f"import:{b.id}", "label": f"Import · {b.file_name}", "count": scope_count(uow, f"import:{b.id}")})
+    for b in s.scalars(select(ImportBatch).where(ImportBatch.status.in_(["completed", "committed"])).order_by(ImportBatch.id.desc()).limit(100)):
+        opts.append({"key": f"import:{b.id}", "label": dataset_label(b), "count": scope_count(uow, f"import:{b.id}")})
     return opts
 
 

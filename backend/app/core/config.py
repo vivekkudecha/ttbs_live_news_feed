@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     import_max_rows: int = 50_000
     import_default_country_code: str = "91"
     pam_default_capacity: int = 500
+    import_chunk_size: int = 500  # rows saved per transaction (one resumable step)
+    import_stall_seconds: int = 60  # no heartbeat for this long → the sweeper resumes the upload
+    import_max_failures: int = 5  # consecutive chunk failures before the upload is marked failed
 
     # --- Research ----------------------------------------------------------------------
     # "perplexity": the API key + model come ONLY from the database (set in the UI under

@@ -1,13 +1,13 @@
 """UI read models + account commands, end to end on a real upload → run (fake provider)."""
 
-from tests.conftest import GOOD_ROWS, upload
+from tests.conftest import GOOD_ROWS, research, upload
 
 
 def _seed(client):
     imp = upload(client).json()
-    r = client.post(f"/api/v1/imports/{imp['id']}/commit", json={"schedule": {"mode": "now", "channels": ["email", "whatsapp"]}})
-    assert r.status_code == 200, r.text
-    return r.json()["run"]["id"]
+    r = research(client, imp["id"], ["email", "whatsapp"])
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
 
 
 def _pam_id(client, email):
@@ -84,8 +84,7 @@ def test_companies_query_detail_and_reassign(client):
 
 def test_pams_query_rebalance_and_deactivate(client):
     _seed(client)
-    upload_more = upload(client, [["Tata Elxsi", "IT", "Enterprise", "", "Rohan Das", "rohan@ttbs.example", "9830033003"]]).json()
-    client.post(f"/api/v1/imports/{upload_more['id']}/commit", json={})
+    upload(client, [["Tata Elxsi", "IT", "Enterprise", "", "Rohan Das", "rohan@ttbs.example", "9830033003"]]).json()
     aarav, rohan = _pam_id(client, "aarav@ttbs.example"), _pam_id(client, "rohan@ttbs.example")
 
     pg = client.post("/api/v1/pams/query", json={"page": 0, "pageSize": 10, "sort": {"id": "load", "desc": True}}).json()
@@ -144,8 +143,7 @@ def test_finops_templates_channels_session(client):
 def test_import_keeps_assignment_history(client):
     _seed(client)
     moved = [["Pine Labs Pvt Ltd", "Fintech", "Enterprise", "", "Priya Nair", "priya@ttbs.example", "9845022002"]]
-    imp = upload(client, moved).json()
-    client.post(f"/api/v1/imports/{imp['id']}/commit", json={})
+    upload(client, moved).json()
     pine = client.get("/api/v1/companies/search?q=pine").json()[0]["id"]
     hist = client.get(f"/api/v1/companies/{pine}").json()["assignments"]
     assert [a["pamName"] for a in hist] == ["Aarav Mehta", "Priya Nair"] and hist[0]["validTo"] and hist[1]["validTo"] is None

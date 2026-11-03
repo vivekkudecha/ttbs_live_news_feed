@@ -9,7 +9,7 @@ from pydantic.alias_generators import to_camel
 from app.core.timeutil import as_utc
 from app.db.models import AuditLog, ImportBatch, LlmProviderConfig, Notification, ResearchResult, Run, Schedule
 from app.services.imports import summary_text
-from app.services.runs import EST_COST_PER_COMPANY
+from app.services.runs import EST_COST_PER_COMPANY, dataset_label
 
 
 class In(BaseModel):
@@ -17,18 +17,6 @@ class In(BaseModel):
 
 
 Channel = Literal["email", "whatsapp"]
-
-
-class RunSchedule(In):
-    """How to schedule research after an import commit (or for an ad-hoc run)."""
-
-    mode: Literal["none", "now", "at"] = "none"
-    run_at: datetime | None = None
-    channels: list[Channel] = Field(default_factory=lambda: ["email", "whatsapp"])
-
-
-class CommitIn(In):
-    schedule: RunSchedule = Field(default_factory=RunSchedule)
 
 
 class RunCreate(In):
@@ -72,38 +60,59 @@ def iso(dt: datetime | None) -> str | None:
     return as_utc(dt).isoformat() if dt else None
 
 
-def import_record(b: ImportBatch) -> dict[str, Any]:
-    return {
+_LEGACY_STATUS = {"committed": "completed", "previewed": "failed"}
+
+
+def dataset_out(b: ImportBatch, *, companies: int | None = None, with_issues: bool = False) -> dict[str, Any]:
+    """An uploaded dataset: label + timestamp, background-save progress, and what it changed."""
+    sm = b.summary or {}
+    valid = b.rows_valid or 0
+    out: dict[str, Any] = {
         "id": str(b.id),
+        "label": b.label or b.file_name,
+        "displayLabel": dataset_label(b),
         "fileName": b.file_name,
         "uploadedBy": b.uploaded_by,
         "uploadedAt": iso(b.created_at),
-        "rows": b.rows_total,
-        "status": b.status,
-        "summary": summary_text(b) if b.status == "committed" else f"{b.rows_valid} valid · {b.rows_error} with errors",
-    }
-
-
-def import_preview(b: ImportBatch) -> dict[str, Any]:
-    sm = b.summary or {}
-    return {
-        "id": str(b.id),
-        "fileName": b.file_name,
-        "rows": b.rows_total,
-        "validRows": b.rows_valid,
+        "status": _LEGACY_STATUS.get(b.status, b.status),
+        "rowsTotal": b.rows_total,
+        "validRows": valid,
         "errorRows": b.rows_error,
+        "saved": min(b.rows_done, valid) if b.status != "committed" else valid,
+        "progress": 100 if b.status in ("completed", "committed") else (round(b.rows_done * 100 / valid) if valid else 0),
+        "companies": companies,
         "newCompanies": sm.get("new_companies", 0),
         "updatedCompanies": sm.get("updated_companies", 0),
-        "newPams": sm.get("new_pams", 0),
         "reassignments": sm.get("reassignments", 0),
+        "newPams": sm.get("new_pams", 0),
         "duplicatesMerged": sm.get("duplicates_merged", 0),
-        "issues": b.issues,
-        "sample": [
-            {"company": r["company"], "pam": r["pam_name"], "email": r["pam_email"], "whatsapp": r["pam_whatsapp"],
-             "segment": r.get("segment"), "change": r["change"]}
-            for r in sm.get("sample", [])
-        ],
+        "startedAt": iso(b.started_at),
+        "finishedAt": iso(b.committed_at),
+        "error": b.error,
+        "summary": summary_text(b),
     }
+    if with_issues:
+        out["issues"] = b.issues or []
+    return out
+
+
+class DatasetPatch(In):
+    label: str = Field(min_length=1, max_length=200)
+
+
+class RowPatch(In):
+    """Row edit; only the fields sent are changed. Changes update the real company / PAM."""
+
+    company: str | None = Field(default=None, max_length=300)
+    industry: str | None = Field(default=None, max_length=200)
+    segment: str | None = Field(default=None, max_length=40)
+    pam_name: str | None = Field(default=None, max_length=200)
+    pam_email: str | None = Field(default=None, max_length=320)
+    pam_whatsapp: str | None = Field(default=None, max_length=40)
+
+
+class RowsDelete(In):
+    company_ids: list[str] = Field(min_length=1, max_length=10_000)
 
 
 def run_out(r: Run, notes: dict[str, int] | None = None) -> dict[str, Any]:

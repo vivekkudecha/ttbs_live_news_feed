@@ -6,7 +6,6 @@ import { PageHeader } from "@/components/common/PageHeader"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,40 +17,11 @@ import { useCreateSchedule, useRunScheduleNow, useSchedules, useScopeOptions, us
 import { useSession } from "@/context/session"
 import { fmtDateTime, fmtUsd } from "@/lib/format"
 import type { DeliveryChannel } from "@/api/types"
+import { DatasetPicker } from "@/components/datasets/DatasetPicker"
+import { ChannelPicker } from "@/components/datasets/ResearchPlan"
 
 const PER_LOGO_USD = 0.0125
 const RATE_PER_SEC = 45
-
-function ScopeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const scopes = useScopeOptions()
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-full">
-        <SelectValue placeholder={scopes.isLoading ? "Loading…" : "Choose companies"} />
-      </SelectTrigger>
-      <SelectContent>
-        {scopes.data?.map((s) => (
-          <SelectItem key={s.key} value={s.key}>
-            {s.label} ({s.count.toLocaleString("en-IN")})
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-}
-
-function ChannelPicker({ value, onChange }: { value: DeliveryChannel[]; onChange: (v: DeliveryChannel[]) => void }) {
-  return (
-    <div className="flex h-9 items-center gap-4">
-      {(["email", "whatsapp"] as DeliveryChannel[]).map((c) => (
-        <label key={c} className="flex items-center gap-2 text-sm">
-          <Checkbox checked={value.includes(c)} onCheckedChange={(v) => onChange(v === true ? [...value, c] : value.filter((x) => x !== c))} />
-          {c === "email" ? "Email" : "WhatsApp"}
-        </label>
-      ))}
-    </div>
-  )
-}
 
 export function NewRunDialog() {
   const { user } = useSession()
@@ -63,6 +33,7 @@ export function NewRunDialog() {
   const [scope, setScope] = useState("all")
   const [templateId, setTemplateId] = useState("t1")
   const [windowDays, setWindowDays] = useState("10")
+  const [channels, setChannels] = useState<DeliveryChannel[]>(["email", "whatsapp"])
   const chosen = scopes.data?.find((s) => s.key === scope)
   const count = chosen?.count ?? 0
   const est = count * PER_LOGO_USD
@@ -70,7 +41,7 @@ export function NewRunDialog() {
 
   const submit = async () => {
     try {
-      const run = await start.mutateAsync({ label: `Ad-hoc: ${chosen?.label ?? scope}`, templateId, scopeKey: scope, actor: user!.username })
+      const run = await start.mutateAsync({ label: `Ad-hoc: ${chosen?.label ?? scope}`, templateId, scopeKey: scope, actor: user!.username, channels })
       setOpen(false)
       toast.success(`Run #${run.id} queued`, {
         description: `${count.toLocaleString("en-IN")} companies · results stream in as each logo finishes`,
@@ -88,17 +59,14 @@ export function NewRunDialog() {
           <Play /> Run now
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Start an ad-hoc research run</DialogTitle>
+          <DialogTitle>Start a research run</DialogTitle>
           <DialogDescription>Uses the same pipeline as scheduled runs: research → per-PAM priority → digest delivery.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-1">
-          <div className="grid gap-2">
-            <Label>Scope</Label>
-            <ScopeSelect value={scope} onChange={setScope} />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <DatasetPicker value={scope} onChange={setScope} />
+          <div className="grid gap-4 sm:grid-cols-3">
             <div className="grid gap-2">
               <Label>Output template</Label>
               <Select value={templateId} onValueChange={setTemplateId}>
@@ -115,6 +83,10 @@ export function NewRunDialog() {
               </Select>
             </div>
             <div className="grid gap-2">
+              <Label>Send digests by</Label>
+              <ChannelPicker value={channels} onChange={setChannels} />
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="window">Research window (days)</Label>
               <Input id="window" type="number" min={1} max={60} value={windowDays} onChange={(e) => setWindowDays(e.target.value)} disabled />
             </div>
@@ -129,7 +101,7 @@ export function NewRunDialog() {
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={start.isPending || count === 0}>
+          <Button onClick={submit} disabled={start.isPending || count === 0 || channels.length === 0}>
             {start.isPending && <Loader2 className="animate-spin" />}
             Queue run
           </Button>
@@ -173,7 +145,7 @@ function NewScheduleDialog() {
           <Plus /> New schedule
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>New recurring schedule</DialogTitle>
           <DialogDescription>The dispatcher checks every 30 seconds and starts a research job when the schedule is due.</DialogDescription>
@@ -193,10 +165,7 @@ function NewScheduleDialog() {
               <Input id="stime" type="time" value={runAtTime} onChange={(e) => setRunAtTime(e.target.value)} />
             </div>
           </div>
-          <div className="grid gap-2">
-            <Label>Companies</Label>
-            <ScopeSelect value={scopeKey} onChange={setScopeKey} />
-          </div>
+          <DatasetPicker value={scopeKey} onChange={setScopeKey} />
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label>Send digests by</Label>

@@ -137,6 +137,14 @@ def send_notification(notification_id: int) -> str:
     return notifications.deliver(notification_id)
 
 
+@celery_app.task(name="maintenance.process_import")
+def process_import(import_id: int) -> str:
+    """Save an uploaded dataset in resumable chunks (see services/imports.process)."""
+    from app.services import imports
+
+    return imports.process(import_id)
+
+
 @celery_app.task(name="maintenance.tick")
 def tick() -> dict:
     return maintenance.tick()
