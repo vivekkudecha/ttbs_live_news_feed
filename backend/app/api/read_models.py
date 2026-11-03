@@ -1,0 +1,768 @@
+"""Read models for the UI pages (dashboard, signals, companies, PAMs, digest, live grid, FinOps).
+
+Each function returns exactly the JSON shape in frontend/src/api/types.ts, computed from the
+database. Lists are filtered, sorted and paged server-side; per-row aggregates are fetched in
+bulk (no N+1 queries).
+"""
+
+import re
+from calendar import monthrange
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import case, func, or_, select
+
+from app.api import schemas as sch
+from app.core.config import get_settings
+from app.core.errors import NotFound
+from app.core.timeutil import utcnow
+from app.db.models import (
+    RES_FAILED,
+    RES_SIGNAL,
+    RES_TERMINAL,
+    RUN_COMPLETED,
+    RUN_PARTIAL,
+    RUN_RUNNING,
+    Company,
+    CompanyAssignment,
+    Notification,
+    Pam,
+    ResearchResult,
+    Run,
+    Schedule,
+)
+from app.db.session import UnitOfWork
+from app.research.prompts import INSTRUCTIONS, OUTPUT_RULES, PROMPT_VERSION, TTBS_CONTEXT, build_prompt
+from app.services import accounts, runs
+
+# Which signal to act on first (same weights the UI used).
+CAT_WEIGHT = {"Contract": 6, "Funding": 5, "Cybersecurity": 5, "Expansion": 4, "Leadership": 3, "Digital": 3}
+CODE = {"pending": 0, "running": 0, "signal": 1, "no_signal": 2, "failed": 3}
+PROVIDER_LABEL = {"perplexity": "Perplexity", "gemini": "Google Gemini", "fake": "Offline (fake)"}
+_BOLD = re.compile(r"\*\*(.+?)\*\*")
+_PAREN_URL = re.compile(r"\(\s*https?://[^)]*\)")
+_URL = re.compile(r"https?://\S+")
+
+
+def _int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _aware(dt: datetime) -> datetime:
+    """SQLite returns naive datetimes; everything is stored in UTC."""
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
+def _tokens(q: str | None) -> list[str]:
+    return [t for t in (q or "").lower().split() if t]
+
+
+def _ui_status(s: str) -> str:
+    return "pending" if s in ("pending", "running") else s
+
+
+def plain(text: str | None, limit: int = 240) -> str:
+    """Markdown-free one-liner for previews: no URLs, no bold markers."""
+    if not text:
+        return ""
+    t = _URL.sub("", _PAREN_URL.sub("", text)).replace("**", "")
+    t = re.sub(r"\s+", " ", t).strip(" .;-")
+    return t if len(t) <= limit else t[: limit - 1].rsplit(" ", 1)[0] + "…"
+
+
+def offerings(text: str | None) -> list[str]:
+    out: list[str] = []
+    for m in _BOLD.findall(text or ""):
+        m = m.strip()
+        if m and len(m) <= 40 and m not in out:
+            out.append(m)
+    return out[:4]
+
+
+def result_ui(r: ResearchResult) -> dict[str, Any]:
+    return {
+        "id": str(r.id),
+        "runId": str(r.run_id),
+        "companyId": str(r.company_id),
+        "pamId": str(r.pam_id) if r.pam_id else "",
+        "status": _ui_status(r.status),
+        "category": r.category,
+        "keySignals": r.key_signals,
+        "opportunity": r.opportunity,
+        "outreach": r.outreach,
+        "sources": r.sources or [],
+        "offerings": offerings(r.opportunity),
+        "tokensIn": r.tokens_in,
+        "tokensOut": r.tokens_out,
+        "cost": round(r.cost or 0, 4),
+        "latencyMs": r.latency_ms,
+        "cached": r.cached,
+        "error": r.error,
+    }
+
+
+def _page(rows: list[Any], page: int, size: int) -> dict[str, Any]:
+    page, size = max(page, 0), max(1, min(size, get_settings().max_page_size))
+    return {"rows": rows[page * size: (page + 1) * size], "total": len(rows), "page": page, "pageSize": size}
+
+
+# --- Runs -------------------------------------------------------------------------------------
+
+
+@dataclass
+class Agg:
+    total: int = 0
+    done: int = 0
+    signal: int = 0
+    failed: int = 0
+
+
+def _aggs(uow: UnitOfWork, run_ids: list[int]) -> dict[int, dict[int, Agg]]:
+    out: dict[int, dict[int, Agg]] = defaultdict(lambda: defaultdict(Agg))
+    if not run_ids:
+        return out
+    q = (select(ResearchResult.run_id, ResearchResult.pam_id, ResearchResult.status, func.count(ResearchResult.id))
+         .where(ResearchResult.run_id.in_(run_ids), ResearchResult.pam_id.is_not(None))
+         .group_by(ResearchResult.run_id, ResearchResult.pam_id, ResearchResult.status))
+    for run_id, pam_id, status, n in uow.session.execute(q):
+        a = out[run_id][pam_id]
+        a.total += n
+        if status in RES_TERMINAL:
+            a.done += n
+        if status == RES_SIGNAL:
+            a.signal += n
+        if status == RES_FAILED:
+            a.failed += n
+    return out
+
+
+def _notes(uow: UnitOfWork, run_ids: list[int]) -> dict[int, dict[tuple[int, str], str]]:
+    out: dict[int, dict[tuple[int, str], str]] = defaultdict(dict)
+    if run_ids:
+        for run_id, pam_id, channel, status in uow.session.execute(
+            select(Notification.run_id, Notification.pam_id, Notification.channel, Notification.status).where(Notification.run_id.in_(run_ids))
+        ):
+            out[run_id][(pam_id, channel)] = status
+    return out
+
+
+def _delivery(run: Run, pam_id: int, channel: str, notes: dict[tuple[int, str], str]) -> str:
+    if channel not in (run.channels or []):
+        return "skipped"
+    st = notes.get((pam_id, channel))
+    return {"sent": "sent", "failed": "failed", "skipped": "skipped"}.get(st or "", "pending")
+
+
+def _job(run: Run, pam_id: int, a: Agg, notes: dict[tuple[int, str], str]) -> dict[str, Any]:
+    if a.done >= a.total:
+        status = "partial" if a.failed else "completed"
+    elif run.status in ("cancelled", "failed"):
+        status = run.status
+    elif a.done:
+        status = "running"
+    else:
+        status = "scheduled" if run.status == "scheduled" else "queued"
+    return {"pamId": str(pam_id), "status": status, "total": a.total, "done": a.done, "withSignal": a.signal,
+            "email": _delivery(run, pam_id, "email", notes), "whatsapp": _delivery(run, pam_id, "whatsapp", notes)}
+
+
+def _window(run: Run) -> tuple[str, str]:
+    if run.window_start and run.window_end:
+        return run.window_start.isoformat(), run.window_end.isoformat()
+    s = get_settings()
+    end = run.scheduled_for.astimezone(ZoneInfo(s.timezone)).date()
+    return (end - timedelta(days=s.research_window_days)).isoformat(), end.isoformat()
+
+
+def _rate(uow: UnitOfWork, run: Run) -> float | None:
+    if run.status != RUN_RUNNING:
+        return None
+    since = utcnow() - timedelta(seconds=30)
+    n = uow.session.scalar(select(func.count(ResearchResult.id)).where(ResearchResult.run_id == run.id, ResearchResult.finished_at >= since)) or 0
+    return round(n / 30, 1)
+
+
+def run_summaries(uow: UnitOfWork, run_list: list[Run]) -> list[dict[str, Any]]:
+    ids = [r.id for r in run_list]
+    aggs, notes = _aggs(uow, ids), _notes(uow, ids)
+    out = []
+    for r in run_list:
+        jobs = [_job(r, pid, a, notes[r.id]) for pid, a in aggs[r.id].items()]
+        ws, we = _window(r)
+        out.append({
+            "id": str(r.id),
+            "label": r.label,
+            "trigger": "scheduled" if r.trigger == "scheduled" else "adhoc",
+            "scheduleId": str(r.schedule_id) if r.schedule_id else None,
+            "templateId": r.template_id,
+            "templateVersion": PROMPT_VERSION,
+            "provider": PROVIDER_LABEL.get(r.provider, r.provider),
+            "model": r.model,
+            "windowStart": ws,
+            "windowEnd": we,
+            "startedAt": sch.iso(r.started_at or r.scheduled_for),
+            "finishedAt": sch.iso(r.finished_at),
+            "status": r.status,
+            "triggeredBy": r.triggered_by,
+            "companies": r.total,
+            "done": r.done,
+            "withSignal": r.with_signal,
+            "failed": r.failed,
+            "cacheHits": r.cache_hits,
+            "cost": round(r.cost or 0, 2),
+            "estimatedCost": round(r.total * runs.EST_COST_PER_COMPANY, 2),
+            "pamJobsTotal": len(jobs),
+            "pamJobsDone": sum(j["done"] >= j["total"] for j in jobs),
+            "emailSent": sum(j["email"] == "sent" for j in jobs),
+            "emailFailed": sum(j["email"] == "failed" for j in jobs),
+            "whatsappSent": sum(j["whatsapp"] == "sent" for j in jobs),
+            "whatsappEligible": sum(j["whatsapp"] != "skipped" for j in jobs),
+            "ratePerSec": _rate(uow, r),
+        })
+    return out
+
+
+def list_runs(uow: UnitOfWork, limit: int = 100) -> list[dict[str, Any]]:
+    return run_summaries(uow, list(uow.session.scalars(select(Run).order_by(Run.id.desc()).limit(limit))))
+
+
+def _get_run(uow: UnitOfWork, run_id: str | int) -> Run:
+    run = uow.session.get(Run, _int(run_id) or 0)
+    if run is None:
+        raise NotFound(f"Run {run_id} not found")
+    return run
+
+
+def get_run(uow: UnitOfWork, run_id: str) -> dict[str, Any]:
+    return run_summaries(uow, [_get_run(uow, run_id)])[0]
+
+
+def _jobs_with_names(uow: UnitOfWork, run: Run) -> list[dict[str, Any]]:
+    aggs, notes = _aggs(uow, [run.id]), _notes(uow, [run.id])
+    pams = {p.id: p for p in uow.session.scalars(select(Pam).where(Pam.id.in_(list(aggs[run.id]))))}
+    rows = []
+    for pid, a in aggs[run.id].items():
+        p = pams.get(pid)
+        rows.append(_job(run, pid, a, notes[run.id]) | {"pamName": p.name if p else "Unknown", "_hay": f"{p.name} {p.email}".lower() if p else ""})
+    return rows
+
+
+def _attention(j: dict[str, Any]) -> bool:
+    return j["email"] == "failed" or j["whatsapp"] == "failed" or j["status"] == "partial"
+
+
+def pam_jobs(uow: UnitOfWork, run_id: str, page: int, size: int, search: str | None, flt: str | None) -> dict[str, Any]:
+    run = _get_run(uow, run_id)
+    toks = _tokens(search)
+    rows = []
+    for j in _jobs_with_names(uow, run):
+        if toks and not all(t in j["_hay"] for t in toks):
+            continue
+        finished = j["done"] >= j["total"]
+        if (flt == "attention" and not _attention(j)) or (flt == "done" and not finished) or (flt == "in_progress" and finished):
+            continue
+        rows.append({k: v for k, v in j.items() if k != "_hay"})
+    rows.sort(key=lambda j: (j["email"] != "failed", j["pamName"].lower()))
+    return _page(rows, page, size)
+
+
+# --- Signals & digest ----------------------------------------------------------------------------
+
+
+def _ranks(uow: UnitOfWork, run_id: int) -> dict[int, int]:
+    """Priority rank of each signal within its PAM (1 = act first): category weight, then name."""
+    by_pam: dict[int, list[tuple[int, str, int]]] = defaultdict(list)
+    for rid, pam_id, cat, name in uow.session.execute(
+        select(ResearchResult.id, ResearchResult.pam_id, ResearchResult.category, Company.name)
+        .join(Company, Company.id == ResearchResult.company_id)
+        .where(ResearchResult.run_id == run_id, ResearchResult.status == RES_SIGNAL)
+    ):
+        by_pam[pam_id or 0].append((-CAT_WEIGHT.get(cat or "", 0), name.lower(), rid))
+    ranks = {}
+    for items in by_pam.values():
+        for i, (_, _, rid) in enumerate(sorted(items), start=1):
+            ranks[rid] = i
+    return ranks
+
+
+def _signal_row(r: ResearchResult, company: Company, pam_name: str | None, rank: int | None) -> dict[str, Any]:
+    row = result_ui(r) | {"companyName": company.name, "industry": company.industry or "", "pamName": pam_name or "Unassigned"}
+    row["priority"] = {"rank": rank, "whyNow": plain(r.key_signals), "action": plain(r.outreach)} if rank else None
+    return row
+
+
+def _weight_expr():
+    return case((ResearchResult.status != RES_SIGNAL, 0), else_=case(CAT_WEIGHT, value=ResearchResult.category, else_=0))
+
+
+def query_signals(uow: UnitOfWork, q: dict[str, Any]) -> dict[str, Any]:
+    counts = {"signal": 0, "no_signal": 0, "failed": 0, "pending": 0, "all": 0}
+    run = uow.session.get(Run, _int(q.get("runId")) or 0)
+    page, size = int(q.get("page") or 0), int(q.get("pageSize") or 50)
+    if run is None:
+        return {"rows": [], "total": 0, "page": page, "pageSize": size, "counts": counts}
+    conds = [ResearchResult.run_id == run.id]
+    if q.get("pamId"):
+        conds.append(ResearchResult.pam_id == (_int(q["pamId"]) or 0))
+    for t in _tokens(q.get("search")):
+        conds.append(or_(Company.name.ilike(f"%{t}%"), Company.industry.ilike(f"%{t}%")))
+    if q.get("category") and q["category"] != "all":
+        conds += [ResearchResult.status == RES_SIGNAL, ResearchResult.category == q["category"]]
+
+    for status, n in uow.session.execute(
+        select(ResearchResult.status, func.count(ResearchResult.id))
+        .join(Company, Company.id == ResearchResult.company_id).where(*conds).group_by(ResearchResult.status)
+    ):
+        counts[_ui_status(status)] += n
+        counts["all"] += n
+    st = q.get("status")
+    if st and st != "all":
+        conds.append(ResearchResult.status.in_(["pending", "running"] if st == "pending" else [st]))
+    total = sum(v for k, v in counts.items() if k != "all") if not st or st == "all" else counts.get(st, 0)
+
+    rows = uow.session.execute(
+        select(ResearchResult, Company, Pam.name)
+        .join(Company, Company.id == ResearchResult.company_id)
+        .outerjoin(Pam, Pam.id == ResearchResult.pam_id)
+        .where(*conds)
+        .order_by(_weight_expr().desc(), Company.name, ResearchResult.id)
+        .limit(size).offset(page * size)
+    ).all()
+    ranks = _ranks(uow, run.id) if any(r.status == RES_SIGNAL for r, _, _ in rows) else {}
+    return {"rows": [_signal_row(r, c, pn, ranks.get(r.id)) for r, c, pn in rows], "total": total, "page": page, "pageSize": size, "counts": counts}
+
+
+def digest(uow: UnitOfWork, run_id: str, pam_id: str) -> dict[str, Any] | None:
+    run = uow.session.get(Run, _int(run_id) or 0)
+    pam = uow.session.get(Pam, _int(pam_id) or 0)
+    if run is None or pam is None:
+        return None
+    ranks = _ranks(uow, run.id)
+    rows = [
+        _signal_row(r, c, pam.name, ranks.get(r.id))
+        for r, c in uow.session.execute(
+            select(ResearchResult, Company).join(Company, Company.id == ResearchResult.company_id)
+            .where(ResearchResult.run_id == run.id, ResearchResult.pam_id == pam.id)
+        )
+    ]
+    rows.sort(key=lambda x: ((x["priority"] or {}).get("rank") or 999, x["companyName"].lower()))
+    aggs, notes = _aggs(uow, [run.id]), _notes(uow, [run.id])
+    a = aggs[run.id].get(pam.id)
+    return {"run": run_summaries(uow, [run])[0], "pam": pam_options(uow, [pam])[0], "rows": rows,
+            "job": _job(run, pam.id, a, notes[run.id]) if a else None}
+
+
+# --- Dashboard ------------------------------------------------------------------------------------
+
+
+def _latest_finished(uow: UnitOfWork) -> Run | None:
+    return uow.session.scalars(
+        select(Run).where(Run.status.in_([RUN_COMPLETED, RUN_PARTIAL])).order_by(Run.finished_at.desc(), Run.id.desc()).limit(1)
+    ).first()
+
+
+def _month_start(now: datetime) -> datetime:
+    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _month_spend(uow: UnitOfWork) -> float:
+    start = _month_start(utcnow())
+    return round(uow.session.scalar(select(func.coalesce(func.sum(ResearchResult.cost), 0.0)).where(ResearchResult.finished_at >= start)) or 0.0, 2)
+
+
+def _next_schedule(uow: UnitOfWork) -> dict[str, Any] | None:
+    s = uow.session.scalars(select(Schedule).where(Schedule.enabled.is_(True)).order_by(Schedule.next_run_at).limit(1)).first()
+    return sch.schedule_out(s) | {"scope": runs.scope_label(uow, s.scope_key)} if s else None
+
+
+def dashboard(uow: UnitOfWork, pam_id: str | None) -> dict[str, Any]:
+    pid = _int(pam_id) if pam_id else None
+    company_q = select(func.count(Company.id)).where(Company.active.is_(True))
+    if pid:
+        company_q = company_q.where(Company.pam_id == pid)
+    base = {
+        "logos": uow.session.scalar(company_q) or 0,
+        "activePams": uow.session.scalar(select(func.count(Pam.id)).where(Pam.active.is_(True))) or 0,
+        "recentRuns": list_runs(uow, 4),
+        "nextSchedule": _next_schedule(uow),
+        "monthSpend": _month_spend(uow),
+        "monthBudget": get_settings().monthly_budget_usd,
+    }
+    run = _latest_finished(uow) or uow.session.scalars(select(Run).order_by(Run.id.desc()).limit(1)).first()
+    if run is None:
+        return base | {"latestRun": None, "scoped": 0, "signals": 0, "emailSent": 0, "emailTotal": 0, "whatsappSent": 0, "whatsappTotal": 0,
+                       "topPriority": [], "byCategory": [], "deliveryAttention": []}
+
+    summary = run_summaries(uow, [run])[0]
+    conds = [ResearchResult.run_id == run.id] + ([ResearchResult.pam_id == pid] if pid else [])
+    rows = uow.session.execute(
+        select(ResearchResult.id, ResearchResult.pam_id, ResearchResult.status, ResearchResult.category, ResearchResult.key_signals,
+               ResearchResult.outreach, Company.id, Company.name, Pam.name)
+        .join(Company, Company.id == ResearchResult.company_id).outerjoin(Pam, Pam.id == ResearchResult.pam_id).where(*conds)
+    ).all()
+    signals = [r for r in rows if r[2] == RES_SIGNAL]
+    ranks = _ranks(uow, run.id) if signals else {}
+    candidates = signals if pid else [r for r in signals if ranks.get(r[0]) == 1]
+    if pid:
+        candidates.sort(key=lambda r: (ranks.get(r[0], 999), r[7].lower()))
+    else:
+        candidates.sort(key=lambda r: (-CAT_WEIGHT.get(r[3] or "", 0), r[7].lower()))
+    top = [{"runId": str(run.id), "pamId": str(r[1] or ""), "companyId": str(r[6]), "rank": ranks.get(r[0], 1), "whyNow": plain(r[4]),
+            "action": plain(r[5]), "companyName": r[7], "category": r[3], "pamName": r[8] or "Unassigned"} for r in candidates[:6]]
+
+    jobs = _jobs_with_names(uow, run)
+    for j in jobs:
+        j.pop("_hay", None)
+    if pid:
+        mine = [j for j in jobs if j["pamId"] == str(pid)]
+        attention = mine
+        email = (sum(j["email"] == "sent" for j in mine), len(mine))
+        wa = (sum(j["whatsapp"] == "sent" for j in mine), sum(j["whatsapp"] != "skipped" for j in mine))
+    else:
+        attention = sorted([j for j in jobs if _attention(j)], key=lambda j: (j["email"] != "failed", j["pamName"].lower()))[:6]
+        email = (summary["emailSent"], summary["pamJobsTotal"])
+        wa = (summary["whatsappSent"], summary["whatsappEligible"])
+    return base | {
+        "latestRun": summary,
+        "scoped": len(rows),
+        "signals": len(signals),
+        "emailSent": email[0], "emailTotal": email[1], "whatsappSent": wa[0], "whatsappTotal": wa[1],
+        "topPriority": top,
+        "byCategory": [{"category": c, "count": n} for c, n in Counter(r[3] or "Other" for r in signals).most_common()],
+        "deliveryAttention": attention,
+    }
+
+
+# --- Companies ------------------------------------------------------------------------------------
+
+
+def pam_options(uow: UnitOfWork, pams: list[Pam]) -> list[dict[str, Any]]:
+    loads, segments = accounts.pam_profiles(uow)
+    cap = get_settings().pam_default_capacity
+    return [{"id": str(p.id), "name": p.name, "email": p.email, "segment": segments.get(p.id), "active": p.active,
+             "load": loads.get(p.id, 0), "capacity": cap} for p in pams]
+
+
+def _signal_stats(uow: UnitOfWork, company_ids: list[int] | None = None) -> dict[int, tuple[int, date | None]]:
+    q = (select(ResearchResult.company_id, func.count(ResearchResult.id), func.max(Run.window_end))
+         .join(Run, Run.id == ResearchResult.run_id).where(ResearchResult.status == RES_SIGNAL).group_by(ResearchResult.company_id))
+    if company_ids is not None:
+        q = q.where(ResearchResult.company_id.in_(company_ids))
+    return {cid: (n, last) for cid, n, last in uow.session.execute(q)}
+
+
+def _cycles(uow: UnitOfWork, company_ids: list[int]) -> dict[int, list[dict[str, str]]]:
+    out: dict[int, list[dict[str, str]]] = defaultdict(list)
+    if company_ids:
+        for cid, run_id, status in uow.session.execute(
+            select(ResearchResult.company_id, ResearchResult.run_id, ResearchResult.status)
+            .where(ResearchResult.company_id.in_(company_ids), ResearchResult.status.in_(RES_TERMINAL)).order_by(ResearchResult.run_id)
+        ):
+            out[cid].append({"runId": str(run_id), "status": status})
+    return out
+
+
+def _latest_map(uow: UnitOfWork) -> dict[int, tuple[str, str | None]]:
+    run = _latest_finished(uow)
+    if run is None:
+        return {}
+    return {cid: (_ui_status(st), cat) for cid, st, cat in uow.session.execute(
+        select(ResearchResult.company_id, ResearchResult.status, ResearchResult.category).where(ResearchResult.run_id == run.id))}
+
+
+def _company_rows(rows: list[tuple], latest: dict, stats: dict, cycles: dict) -> list[dict[str, Any]]:
+    out = []
+    for cid, name, industry, segment, pam_id, pam_name in rows:
+        st, cat = latest.get(cid, ("none", None))
+        n, last = stats.get(cid, (0, None))
+        out.append({"id": str(cid), "name": name, "industry": industry or "", "segment": segment, "pamId": str(pam_id) if pam_id else None,
+                    "pamName": pam_name or "Unassigned", "latestStatus": st, "latestCategory": cat if st == "signal" else None,
+                    "signals": n, "lastSignal": last.isoformat() if last else None, "cycles": cycles.get(cid, [])})
+    return out
+
+
+def query_companies(uow: UnitOfWork, q: dict[str, Any]) -> dict[str, Any]:
+    t0 = datetime.now(UTC)
+    stmt = (select(Company.id, Company.name, Company.industry, Company.segment, Company.pam_id, Pam.name, Pam.email)
+            .outerjoin(Pam, Pam.id == Company.pam_id).where(Company.active.is_(True)))
+    if q.get("scopePamId"):
+        stmt = stmt.where(Company.pam_id == (_int(q["scopePamId"]) or 0))
+    pam_set = {_int(x) for x in q.get("pamIds") or []} or None
+    segments = set(q.get("segments") or []) or None
+    latest_set = set(q.get("latest") or []) or None
+    toks = _tokens(q.get("search"))
+    latest = _latest_map(uow)
+
+    facets: dict[str, dict[str, int]] = {"segment": {}, "latest": {}}
+    hits = []
+    for cid, name, industry, segment, pam_id, pam_name, pam_email in uow.session.execute(stmt):
+        if toks:
+            hay = f"{name} {industry or ''} {pam_name or ''} {pam_email or ''}".lower()
+            if not all(t in hay for t in toks):
+                continue
+        if pam_set and pam_id not in pam_set:
+            continue
+        lst = latest.get(cid, ("none", None))[0]
+        seg_key = segment or "Unspecified"
+        m_s = not segments or seg_key in segments
+        m_l = not latest_set or lst in latest_set
+        if m_l:
+            facets["segment"][seg_key] = facets["segment"].get(seg_key, 0) + 1
+        if m_s:
+            facets["latest"][lst] = facets["latest"].get(lst, 0) + 1
+        if m_s and m_l:
+            hits.append((cid, name, industry, segment, pam_id, pam_name))
+
+    sort = q.get("sort") or {"id": "name", "desc": False}
+    desc = bool(sort.get("desc"))
+    if sort.get("id") in ("signals", "lastSignal"):
+        stats_all = _signal_stats(uow)
+        idx = 0 if sort["id"] == "signals" else 1
+        hits.sort(key=lambda h: h[1].lower())
+        hits.sort(key=lambda h: (stats_all.get(h[0], (0, None))[idx] or (0 if idx == 0 else date.min)), reverse=desc)
+    elif sort.get("id") == "pam":
+        hits.sort(key=lambda h: ((h[5] or "~").lower(), h[1].lower()), reverse=desc)
+    elif sort.get("id") == "segment":
+        hits.sort(key=lambda h: ((h[3] or "~").lower(), h[1].lower()), reverse=desc)
+    else:
+        hits.sort(key=lambda h: h[1].lower(), reverse=desc)
+
+    pg = _page(hits, int(q.get("page") or 0), int(q.get("pageSize") or 50))
+    ids = [h[0] for h in pg["rows"]]
+    pg["rows"] = _company_rows(pg["rows"], latest, _signal_stats(uow, ids), _cycles(uow, ids))
+    took = (datetime.now(UTC) - t0).total_seconds() * 1000
+    return pg | {"facets": facets, "tookMs": round(took, 1)}
+
+
+def search_companies(uow: UnitOfWork, q: str, limit: int) -> list[dict[str, Any]]:
+    stmt = select(Company).where(Company.active.is_(True))
+    for t in _tokens(q):
+        stmt = stmt.where(or_(Company.name.ilike(f"%{t}%"), Company.industry.ilike(f"%{t}%")))
+    return [{"id": str(c.id), "name": c.name, "industry": c.industry or ""} for c in uow.session.scalars(stmt.order_by(Company.name).limit(min(limit, 100)))]
+
+
+def company_detail(uow: UnitOfWork, company_id: str) -> dict[str, Any] | None:
+    c = uow.session.get(Company, _int(company_id) or 0)
+    if c is None:
+        return None
+    pam = uow.session.get(Pam, c.pam_id) if c.pam_id else None
+    row = _company_rows([(c.id, c.name, c.industry, c.segment, c.pam_id, pam.name if pam else None)],
+                        _latest_map(uow), _signal_stats(uow, [c.id]), _cycles(uow, [c.id]))[0]
+    cycles = [
+        {"result": result_ui(r), "run": {"id": str(run.id), "windowStart": _window(run)[0], "windowEnd": _window(run)[1], "templateVersion": PROMPT_VERSION}}
+        for r, run in uow.session.execute(
+            select(ResearchResult, Run).join(Run, Run.id == ResearchResult.run_id)
+            .where(ResearchResult.company_id == c.id, ResearchResult.status.in_(RES_TERMINAL)).order_by(Run.id.desc())
+        )
+    ]
+    history = [
+        {"id": str(a.id), "companyId": str(c.id), "pamId": str(a.pam_id), "validFrom": sch.iso(a.valid_from), "validTo": sch.iso(a.valid_to),
+         "reason": a.reason, "actor": a.actor, "pamName": pname}
+        for a, pname in uow.session.execute(
+            select(CompanyAssignment, Pam.name).join(Pam, Pam.id == CompanyAssignment.pam_id)
+            .where(CompanyAssignment.company_id == c.id).order_by(CompanyAssignment.valid_from, CompanyAssignment.id)
+        )
+    ]
+    if not history and pam:  # owned since before history was recorded
+        history = [{"id": f"a-{c.id}", "companyId": str(c.id), "pamId": str(pam.id), "validFrom": sch.iso(c.created_at), "validTo": None,
+                    "reason": "import", "actor": "import", "pamName": pam.name}]
+    return {"company": row, "pam": pam_options(uow, [pam])[0] if pam else None, "cycles": cycles, "assignments": history}
+
+
+# --- PAMs -----------------------------------------------------------------------------------------
+
+
+def _pam_card(p: Pam, loads: dict[int, int], segments: dict[int, str | None], cap: int) -> dict[str, Any]:
+    return {"id": str(p.id), "name": p.name, "email": p.email, "whatsapp": p.whatsapp or "", "segment": segments.get(p.id), "active": p.active,
+            "capacity": cap, "notifyEmail": p.notify_email, "notifyWhatsapp": p.notify_whatsapp, "load": loads.get(p.id, 0)}
+
+
+def query_pams(uow: UnitOfWork, q: dict[str, Any]) -> dict[str, Any]:
+    t0 = datetime.now(UTC)
+    loads, segments = accounts.pam_profiles(uow)
+    cap = get_settings().pam_default_capacity
+    toks = _tokens(q.get("search"))
+    seg_f = set(q.get("segments") or []) or None
+    st_f = set(q.get("status") or []) or None
+    facets: dict[str, dict[str, int]] = {"segment": {}, "status": {}}
+    hits, active_total = [], 0
+    for p in uow.session.scalars(select(Pam)):
+        st = "active" if p.active else "inactive"
+        active_total += p.active
+        seg = segments.get(p.id) or "Unspecified"
+        if toks and not all(t in f"{p.name} {p.email} {seg}".lower() for t in toks):
+            continue
+        m_s, m_t = not seg_f or seg in seg_f, not st_f or st in st_f
+        if m_t:
+            facets["segment"][seg] = facets["segment"].get(seg, 0) + 1
+        if m_s:
+            facets["status"][st] = facets["status"].get(st, 0) + 1
+        if m_s and m_t:
+            hits.append(p)
+    sort = q.get("sort") or {"id": "name", "desc": False}
+    desc = bool(sort.get("desc"))
+    hits.sort(key=lambda p: p.name.lower())
+    if sort.get("id") == "load":
+        hits.sort(key=lambda p: loads.get(p.id, 0), reverse=desc)
+    elif sort.get("id") == "segment":
+        hits.sort(key=lambda p: segments.get(p.id) or "~", reverse=desc)
+    elif sort.get("id") == "status":
+        hits.sort(key=lambda p: not p.active, reverse=desc)
+    elif desc:
+        hits.reverse()
+    pg = _page(hits, int(q.get("page") or 0), int(q.get("pageSize") or 50))
+    pg["rows"] = [_pam_card(p, loads, segments, cap) for p in pg["rows"]]
+    return pg | {"facets": facets, "activeTotal": active_total, "tookMs": round((datetime.now(UTC) - t0).total_seconds() * 1000, 1)}
+
+
+def search_pams(uow: UnitOfWork, q: str, limit: int, active_only: bool, exclude_id: str | None) -> list[dict[str, Any]]:
+    stmt = select(Pam)
+    if active_only:
+        stmt = stmt.where(Pam.active.is_(True))
+    if exclude_id and _int(exclude_id):
+        stmt = stmt.where(Pam.id != _int(exclude_id))
+    for t in _tokens(q):
+        stmt = stmt.where(or_(Pam.name.ilike(f"%{t}%"), Pam.email.ilike(f"%{t}%")))
+    return pam_options(uow, list(uow.session.scalars(stmt.order_by(Pam.name).limit(min(limit, 100)))))
+
+
+def get_pams(uow: UnitOfWork, ids: list[str]) -> list[dict[str, Any]]:
+    wanted = [i for i in (_int(x) for x in ids) if i]
+    return pam_options(uow, list(uow.session.scalars(select(Pam).where(Pam.id.in_(wanted))))) if wanted else []
+
+
+# --- Live run grid ----------------------------------------------------------------------------------
+
+
+def live_snapshot(uow: UnitOfWork, run_id: str) -> dict[str, Any]:
+    run = _get_run(uow, run_id)
+    rows = uow.session.execute(
+        select(ResearchResult.company_id, Company.name, Pam.name, ResearchResult.status)
+        .join(Company, Company.id == ResearchResult.company_id).outerjoin(Pam, Pam.id == ResearchResult.pam_id)
+        .where(ResearchResult.run_id == run.id).order_by(Pam.name, Company.name, ResearchResult.id)
+    ).all()
+    statuses = [CODE.get(st, 0) for *_, st in rows]
+    aggs = _aggs(uow, [run.id])[run.id]
+    return {
+        "runId": str(run.id), "companyIds": [str(r[0]) for r in rows], "names": [r[1] for r in rows], "pamNames": [r[2] or "Unassigned" for r in rows],
+        "statuses": statuses, "total": len(rows), "done": sum(s != 0 for s in statuses), "signals": statuses.count(1), "failed": statuses.count(3),
+        "pamsTotal": len(aggs), "pamsDone": sum(a.done >= a.total for a in aggs.values()),
+        "startedAt": sch.iso(run.started_at or run.scheduled_for), "status": run.status, "serverTime": sch.iso(utcnow()),
+    }
+
+
+def live_changes(uow: UnitOfWork, run_id: str, since: datetime | None) -> dict[str, Any]:
+    """Results finished since `since` (server clock) plus run counters. Clients pass back
+    `serverTime` from the previous response, so client clock skew does not matter."""
+    run = _get_run(uow, run_id)
+    now = utcnow()
+    since = since or now - timedelta(seconds=10)
+    items = [
+        {"companyId": str(cid), "s": CODE.get(st, 0), "category": cat if st == RES_SIGNAL else None, "at": int(_aware(fin).timestamp() * 1000)}
+        for cid, st, cat, fin in uow.session.execute(
+            select(ResearchResult.company_id, ResearchResult.status, ResearchResult.category, ResearchResult.finished_at)
+            .where(ResearchResult.run_id == run.id, ResearchResult.finished_at > since - timedelta(seconds=2), ResearchResult.status.in_(RES_TERMINAL))
+            .order_by(ResearchResult.finished_at)
+        )
+    ]
+    aggs = _aggs(uow, [run.id])[run.id]
+    return {"items": items, "done": run.done, "signals": run.with_signal, "failed": run.failed,
+            "pamsDone": sum(a.done >= a.total for a in aggs.values()), "ratePerSec": _rate(uow, run) or 0, "status": run.status, "serverTime": sch.iso(now)}
+
+
+# --- FinOps, templates, channels ---------------------------------------------------------------------
+
+
+def finops(uow: UnitOfWork) -> dict[str, Any]:
+    s = get_settings()
+    now = utcnow()
+    month = _month_start(now)
+    first = (month - timedelta(days=150)).replace(day=1)
+    by_month: dict[str, float] = defaultdict(float)
+    spend = signals = cached = 0.0
+    paid_costs: list[float] = []
+    for fin, cost, status, was_cached in uow.session.execute(
+        select(ResearchResult.finished_at, ResearchResult.cost, ResearchResult.status, ResearchResult.cached).where(ResearchResult.finished_at >= first)
+    ):
+        fin = _aware(fin)
+        by_month[fin.strftime("%Y-%m")] += cost or 0
+        if fin >= month:
+            spend += cost or 0
+            signals += status == RES_SIGNAL
+            cached += bool(was_cached)
+            if not was_cached and cost:
+                paid_costs.append(cost)
+    series, cursor = [], first
+    while cursor <= month:
+        series.append({"month": cursor.strftime("%b"), "llm": round(by_month.get(cursor.strftime("%Y-%m"), 0.0), 2), "messaging": 0})
+        cursor = (cursor + timedelta(days=32)).replace(day=1)
+    days = monthrange(now.year, now.month)[1]
+    elapsed = max((now - month).total_seconds() / 86400, 1)
+    by_provider = [
+        {"name": PROVIDER_LABEL.get(p, p), "cost": round(c or 0, 2)}
+        for p, c in uow.session.execute(
+            select(Run.provider, func.sum(ResearchResult.cost)).join(Run, Run.id == ResearchResult.run_id)
+            .where(ResearchResult.finished_at >= month).group_by(Run.provider)
+        )
+    ]
+    avg = sum(paid_costs) / len(paid_costs) if paid_costs else 0
+    return {
+        "monthBudget": s.monthly_budget_usd,
+        "monthSpend": round(spend, 2),
+        "forecast": round(spend / elapsed * days, 2),
+        "softLimitPct": s.budget_soft_limit_pct,
+        "costPerSignal": round(spend / signals, 4) if signals else 0,
+        "cacheSavings": round(cached * avg, 2),
+        "series": series,
+        "byProvider": by_provider,
+    }
+
+
+def templates(uow: UnitOfWork) -> list[dict[str, Any]]:
+    from app.services import llm_config
+
+    active = llm_config.get_active_row(uow)
+    prompt = build_prompt("{company}", "{window_start}", "{window_end}")
+    return [{
+        "id": "t1",
+        "name": "TTBS account signals",
+        "description": "Built-in research prompt (backend/app/research/prompts.py). Edit the file and bump PROMPT_VERSION to change it.",
+        "activeVersion": PROMPT_VERSION,
+        "versions": [{
+            "version": PROMPT_VERSION,
+            "createdAt": "2026-11-03T00:00:00+05:30",
+            "createdBy": "system",
+            "note": "Ported from test.py; adds a Category line",
+            "windowDays": get_settings().research_window_days,
+            "model": active.model if active else "",
+            "preset": "medium",
+            "ttbsContext": TTBS_CONTEXT.strip(),
+            "researchPrompt": prompt.split("TTBS context:")[0].strip(),
+            "relevanceRules": OUTPUT_RULES.strip(),
+            "sections": [
+                {"key": "category", "label": "Category", "instruction": "One category, or None when no qualifying news"},
+                {"key": "key_signals", "label": "Key signals", "instruction": "1-2 short lines; TTBS-relevant signals only"},
+                {"key": "opportunity", "label": "Opportunity type", "instruction": "1-2 short lines; TTBS offering"},
+                {"key": "outreach", "label": "Recommended outreach approach", "instruction": "1-2 short lines; sales action"},
+            ],
+            "priorityPrompt": INSTRUCTIONS,
+            "excelColumns": ["Company", "Category", "Key signals", "Opportunity type", "Recommended outreach approach", "Sources"],
+        }],
+    }]
+
+
+def channels() -> list[dict[str, Any]]:
+    s = get_settings()
+
+    def one(key: str, name: str, adapter: str) -> dict[str, Any]:
+        console = adapter == "console"
+        return {"key": key, "name": name, "type": key, "adapter": f"{adapter} adapter", "status": "connected", "enabled": True,
+                "details": {"Delivery": "Logged to the worker console (not sent)" if console else adapter, "Max attempts": str(s.notify_max_attempts)}}
+
+    return [one("email", "Email", s.notify_email_adapter), one("whatsapp", "WhatsApp", s.notify_whatsapp_adapter)]

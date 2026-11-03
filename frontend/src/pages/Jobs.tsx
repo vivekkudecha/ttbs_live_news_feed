@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { Ban, BellRing, CircleDollarSign, Database, ExternalLink, ListChecks, Loader2, RotateCcw, Zap } from "lucide-react"
+import { Ban, BellRing, CircleDollarSign, ExternalLink, ListChecks, Loader2, RotateCcw, Zap } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { EmptyState } from "@/components/common/EmptyState"
 import { RichText, safeHref } from "@/components/common/RichText"
@@ -13,22 +13,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { backendEnabled, errorMessage } from "@/api/http"
+import { errorMessage } from "@/api/http"
 import { useCancelJob, useJob, useJobNotifications, useJobResults, useJobs, useQueues, useResendNotification, useRetryFailed } from "@/api/hooks"
-import { can, useSession } from "@/context/session"
 import { fmtDateTime, fmtUsd, pct } from "@/lib/format"
 import type { Job, JobNotification, JobResult } from "@/api/types"
 
 const ACTIVE = new Set(["scheduled", "queued", "running"])
 const asStatus = (s: string): AnyStatus => (s === "sending" ? "running" : (s as AnyStatus))
-
-function Disabled() {
-  return (
-    <EmptyState icon={Database} title="Backend not connected">
-      Set <code>VITE_API_URL</code> in <code>frontend/.env.development</code> and start the API server to see real research jobs.
-    </EmptyState>
-  )
-}
 
 function JobProgress({ job }: { job: Job }) {
   const p = pct(job.done, job.companies)
@@ -78,7 +69,6 @@ function QueueCard() {
 export function JobsList() {
   const [page, setPage] = useState(0)
   const jobs = useJobs({ page, pageSize: 25 })
-  if (!backendEnabled) return <Disabled />
   const total = jobs.data?.total ?? 0
 
   return (
@@ -217,7 +207,7 @@ function ResultRow({ r }: { r: JobResult }) {
   )
 }
 
-function NotificationsTable({ jobId, live, editable }: { jobId: string; live: boolean; editable: boolean }) {
+function NotificationsTable({ jobId, live }: { jobId: string; live: boolean }) {
   const notes = useJobNotifications(jobId, live)
   const resend = useResendNotification()
   const rows: JobNotification[] = notes.data ?? []
@@ -252,7 +242,7 @@ function NotificationsTable({ jobId, live, editable }: { jobId: string; live: bo
               {n.status === "pending" && n.nextAttemptAt && ` · next try ${fmtDateTime(n.nextAttemptAt)}`}
             </TableCell>
             <TableCell className="pr-5 text-right">
-              {editable && (n.status === "failed" || n.status === "sent" || (n.status === "skipped" && n.recipient)) && (
+              {(n.status === "failed" || n.status === "sent" || (n.status === "skipped" && n.recipient)) && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -277,8 +267,6 @@ function NotificationsTable({ jobId, live, editable }: { jobId: string; live: bo
 
 export function JobDetail() {
   const { id = "" } = useParams()
-  const { user } = useSession()
-  const editable = can.runJobs(user!.role)
   const job = useJob(id)
   const [tab, setTab] = useState("all")
   const [view, setView] = useState<"results" | "digests">("results")
@@ -288,7 +276,6 @@ export function JobDetail() {
   const cancel = useCancelJob()
   const retry = useRetryFailed()
 
-  if (!backendEnabled) return <Disabled />
   if (job.isError) return <EmptyState icon={ListChecks} title="Job not available">{errorMessage(job.error)}</EmptyState>
   if (!job.data) return <Loader2 className="mx-auto mt-16 size-6 animate-spin text-muted-foreground" />
   const j = job.data
@@ -302,7 +289,7 @@ export function JobDetail() {
         description={j.label}
         back={{ to: "/jobs", label: "All jobs" }}
         actions={
-          editable && (
+          (
             <>
               {ACTIVE.has(j.status) && (
                 <Button
@@ -385,7 +372,7 @@ export function JobDetail() {
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
           {view === "digests" ? (
-            <NotificationsTable jobId={j.id} live={live} editable={editable} />
+            <NotificationsTable jobId={j.id} live={live} />
           ) : (
             <Table className="min-w-[52rem]">
               <TableHeader>

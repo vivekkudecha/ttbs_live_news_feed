@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     cache_ttl_job_finished: int = 300
     cache_ttl_lists: int = 15
 
+    # --- FinOps --------------------------------------------------------------------------
+    monthly_budget_usd: float = 500.0
+    budget_soft_limit_pct: int = 80
+
     timezone: str = "Asia/Kolkata"
     max_page_size: int = 200
 

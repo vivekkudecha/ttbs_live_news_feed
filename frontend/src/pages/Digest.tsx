@@ -9,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useDigest, useRuns } from "@/api/hooks"
+import { useDigest, usePamJobs, useRuns } from "@/api/hooks"
+import { EmptyState } from "@/components/common/EmptyState"
 import { PamPicker } from "@/components/pickers/Pickers"
-import { useSession } from "@/context/session"
 import { fmtDate } from "@/lib/format"
 import type { PamOption, PriorityAction, ResearchResult, Run } from "@/api/types"
 
@@ -124,17 +124,17 @@ function WhatsAppPreview({ d }: { d: DigestData }) {
         <div className="flex size-8 items-center justify-center rounded-full bg-white/20 text-xs font-semibold">TS</div>
         <div className="leading-tight">
           <p className="text-sm font-semibold">TTBS Signals</p>
-          <p className="text-[11px] opacity-75">Business account</p>
+          <p className="text-xs opacity-75">Business account</p>
         </div>
       </div>
       <div className="space-y-2 p-3 pb-6">
-        <div className="mx-auto w-fit rounded-md bg-white/80 px-2 py-0.5 text-[11px] text-neutral-600 dark:bg-white/10 dark:text-neutral-300">TODAY</div>
-        <div className="max-w-[88%] rounded-lg rounded-tl-none bg-white p-1.5 text-[13px] text-neutral-900 shadow-sm dark:bg-[#202c33] dark:text-neutral-100">
+        <div className="mx-auto w-fit rounded-md bg-white/80 px-2 py-0.5 text-xs text-neutral-600 dark:bg-white/10 dark:text-neutral-300">TODAY</div>
+        <div className="max-w-[88%] rounded-lg rounded-tl-none bg-white p-1.5 text-[14.5px] text-neutral-900 shadow-sm dark:bg-[#202c33] dark:text-neutral-100">
           <div className="flex items-center gap-2 rounded-md bg-neutral-100 p-2.5 dark:bg-[#111b21]">
             <FileSpreadsheet className="size-8 text-[#1d6f42]" />
             <div className="min-w-0">
-              <p className="truncate text-[13px] font-medium">{d.pam.name.split(" ")[0]}_signals_{d.run.id}.xlsx</p>
-              <p className="text-[11px] text-neutral-500">XLSX · 48 kB</p>
+              <p className="truncate text-[14.5px] font-medium">{d.pam.name.split(" ")[0]}_signals_{d.run.id}.xlsx</p>
+              <p className="text-xs text-neutral-500">XLSX · 48 kB</p>
             </div>
           </div>
           <div className="space-y-1.5 px-1.5 pb-1 pt-2">
@@ -151,11 +151,11 @@ function WhatsAppPreview({ d }: { d: DigestData }) {
               </p>
             ))}
             <p>Full details are in the attached file and your email.</p>
-            <p className="flex items-center justify-end gap-1 text-[11px] text-neutral-500">
+            <p className="flex items-center justify-end gap-1 text-xs text-neutral-500">
               06:43 <CheckCheck className="size-3.5 text-sky-500" />
             </p>
           </div>
-          <div className="border-t border-neutral-200 py-1.5 text-center text-[13px] font-medium text-sky-600 dark:border-white/10">Open TTBS Signals</div>
+          <div className="border-t border-neutral-200 py-1.5 text-center text-[14.5px] font-medium text-sky-600 dark:border-white/10">Open TTBS Signals</div>
         </div>
       </div>
     </div>
@@ -214,17 +214,31 @@ function ExcelPreview({ d }: { d: DigestData }) {
 }
 
 export default function Digest() {
-  const { user } = useSession()
-  const isPam = user!.role === "pam"
   const runs = useRuns()
   const completed = runs.data?.filter((r) => r.status === "completed" || r.status === "partial") ?? []
   const [runId, setRunId] = useState("")
-  const [pamSel, setPamSel] = useState("p1")
+  const [pamSel, setPamSel] = useState("")
   const activeRun = completed.find((r) => r.id === runId) ?? completed[0]
-  const pamId = isPam ? user!.pamId! : pamSel
+  // Default to the first PAM in the run until one is picked.
+  const firstJob = usePamJobs(pamSel ? "" : (activeRun?.id ?? ""), { page: 0, pageSize: 1 })
+  const pamId = pamSel || firstJob.data?.rows[0]?.pamId || ""
   const digest = useDigest(activeRun?.id ?? "", pamId)
 
-  if (!activeRun || !digest.data) return <Skeleton className="h-96" />
+  if (runs.isLoading) return <Skeleton className="h-96" />
+  if (!activeRun)
+    return (
+      <EmptyState icon={Mail} title="No digests yet">
+        A digest is built for each PAM when a research run finishes. Upload the Excel under Imports and run research to see one here.
+      </EmptyState>
+    )
+  if (!digest.data) {
+    if (digest.isLoading || firstJob.isLoading) return <Skeleton className="h-96" />
+    return (
+      <EmptyState icon={Mail} title="Nothing to show for this PAM">
+        This PAM had no logos in the selected run.
+      </EmptyState>
+    )
+  }
 
   const { rows, pam, job } = digest.data
   const names = new Map(rows.map((r) => [r.companyId, r.companyName]))
@@ -243,7 +257,7 @@ export default function Digest() {
   return (
     <div>
       <PageHeader
-        title={isPam ? "My digest" : "PAM digest preview"}
+        title="PAM digest preview"
         description="Exactly what the PAM receives: one email with all their logos plus an Excel attachment, and a WhatsApp summary with the same file."
       />
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -259,7 +273,7 @@ export default function Digest() {
             ))}
           </SelectContent>
         </Select>
-        {!isPam && <PamPicker value={pamSel} onChange={(id) => id && setPamSel(id)} className="w-64" />}
+        <PamPicker value={pamId} onChange={(id) => id && setPamSel(id)} className="w-64" />
         {job && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground sm:ml-auto">
             <Mail className="size-3.5" /> <StatusBadge status={job.email} />

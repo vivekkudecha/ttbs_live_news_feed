@@ -21,7 +21,7 @@ export function StatCard({
   return (
     <Card className="gap-0">
       <CardContent className="space-y-3">
-        <p className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground">
+        <p className="flex items-center gap-2 text-[0.9375rem] text-muted-foreground">
           <Icon className="size-4" strokeWidth={1.75} />
           {label}
         </p>

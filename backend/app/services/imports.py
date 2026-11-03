@@ -22,7 +22,7 @@ from app.core.errors import Conflict, NotFound, PayloadTooLarge, UnsupportedMedi
 from app.core.timeutil import utcnow
 from app.db.models import IMPORT_COMMITTED, IMPORT_PREVIEWED, SEGMENTS, Company, ImportBatch, Pam
 from app.db.session import LOCK_IMPORT_COMMIT, UnitOfWork
-from app.services import audit
+from app.services import assignments, audit
 
 HEADER_ALIASES: dict[str, tuple[str, ...]] = {
     "company": ("company", "company name", "logo", "account", "account name"),
@@ -307,12 +307,14 @@ def commit(uow: UnitOfWork, import_id: int, actor: str) -> ImportBatch:
             p.name, p.whatsapp, p.active = r["pam_name"], r["pam_whatsapp"], True
     s.flush()
 
+    now = utcnow()
     for r in diffed:
         p = pams[r["pam_email"]]
         c = companies.get(r["name_key"])
         if c is None:
             c = Company(name=r["company"], name_key=r["name_key"], industry=r["industry"], segment=r["segment"], active=True)
             s.add(c)
+            s.flush()
         else:
             c.name = r["company"]
             if r["industry"]:
@@ -320,7 +322,8 @@ def commit(uow: UnitOfWork, import_id: int, actor: str) -> ImportBatch:
             if r["segment"]:
                 c.segment = r["segment"]
             c.active = True
-        c.pam_id = p.id
+        # Ownership changes are recorded with history (company_assignments).
+        assignments.assign(uow, c, p.id, reason="import", actor=actor, ts=now)
         c.last_import_id = batch.id
     s.flush()
 

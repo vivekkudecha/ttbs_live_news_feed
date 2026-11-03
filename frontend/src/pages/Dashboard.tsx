@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom"
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { ArrowRight, Building2, CalendarClock, Mail, MessageCircle, Radio, Wallet, Zap } from "lucide-react"
+import { ArrowRight, Building2, CalendarClock, CheckCircle2, Mail, MessageCircle, Radio, Wallet, Zap } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { StatCard } from "@/components/common/StatCard"
 import { StatusBadge } from "@/components/common/StatusBadge"
@@ -11,17 +11,50 @@ import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useDashboard } from "@/api/hooks"
-import { can, useSession } from "@/context/session"
+import { useSession } from "@/context/session"
 import { fmtDate, fmtDateTime, fmtUsd, pct } from "@/lib/format"
 import { NewRunDialog } from "./Schedules"
 
 const n = (x: number) => x.toLocaleString("en-IN")
 
+/** Before the first research run: what to do next, in order. */
+function GettingStarted({ greeting, logos }: { greeting: string; logos: number }) {
+  const steps = [
+    { done: logos > 0, title: "Upload the company → PAM Excel", hint: logos > 0 ? `${n(logos)} logos imported` : "Imports → upload .xlsx or .csv", to: "/imports" },
+    { done: false, title: "Connect a research AI", hint: "Providers & channels → Perplexity or Gemini key + model", to: "/integrations" },
+    { done: false, title: "Run research", hint: "Research now, at a time, or on a recurring schedule", to: "/schedules" },
+  ]
+  return (
+    <div className="space-y-8">
+      <PageHeader title={greeting} description="No research has run yet. Results, signals and digests appear here after the first run." actions={logos > 0 ? <NewRunDialog /> : undefined} />
+      <Card>
+          <CardHeader>
+            <CardTitle>Get started</CardTitle>
+            <CardDescription>Three steps to the first signals</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {steps.map((s, i) => (
+              <Link key={s.title} to={s.to} className="flex items-center gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/60">
+                <span className={`flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-medium ${s.done ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
+                  {s.done ? <CheckCircle2 className="size-4" /> : i + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{s.title}</p>
+                  <p className="text-xs text-muted-foreground">{s.hint}</p>
+                </div>
+                <ArrowRight className="size-4 text-muted-foreground" />
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { user } = useSession()
-  const isPam = user!.role === "pam"
   // One summary call: the server aggregates 10k logos / 5k PAMs; the UI renders a handful of numbers.
-  const dash = useDashboard(isPam ? user!.pamId : undefined)
+  const dash = useDashboard()
   const d = dash.data
 
   if (!d) {
@@ -43,6 +76,8 @@ export default function Dashboard() {
   const hour = new Date().getHours()
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
 
+  if (!latest) return <GettingStarted greeting={`${greeting}, ${user!.name.split(" ")[0]}`} logos={d.logos} />
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -59,12 +94,12 @@ export default function Dashboard() {
                 View signals <ArrowRight />
               </Link>
             </Button>
-            {can.runJobs(user!.role) && <NewRunDialog />}
+            <NewRunDialog />
           </>
         }
       />
 
-      {live && !isPam && (
+      {live && (
         <Link to={`/runs/${live.id}`} className="flex flex-wrap items-center gap-3 rounded-lg border border-brand-blue/25 bg-brand-blue/[0.06] px-4 py-3 text-sm transition-colors hover:bg-brand-blue/10">
           <span className="relative flex size-2.5">
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand-blue opacity-60" />
@@ -81,31 +116,27 @@ export default function Dashboard() {
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
-        <StatCard icon={Building2} label={isPam ? "My logos" : "Logos tracked"} value={n(d.logos)} hint={isPam ? "Assigned to you" : `${n(d.activePams)} active PAMs`} />
+        <StatCard icon={Building2} label="Logos tracked" value={n(d.logos)} hint={`${n(d.activePams)} active PAMs`} />
         <StatCard icon={Zap} tone="info" label="Actionable signals" value={n(d.signals)} hint={`${pct(d.signals, d.scoped)}% of logos had a TTBS-relevant trigger`} />
         <StatCard
           icon={Mail}
           tone="success"
-          label={isPam ? "Digest delivery" : "Digests delivered"}
-          value={isPam ? (d.emailSent ? "Delivered" : "Pending") : `${n(d.emailSent)}/${n(d.emailTotal)}`}
+          label="Digests delivered"
+          value={`${n(d.emailSent)}/${n(d.emailTotal)}`}
           hint={
             <span className="inline-flex items-center gap-1">
               <MessageCircle className="size-3" /> WhatsApp {n(d.whatsappSent)}/{n(d.whatsappTotal)}
             </span>
           }
         />
-        {isPam ? (
-          <StatCard icon={CalendarClock} tone="warning" label="Next digest" value={d.nextSchedule ? fmtDate(d.nextSchedule.nextRunAt) : "—"} hint={d.nextSchedule ? `Every ${d.nextSchedule.intervalDays} days at ${d.nextSchedule.runAtTime} IST` : "No schedule"} />
-        ) : (
-          <StatCard icon={Wallet} tone="warning" label="Spend this month" value={fmtUsd(d.monthSpend)} hint={`${pct(d.monthSpend, d.monthBudget)}% of ${fmtUsd(d.monthBudget, 0)} budget`} />
-        )}
+        <StatCard icon={Wallet} tone="warning" label="Spend this month" value={fmtUsd(d.monthSpend)} hint={`${pct(d.monthSpend, d.monthBudget)}% of ${fmtUsd(d.monthBudget, 0)} budget`} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
         <Card>
           <CardHeader>
-            <CardTitle>{isPam ? "Your priority actions" : "Top priority actions"}</CardTitle>
-            <CardDescription>{isPam ? "Ranked by strength and recency of trigger" : "Strongest #1 action across all PAMs"} · {latest.id}</CardDescription>
+            <CardTitle>Top priority actions</CardTitle>
+            <CardDescription>Strongest #1 action across all PAMs · {latest.id}</CardDescription>
             <CardAction>
               <Button variant="ghost" size="sm" asChild>
                 <Link to="/digest">
@@ -115,7 +146,7 @@ export default function Dashboard() {
             </CardAction>
           </CardHeader>
           <CardContent className="-mx-2 space-y-0.5">
-            {d.topPriority.length === 0 && <p className="px-2 text-sm text-muted-foreground">No signals for your logos in this cycle.</p>}
+            {d.topPriority.length === 0 && <p className="px-2 text-sm text-muted-foreground">No signals in this cycle.</p>}
             {d.topPriority.map((p, i) => (
               <Link key={`${p.pamId}-${p.companyId}`} to={`/companies?company=${p.companyId}`} className="group flex gap-4 rounded-lg px-3 py-3.5 transition-colors hover:bg-muted/60">
                 <span className="tabular mt-0.5 w-5 shrink-0 text-right text-sm font-medium text-muted-foreground">{i + 1}</span>
@@ -123,7 +154,7 @@ export default function Dashboard() {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate text-sm font-medium group-hover:text-brand-blue">{p.companyName}</p>
                     <CategoryBadge category={p.category} />
-                    {!isPam && <span className="text-xs text-muted-foreground">· {p.pamName}</span>}
+                    <span className="text-xs text-muted-foreground">· {p.pamName}</span>
                   </div>
                   <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                     <span className="text-foreground/80">Why now?</span> {p.whyNow}
@@ -149,16 +180,16 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={d.byCategory} layout="vertical" margin={{ left: 8, right: 40, top: 4, bottom: 4 }} barCategoryGap={6}>
                   <CartesianGrid horizontal={false} stroke="var(--border)" />
-                  <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickFormatter={(v) => n(v)} />
-                  <YAxis type="category" dataKey="category" width={96} tickLine={false} axisLine={false} tick={{ fill: "var(--foreground)", fontSize: 12 }} />
+                  <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 13 }} tickFormatter={(v) => n(v)} />
+                  <YAxis type="category" dataKey="category" width={96} tickLine={false} axisLine={false} tick={{ fill: "var(--foreground)", fontSize: 13 }} />
                   <Tooltip
                     cursor={{ fill: "var(--muted)", opacity: 0.6 }}
-                    contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--popover-foreground)" }}
+                    contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, color: "var(--popover-foreground)" }}
                     formatter={(v: number) => [`${n(v)} signals`, ""]}
                     separator=""
                   />
                   <Bar dataKey="count" fill="var(--chart-1)" radius={[0, 4, 4, 0]} maxBarSize={22}>
-                    <LabelList dataKey="count" position="right" formatter={(v: number) => n(v)} style={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
+                    <LabelList dataKey="count" position="right" formatter={(v: number) => n(v)} style={{ fill: "var(--muted-foreground)", fontSize: 13 }} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -167,7 +198,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {!isPam && (
+      {(
         <div className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
           <Card>
             <CardHeader>

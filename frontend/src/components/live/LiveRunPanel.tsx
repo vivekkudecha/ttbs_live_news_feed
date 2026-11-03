@@ -143,7 +143,7 @@ export function LiveRunPanel({ runId, finishedAt, onOpenCompany }: { runId: stri
                           <span className="block truncate text-xs text-muted-foreground">{r.pamName}</span>
                         </span>
                         {r.s === 1 ? <CategoryBadge category={r.category} /> : <span className="text-xs text-muted-foreground">{r.s === 3 ? "Failed" : "No signal"}</span>}
-                        <span className="tabular w-12 shrink-0 text-right text-[11px] text-muted-foreground">{ago(r.at, now)}</span>
+                        <span className="tabular w-12 shrink-0 text-right text-xs text-muted-foreground">{ago(r.at, now)}</span>
                       </button>
                     </li>
                   ))}

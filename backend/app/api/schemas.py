@@ -246,7 +246,6 @@ def audit_out(a: AuditLog) -> dict[str, Any]:
         "id": str(a.id),
         "ts": iso(a.ts),
         "actor": a.actor,
-        "role": "system" if a.actor in ("system", "scheduler") else "admin",
         "action": a.action,
         "entity": f"{a.entity_type.capitalize()} {a.entity_id}" if a.entity_id else a.entity_type.capitalize(),
         "detail": ", ".join(f"{k}: {v}" for k, v in (a.detail or {}).items() if v not in (None, "", [], {})),

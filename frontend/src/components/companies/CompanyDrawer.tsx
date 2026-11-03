@@ -12,7 +12,6 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCompanyDetail } from "@/api/hooks"
-import { can, useSession } from "@/context/session"
 import { fmtDate, fmtUsd, initials } from "@/lib/format"
 import type { AssignmentReason } from "@/api/types"
 
@@ -40,11 +39,9 @@ export function CompanyDrawer({
   onOpenChange: (open: boolean) => void
   onReassign: (companyId: string) => void
 }) {
-  const { user } = useSession()
   const navigate = useNavigate()
   // One server call returns the company, its PAM, every research cycle and ownership history.
   const detail = useCompanyDetail(companyId)
-  const manage = can.manageData(user!.role)
   const company = detail.data?.company
   const pam = detail.data?.pam
   const cycles = detail.data?.cycles.map(({ result, run }) => ({ r: result, run })) ?? []
@@ -113,16 +110,15 @@ export function CompanyDrawer({
   })
 
   const ready = company && detail.data
-  const restricted = company && user!.role === "pam" && company.pamId !== user!.pamId
 
   return (
     <Sheet open={!!companyId} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl data-[side=right]:lg:max-w-2xl">
         <div className="h-1 shrink-0 bg-brand-gradient" aria-hidden="true" />
-        {!ready || restricted ? (
+        {!ready ? (
           <div className="space-y-4 p-6">
             <SheetTitle className="sr-only">Company details</SheetTitle>
-            {restricted ? <p className="text-sm text-muted-foreground">You don't have access to this company.</p> : <Skeleton className="h-40" />}
+            <Skeleton className="h-40" />
           </div>
         ) : (
           <>
@@ -134,7 +130,7 @@ export function CompanyDrawer({
                 <div className="min-w-0 space-y-1.5">
                   <SheetTitle className="text-xl font-medium leading-tight tracking-tight">{company.name}</SheetTitle>
                   <SheetDescription asChild>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.8125rem]">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.9375rem]">
                       <span className="inline-flex items-center gap-1.5">
                         <Building2 className="size-3.5" />
                         {company.industry}
@@ -154,7 +150,7 @@ export function CompanyDrawer({
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Avatar className="size-7">
-                  <AvatarFallback className="bg-accent text-[11px] font-medium text-accent-foreground">{pam ? initials(pam.name) : "?"}</AvatarFallback>
+                  <AvatarFallback className="bg-accent text-xs font-medium text-accent-foreground">{pam ? initials(pam.name) : "?"}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 leading-tight">
                   <p className="font-medium">{pam?.name ?? "Unassigned"}</p>
@@ -243,7 +239,7 @@ export function CompanyDrawer({
               <Button variant="outline" size="sm" onClick={() => navigate("/signals")}>
                 <Zap /> Signals feed
               </Button>
-              {manage && (
+              {(
                 <>
                   <Button variant="outline" size="sm" onClick={() => onReassign(company.id)}>
                     <UserRound /> Reassign PAM

@@ -1,6 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "./client"
-import { backend, backendEnabled } from "./http"
+import { backend } from "./http"
 import type { AiProvider, CompanyQuery, PamQuery, RunPlan, ScheduleInput, SignalQuery } from "./types"
 
 /*
@@ -9,8 +9,7 @@ import type { AiProvider, CompanyQuery, PamQuery, RunPlan, ScheduleInput, Signal
  *  - `placeholderData: keepPreviousData` keeps the current page on screen while the next loads
  *    (no flash, no layout jump).
  *  - Search inputs are debounced by the caller before they reach a query key.
- *  - Always wrap API calls in an arrow (`() => api.x()`): React Query passes a context with an
- *    AbortSignal as the first argument, which cannot be cloned across to the Worker.
+ *  - Always wrap API calls in an arrow (`() => api.x()`): React Query passes its own context as the first argument.
  */
 
 const paged = { placeholderData: keepPreviousData, staleTime: 15_000 } as const
@@ -46,17 +45,16 @@ export const useDashboard = (pamId?: string) => useQuery({ queryKey: ["dashboard
 export const useDigest = (runId: string, pamId: string) =>
   useQuery({ queryKey: ["digest", runId, pamId], queryFn: () => api.digest(runId, pamId), enabled: !!runId && !!pamId, ...paged })
 export const useScopeOptions = () =>
-  useQuery({ queryKey: ["scopes"], queryFn: () => (backendEnabled ? backend.scopes() : api.scopeOptions()), staleTime: backendEnabled ? 10_000 : 60_000 })
+  useQuery({ queryKey: ["scopes"], queryFn: () => backend.scopes(), staleTime: 10_000 })
 
 // ---- Small resources --------------------------------------------------------------------
 export const useTemplates = () => useQuery({ queryKey: ["templates"], queryFn: () => api.listTemplates() })
-export const useSchedules = () => useQuery({ queryKey: ["schedules"], queryFn: () => (backendEnabled ? backend.listSchedules() : api.listSchedules()) })
-export const useProviders = () => useQuery({ queryKey: ["providers"], queryFn: () => api.listProviders() })
+export const useSchedules = () => useQuery({ queryKey: ["schedules"], queryFn: () => backend.listSchedules() })
 export const useChannels = () => useQuery({ queryKey: ["channels"], queryFn: () => api.listChannels() })
 export const useUsers = () => useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() })
 export const useAudit = () => useQuery({ queryKey: ["audit"], queryFn: () => api.listAudit() })
 export const useFinops = () => useQuery({ queryKey: ["finops"], queryFn: () => api.finops() })
-export const useImports = () => useQuery({ queryKey: ["imports"], queryFn: () => (backendEnabled ? backend.listImports() : api.listImports()) })
+export const useImports = () => useQuery({ queryKey: ["imports"], queryFn: () => backend.listImports() })
 
 // ---- Mutations --------------------------------------------------------------------------
 function useInvalidate(keys: string[][]) {
@@ -66,40 +64,33 @@ function useInvalidate(keys: string[][]) {
 
 export const useDeactivatePam = () => {
   const inv = useInvalidate([["pams"], ["pamSearch"], ["companies"], ["company"], ["audit"]])
-  return useMutation({ mutationFn: (v: { pamId: string; actor: string }) => api.deactivatePam(v.pamId, v.actor), onSuccess: inv })
+  return useMutation({ mutationFn: (v: { pamId: string; actor: string }) => api.deactivatePam(v.pamId), onSuccess: inv })
 }
 export const useReassign = () => {
   const inv = useInvalidate([["companies"], ["company"], ["pams"], ["pamSearch"], ["audit"]])
-  return useMutation({ mutationFn: (v: { companyIds: string[]; toPamId: string; actor: string }) => api.reassignCompanies(v.companyIds, v.toPamId, v.actor), onSuccess: inv })
+  return useMutation({ mutationFn: (v: { companyIds: string[]; toPamId: string; actor: string }) => api.reassignCompanies(v.companyIds, v.toPamId), onSuccess: inv })
 }
 export const useStartRun = () => {
   const inv = useInvalidate([["runs"], ["jobs"], ["audit"]])
   return useMutation({
-    mutationFn: (v: Parameters<typeof api.startRun>[0]): Promise<{ id: string }> =>
-      backendEnabled ? backend.startRun({ scopeKey: v.scopeKey, label: v.label, templateId: v.templateId }) : api.startRun(v),
+    mutationFn: (v: { label: string; templateId: string; scopeKey: string; actor: string }): Promise<{ id: string }> =>
+      backend.startRun({ scopeKey: v.scopeKey, label: v.label, templateId: v.templateId }),
     onSuccess: inv,
   })
 }
 export const useResend = () => {
   const inv = useInvalidate([["pamJobs"], ["run"], ["dashboard"], ["audit"]])
-  return useMutation({ mutationFn: (v: { runId: string; pamId: string; actor: string }) => api.resendDigest(v.runId, v.pamId, v.actor), onSuccess: inv })
+  return useMutation({ mutationFn: (v: { runId: string; pamId: string; actor: string }) => api.resendDigest(v.runId, v.pamId), onSuccess: inv })
 }
 export const useToggleSchedule = () => {
   const inv = useInvalidate([["schedules"], ["audit"]])
   return useMutation({
-    mutationFn: async (v: { id: string; enabled: boolean; actor: string }) => {
-      if (backendEnabled) await backend.updateSchedule(v.id, { enabled: v.enabled })
-      else await api.toggleSchedule(v.id, v.enabled, v.actor)
-    },
+    mutationFn: (v: { id: string; enabled: boolean; actor: string }) => backend.updateSchedule(v.id, { enabled: v.enabled }),
     onSuccess: inv,
   })
 }
-export const useCommitImport = () => {
-  const inv = useInvalidate([["imports"], ["audit"]])
-  return useMutation({ mutationFn: (fileName: string) => api.commitImport(fileName), onSuccess: inv })
-}
 
-// ---- FastAPI backend only (VITE_API_URL) -----------------------------------------------------
+// ---- Jobs, queues, schedules ------------------------------------------------------------------
 const ACTIVE = new Set(["scheduled", "queued", "running"])
 
 export const useCommitBackendImport = () => {
@@ -135,7 +126,7 @@ export const useRunScheduleNow = () => {
 }
 
 // ---- Research AI settings (live backend) ------------------------------------------------
-export const useLlmSettings = () => useQuery({ queryKey: ["llmSettings"], queryFn: () => backend.llmSettings(), enabled: backendEnabled })
+export const useLlmSettings = () => useQuery({ queryKey: ["llmSettings"], queryFn: () => backend.llmSettings() })
 /** Mutation (not a query): a typed key must never become part of a cache key. */
 export const useLoadLlmModels = () =>
   useMutation({ mutationFn: (v: { provider: AiProvider; apiKey?: string }) => backend.llmModels(v.provider, v.apiKey) })

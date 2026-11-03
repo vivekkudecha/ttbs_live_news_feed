@@ -25,8 +25,8 @@ export default function Costs() {
       />
       <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
         <StatCard icon={Gauge} label="Month to date" value={fmtUsd(d.monthSpend)} hint={`${used}% of ${fmtUsd(d.monthBudget, 0)} budget`} />
-        <StatCard icon={TrendingUp} tone="info" label="Month forecast" value={fmtUsd(d.forecast)} hint="3 scheduled cycles at current scope" />
-        <StatCard icon={Target} tone="success" label="Cost per actionable signal" value={fmtUsd(d.costPerSignal, 3)} hint="Last completed run" />
+        <StatCard icon={TrendingUp} tone="info" label="Month forecast" value={fmtUsd(d.forecast)} hint="Month-to-date spend rate, projected" />
+        <StatCard icon={Target} tone="success" label="Cost per actionable signal" value={fmtUsd(d.costPerSignal, 3)} hint="This month" />
         <StatCard icon={PiggyBank} tone="warning" label="Saved by cache" value={fmtUsd(d.cacheSavings)} hint="Duplicate company research avoided" />
       </div>
 
@@ -41,17 +41,17 @@ export default function Costs() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={d.series} margin={{ left: -8, right: 8, top: 8 }} barCategoryGap="28%">
                   <CartesianGrid vertical={false} stroke="var(--border)" />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
-                  <YAxis tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 13 }} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 13 }} tickFormatter={(v) => `$${v}`} />
                   <Tooltip
                     cursor={{ fill: "var(--muted)", opacity: 0.6 }}
-                    contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--popover-foreground)" }}
+                    contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, color: "var(--popover-foreground)" }}
                     formatter={(v: number, name: string) => [fmtUsd(v), name]}
                   />
                   <Legend
                     iconType="circle"
                     iconSize={8}
-                    wrapperStyle={{ fontSize: 12 }}
+                    wrapperStyle={{ fontSize: 13 }}
                     formatter={(value: string) => <span style={{ color: "var(--foreground)" }}>{value}</span>}
                   />
                   <Bar dataKey="llm" name="LLM research" stackId="a" fill="var(--chart-1)" stroke="var(--card)" strokeWidth={2} />

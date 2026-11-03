@@ -31,7 +31,7 @@ export function DataTablePagination<T>({
     <nav
       aria-label={placement === "top" ? "Pagination (top)" : "Pagination"}
       className={cn(
-        "flex flex-col-reverse gap-3 px-1 text-[0.8125rem] text-muted-foreground sm:flex-row sm:items-center sm:justify-between",
+        "flex flex-col-reverse gap-3 px-1 text-[0.9375rem] text-muted-foreground sm:flex-row sm:items-center sm:justify-between",
         placement === "top" ? "pb-3" : "pt-4",
       )}
     >

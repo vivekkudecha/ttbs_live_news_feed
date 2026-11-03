@@ -10,7 +10,7 @@ export function DataTableCompactPager<T>({ table, totalRows }: { table: Table<T>
   const f = (n: number) => n.toLocaleString("en-IN")
   return (
     <nav aria-label="Pagination (top)" className="flex items-center gap-2">
-      <span className="tabular whitespace-nowrap text-[0.8125rem] text-muted-foreground">
+      <span className="tabular whitespace-nowrap text-[0.9375rem] text-muted-foreground">
         {f(from)}–{f(to)} of {f(totalRows)}
       </span>
       <div className="flex items-center gap-1">

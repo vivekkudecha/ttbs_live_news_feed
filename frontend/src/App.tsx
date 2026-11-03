@@ -1,11 +1,10 @@
 import { lazy, type ReactNode } from "react"
-import { HashRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from "react-router-dom"
+import { HashRouter, MemoryRouter, Navigate, Route, Routes } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ThemeProvider } from "next-themes"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppShell } from "@/components/layout/AppShell"
-import { allowedPaths } from "@/components/layout/nav"
 import { SessionProvider, useSession } from "@/context/session"
 import Login from "@/pages/Login"
 import Dashboard from "@/pages/Dashboard"
@@ -26,7 +25,6 @@ const Schedules = lazy(() => import("@/pages/Schedules"))
 const Integrations = lazy(() => import("@/pages/Integrations"))
 const Costs = lazy(() => import("@/pages/Costs"))
 const Audit = lazy(() => import("@/pages/Audit"))
-const Users = lazy(() => import("@/pages/Users"))
 
 // The shareable demo build (VITE_ROUTER=memory) runs inside a hosted viewer where URL hashes
 // are not reliable, so it routes in memory. Local dev and the real deployment use URLs.
@@ -36,13 +34,10 @@ const hostTheme = document.documentElement.getAttribute("data-theme") ?? "system
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } } })
 
-/** Route guard: signed in, and the role may open this section (mirrors server-side RBAC). */
+/** Route guard: signed in. */
 function Guard({ children }: { children: ReactNode }) {
   const { user } = useSession()
-  const { pathname } = useLocation()
   if (!user) return <Navigate to="/login" replace />
-  const base = "/" + (pathname.split("/")[1] ?? "")
-  if (base !== "/" && !allowedPaths(user.role).includes(base)) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -83,7 +78,6 @@ export default function App() {
                   <Route path="integrations" element={<Integrations />} />
                   <Route path="costs" element={<Costs />} />
                   <Route path="audit" element={<Audit />} />
-                  <Route path="users" element={<Users />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

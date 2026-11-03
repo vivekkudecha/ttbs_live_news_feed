@@ -1,7 +1,4 @@
-// Domain contracts shared by the mock client and (later) the FastAPI client.
-// Shapes mirror the planned Postgres model so swapping the backend does not touch UI code.
-
-export type Role = "admin" | "manager" | "pam" | "auditor"
+// Domain contracts shared with the FastAPI backend (/api/v1); shapes match backend/app/api/read_models.py.
 
 export type Segment = "Enterprise" | "Mid-market" | "Emerging"
 
@@ -9,10 +6,7 @@ export interface User {
   id: string
   username: string
   name: string
-  role: Role
-  active: boolean
   lastLoginAt: string | null
-  pamId?: string
 }
 
 export interface Pam {
@@ -20,7 +14,8 @@ export interface Pam {
   name: string
   email: string
   whatsapp: string
-  segment: Segment
+  /** Majority segment of the PAM's companies (null when they own none). */
+  segment: Segment | null
   active: boolean
   capacity: number
   notifyEmail: boolean
@@ -215,7 +210,6 @@ export interface AuditEntry {
   id: string
   ts: string
   actor: string
-  role: Role | "system"
   action: string
   entity: string
   detail: string
@@ -312,7 +306,7 @@ export interface CompanyListRow {
   id: string
   name: string
   industry: string
-  segment: Segment
+  segment: Segment | null
   pamId: string | null
   pamName: string
   latestStatus: LatestStatus
@@ -331,7 +325,7 @@ export interface PamOption {
   id: string
   name: string
   email: string
-  segment: Segment
+  segment: Segment | null
   active: boolean
   load: number
   capacity: number
@@ -387,7 +381,8 @@ export interface PamJobRow extends PamJob {
 }
 
 export interface DashboardSummary {
-  latestRun: Run
+  /** Latest finished run (or the latest run); null before the first run. */
+  latestRun: Run | null
   logos: number
   activePams: number
   scoped: number
@@ -412,7 +407,7 @@ export interface DigestData {
   job: PamJob | null
 }
 
-/** Live research stream (SSE in production, Worker messages in the mock). */
+/** Live research stream (polled from /run-summaries/{id}/live). */
 export interface LiveSnapshot {
   runId: string
   /** Grid order: grouped by PAM so each PAM's logos sit together. */

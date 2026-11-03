@@ -17,7 +17,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRuns, useSignalsInfinite } from "@/api/hooks"
-import { useSession } from "@/context/session"
 import { useDebounced } from "@/lib/use-debounced"
 import { fmtDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -82,12 +81,10 @@ function SignalCardRow({ r, showPam, pamFilter }: { r: SignalRow; showPam: boole
 }
 
 export default function Signals() {
-  const { user } = useSession()
-  const isPam = user!.role === "pam"
   const runs = useRuns()
   const usable = runs.data?.filter((r) => r.status !== "queued") ?? []
   const [runId, setRunId] = useState("")
-  const activeRunId = runId || usable.find((r) => r.status === "completed")?.id || ""
+  const activeRunId = runId || usable.find((r) => r.status === "completed" || r.status === "partial")?.id || usable[0]?.id || ""
   const [pamId, setPamId] = useState("")
   const [category, setCategory] = useState("all")
   const [status, setStatus] = useState<ResearchStatus | "all">("signal")
@@ -100,7 +97,7 @@ export default function Signals() {
     pageSize: PAGE,
     status,
     category,
-    pamId: isPam ? user!.pamId : pamId || undefined,
+    pamId: pamId || undefined,
     search: q,
   })
   const rows = feed.data?.pages.flatMap((p) => p.rows) ?? []
@@ -127,7 +124,7 @@ export default function Signals() {
   return (
     <div>
       <PageHeader
-        title={isPam ? "My signals" : "Signals feed"}
+        title="Signals feed"
         description={run ? `${run.label} · window ${fmtDate(run.windowStart)} – ${fmtDate(run.windowEnd)} · template v${run.templateVersion}` : "Research results by logo"}
       />
 
@@ -159,7 +156,7 @@ export default function Signals() {
               ))}
             </SelectContent>
           </Select>
-          {!isPam && <PamPicker value={pamId} onChange={(id) => setPamId(id)} allLabel="All PAMs" className="w-full lg:w-56" />}
+          {<PamPicker value={pamId} onChange={(id) => setPamId(id)} allLabel="All PAMs" className="w-full lg:w-56" />}
           <Select value={category} onValueChange={setCategory}>
             <SelectTrigger className="w-full lg:w-44">
               <SelectValue />
@@ -179,7 +176,11 @@ export default function Signals() {
         </div>
       </div>
 
-      {!first ? (
+      {runs.isSuccess && !activeRunId ? (
+        <EmptyState icon={Zap} title="No research yet">
+          Signals appear here once a research run has started. Upload the Excel under Imports and run research.
+        </EmptyState>
+      ) : !first ? (
         <div className="space-y-4">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-56" />
@@ -203,7 +204,7 @@ export default function Signals() {
                 className="absolute inset-x-0 top-0"
                 style={{ transform: `translateY(${v.start - virtualizer.options.scrollMargin}px)` }}
               >
-                <SignalCardRow r={rows[v.index]} showPam={!isPam} pamFilter={isPam || !!pamId} />
+                <SignalCardRow r={rows[v.index]} showPam pamFilter={!!pamId} />
               </div>
             ))}
           </div>

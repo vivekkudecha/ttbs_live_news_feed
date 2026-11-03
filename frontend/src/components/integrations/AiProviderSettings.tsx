@@ -53,7 +53,7 @@ const shortModel = (id: string | null) => (id?.includes("/") ? id.split("/").sli
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"
 
-export function AiProviderSettings({ editable }: { editable: boolean }) {
+export function AiProviderSettings() {
   const settings = useLlmSettings()
 
   if (settings.isLoading) return <Skeleton className="h-72 w-full" />
@@ -93,14 +93,14 @@ export function AiProviderSettings({ editable }: { editable: boolean }) {
       )}
       <div className="grid gap-6 xl:grid-cols-2">
         {s.providers.map((cfg) => (
-          <ProviderCard key={cfg.provider} cfg={cfg} activeLabel={active && !cfg.active ? active.label : null} editable={editable} />
+          <ProviderCard key={cfg.provider} cfg={cfg} activeLabel={active && !cfg.active ? active.label : null} />
         ))}
       </div>
     </div>
   )
 }
 
-function ProviderCard({ cfg: c, activeLabel, editable }: { cfg: LlmConfig; activeLabel: string | null; editable: boolean }) {
+function ProviderCard({ cfg: c, activeLabel }: { cfg: LlmConfig; activeLabel: string | null }) {
   const meta = META[c.provider]
   const Icon = meta.icon
   const loadModels = useLoadLlmModels()
@@ -249,7 +249,7 @@ function ProviderCard({ cfg: c, activeLabel, editable }: { cfg: LlmConfig; activ
                 <AlertDescription>{c.lastCheckError}</AlertDescription>
               </Alert>
             )}
-            {editable && (
+            {(
               <div className="flex flex-wrap gap-2">
                 {!c.active && (
                   <Button size="sm" onClick={onActivate} disabled={activate.isPending}>
@@ -267,7 +267,7 @@ function ProviderCard({ cfg: c, activeLabel, editable }: { cfg: LlmConfig; activ
           </>
         )}
 
-        {editable && (
+        {(
           <>
             {c.configured && <Separator />}
             <div className="space-y-4">

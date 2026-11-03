@@ -86,10 +86,10 @@ export default function Audit() {
                   <TableCell className="tabular pl-5 text-sm text-muted-foreground">{fmtDateTime(e.ts)}</TableCell>
                   <TableCell>
                     <span className="font-medium">{e.actor}</span>
-                    <p className="text-xs capitalize text-muted-foreground">{e.role}</p>
+                    
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="gap-1.5 font-mono text-[11px] font-normal text-foreground/80">
+                    <Badge variant="outline" className="gap-1.5 font-mono text-xs font-normal text-foreground/80">
                       <span className={cn("size-1.5 rounded-full", areaDot[area(e.action)] ?? "bg-muted-foreground/50")} aria-hidden="true" />
                       {e.action}
                     </Badge>

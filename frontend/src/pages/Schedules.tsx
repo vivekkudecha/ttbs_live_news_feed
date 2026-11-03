@@ -13,9 +13,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { backendEnabled, errorMessage } from "@/api/http"
+import { errorMessage } from "@/api/http"
 import { useCreateSchedule, useRunScheduleNow, useSchedules, useScopeOptions, useStartRun, useTemplates, useToggleSchedule } from "@/api/hooks"
-import { can, useSession } from "@/context/session"
+import { useSession } from "@/context/session"
 import { fmtDateTime, fmtUsd } from "@/lib/format"
 import type { DeliveryChannel } from "@/api/types"
 
@@ -72,10 +72,10 @@ export function NewRunDialog() {
     try {
       const run = await start.mutateAsync({ label: `Ad-hoc: ${chosen?.label ?? scope}`, templateId, scopeKey: scope, actor: user!.username })
       setOpen(false)
-      toast.success(backendEnabled ? `Job ${run.id} queued` : `${run.id} started`, {
+      toast.success(`Job ${run.id} queued`, {
         description: `${count.toLocaleString("en-IN")} companies · results stream in as each logo finishes`,
       })
-      navigate(backendEnabled ? `/jobs/${run.id}` : `/runs/${run.id}`)
+      navigate(`/jobs/${run.id}`)
     } catch (e) {
       toast.error("Could not start the run", { description: errorMessage(e) })
     }
@@ -116,7 +116,7 @@ export function NewRunDialog() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="window">Research window (days)</Label>
-              <Input id="window" type="number" min={1} max={60} value={windowDays} onChange={(e) => setWindowDays(e.target.value)} disabled={backendEnabled} />
+              <Input id="window" type="number" min={1} max={60} value={windowDays} onChange={(e) => setWindowDays(e.target.value)} disabled />
             </div>
           </div>
           <Alert>
@@ -229,7 +229,6 @@ export default function Schedules() {
   const templates = useTemplates()
   const toggle = useToggleSchedule()
   const runNow = useRunScheduleNow()
-  const editable = can.runJobs(user!.role)
 
   return (
     <div>
@@ -237,15 +236,9 @@ export default function Schedules() {
         title="Schedules"
         description="When research runs, for which logos, with which template and provider. Stored in the database; the dispatcher checks every 30 seconds."
         actions={
-          editable && (
+          (
             <>
-              {backendEnabled ? (
-                <NewScheduleDialog />
-              ) : (
-                <Button variant="outline" onClick={() => toast.info("Schedule editor opens here (prototype)")}>
-                  <Plus /> New schedule
-                </Button>
-              )}
+              <NewScheduleDialog />
               <NewRunDialog />
             </>
           )
@@ -266,7 +259,6 @@ export default function Schedules() {
                 <CardAction>
                   <Switch
                     checked={s.enabled}
-                    disabled={!editable}
                     aria-label={`Enable ${s.name}`}
                     onCheckedChange={(v) =>
                       toggle.mutate(
@@ -322,7 +314,7 @@ export default function Schedules() {
                 </dl>
                 <div className="mt-4 flex items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">Last run: {fmtDateTime(s.lastRunAt)}</p>
-                  {backendEnabled && editable && (
+                  {(
                     <Button
                       size="sm"
                       variant="outline"

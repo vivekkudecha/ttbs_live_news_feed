@@ -17,7 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePamJobs, useResend, useRun, useRuns } from "@/api/hooks"
-import { can, useSession } from "@/context/session"
+import { useSession } from "@/context/session"
 import { useDebounced } from "@/lib/use-debounced"
 import { durationMin, fmtDate, fmtDateTime, fmtUsd, pct } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -26,14 +26,13 @@ import { NewRunDialog } from "./Schedules"
 const n = (x: number) => x.toLocaleString("en-IN")
 
 export function RunsList() {
-  const { user } = useSession()
   const runs = useRuns()
   return (
     <div>
       <PageHeader
         title="Research runs"
         description="Every scheduled or ad-hoc run. Results stream in logo by logo, and each PAM's digest goes out as soon as their logos finish."
-        actions={can.runJobs(user!.role) && <NewRunDialog />}
+        actions={<NewRunDialog />}
       />
       <Card className="py-0">
         <CardContent className="overflow-x-auto p-0">
@@ -58,7 +57,7 @@ export function RunsList() {
                     </Link>
                     <p className="text-xs text-muted-foreground">
                       {r.label} ·{" "}
-                      <Badge variant="outline" className="h-4 px-1.5 text-[10px] font-normal">
+                      <Badge variant="outline" className="h-4 px-1.5 text-[11.5px] font-normal">
                         {r.trigger}
                       </Badge>
                     </p>
@@ -110,7 +109,6 @@ function PamJobsCard({ runId }: { runId: string }) {
   const jobs = usePamJobs(runId, { page, pageSize: 10, filter, search: q })
   const data = jobs.data
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1
-  const manage = can.runJobs(user!.role)
 
   return (
     <Card>
@@ -186,7 +184,7 @@ function PamJobsCard({ runId }: { runId: string }) {
                     <StatusBadge status={j.whatsapp} />
                   </TableCell>
                   <TableCell className="pr-6 text-right">
-                    {manage && (j.email === "sent" || j.email === "failed") && (
+                    {(j.email === "sent" || j.email === "failed") && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -212,7 +210,7 @@ function PamJobsCard({ runId }: { runId: string }) {
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between px-6 text-[0.8125rem] text-muted-foreground">
+        <div className="flex items-center justify-between px-6 text-[0.9375rem] text-muted-foreground">
           <span className="tabular">{data ? `${n(data.total)} PAMs` : "…"}</span>
           <div className="flex items-center gap-3">
             <span className="tabular">

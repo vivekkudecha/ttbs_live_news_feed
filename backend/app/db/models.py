@@ -99,6 +99,22 @@ class Company(TimestampMixin, Base):
     pam: Mapped[Pam | None] = relationship(lazy="joined")
 
 
+class CompanyAssignment(Base):
+    """Who owned a company when (SCD type 2): exactly one open row (valid_to IS NULL) per assigned
+    company. Written by imports, manual reassignment and PAM deactivation rebalancing."""
+
+    __tablename__ = "company_assignments"
+    __table_args__ = (Index("ix_company_assignments_company_open", "company_id", "valid_to"),)
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    pam_id: Mapped[int] = mapped_column(ForeignKey("pams.id"), index=True)
+    valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    valid_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reason: Mapped[str] = mapped_column(String(20))  # import | manual | rebalance
+    actor: Mapped[str] = mapped_column(String(100))
+
+
 class ImportBatch(TimestampMixin, Base):
     __tablename__ = "import_batches"
 

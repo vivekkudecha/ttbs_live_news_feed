@@ -1,6 +1,6 @@
 /**
- * FastAPI backend client (/api/v1). Enabled when VITE_API_URL is set (see .env.development);
- * otherwise the app keeps running on the in-browser mock.
+ * FastAPI backend client (/api/v1). The base URL comes from VITE_API_URL (see .env.development),
+ * defaulting to http://localhost:8010.
  */
 import type {
   BackendImportPreview,
@@ -20,8 +20,7 @@ import type {
   DeliveryChannel,
 } from "./types"
 
-const BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "")
-export const backendEnabled = !!BASE
+const BASE = ((import.meta.env.VITE_API_URL as string | undefined) || "http://localhost:8010").replace(/\/$/, "")
 
 /** Error with the backend's envelope: {"error": {code, message, details, request_id}}. */
 export class ApiError extends Error {
@@ -41,14 +40,14 @@ export class ApiError extends Error {
 
 function actor(): string | undefined {
   try {
-    const raw = sessionStorage.getItem("ttbs-demo-session")
+    const raw = sessionStorage.getItem("ttbs-session")
     return raw ? (JSON.parse(raw).username as string) : undefined
   } catch {
     return undefined
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   if (!BASE) throw new ApiError(0, "backend_disabled", "Backend is not configured (VITE_API_URL)")
   const headers: Record<string, string> = {}
   const who = actor()

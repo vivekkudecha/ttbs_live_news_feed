@@ -24,7 +24,7 @@ export function SignalSections({ result, compact = false }: { result: ResearchRe
     <div className={cn("space-y-3 text-sm leading-relaxed text-foreground/85", compact && "space-y-1.5")}>
       {rows.map(([label, text]) => (
         <div key={label} className="grid gap-0.5 sm:grid-cols-[11rem_1fr] sm:gap-4">
-          <span className="text-[0.8125rem] text-muted-foreground">{label}</span>
+          <span className="text-[0.9375rem] text-muted-foreground">{label}</span>
           <span>
             <RichText text={text} />
           </span>

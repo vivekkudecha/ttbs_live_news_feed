@@ -27,7 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { api } from "@/api/client"
 import { useDeactivatePam, usePamPage } from "@/api/hooks"
-import { can, useSession } from "@/context/session"
+import { useSession } from "@/context/session"
 import { useDebounced } from "@/lib/use-debounced"
 import { initials, pct } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -45,7 +45,6 @@ async function copy(text: string) {
 export default function Pams() {
   const { user } = useSession()
   const navigate = useNavigate()
-  const admin = can.admin(user!.role)
   const deactivate = useDeactivatePam()
   const [target, setTarget] = useState<PamCard | null>(null)
 
@@ -84,7 +83,6 @@ export default function Pams() {
 
   const columns = useMemo<ColumnDef<PamCard>[]>(() => {
     const cols: ColumnDef<PamCard>[] = []
-    if (admin)
       cols.push({
         id: "select",
         size: 40,
@@ -113,7 +111,7 @@ export default function Pams() {
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
             <Avatar className="size-8">
-              <AvatarFallback className="bg-accent text-[11px] font-medium text-accent-foreground">{initials(row.original.name)}</AvatarFallback>
+              <AvatarFallback className="bg-accent text-xs font-medium text-accent-foreground">{initials(row.original.name)}</AvatarFallback>
             </Avatar>
             <div className="min-w-0">
               <p className="truncate font-medium">{row.original.name}</p>
@@ -209,7 +207,7 @@ export default function Pams() {
                   <DropdownMenuItem onClick={() => copy(p.email)}>
                     <Copy /> Copy email
                   </DropdownMenuItem>
-                  {admin && (
+                  {(
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => toast.info("Edit PAM form opens here (prototype)")}>
@@ -232,7 +230,7 @@ export default function Pams() {
     return cols
     // navigate is stable; columns rebuild when the role changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [admin])
+  }, [])
 
   const table = useReactTable({
     data: page?.rows ?? [],
@@ -243,7 +241,7 @@ export default function Pams() {
     manualSorting: true,
     manualFiltering: true,
     rowCount: page?.total ?? 0,
-    enableRowSelection: admin,
+    enableRowSelection: true,
     enableSortingRemoval: false,
     onSortingChange: (u) => {
       setSorting(u)

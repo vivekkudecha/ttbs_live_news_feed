@@ -10,18 +10,15 @@ import {
   MailCheck,
   PlugZap,
   ScrollText,
-  ShieldCheck,
   Users,
   Zap,
   type LucideIcon,
 } from "lucide-react"
-import type { Role } from "@/api/types"
 
 export interface NavItem {
   to: string
   label: string
   icon: LucideIcon
-  roles: Role[]
 }
 
 export interface NavGroup {
@@ -29,48 +26,41 @@ export interface NavGroup {
   items: NavItem[]
 }
 
-const ALL: Role[] = ["admin", "manager", "pam", "auditor"]
-const STAFF: Role[] = ["admin", "manager", "auditor"]
-
 export const navGroups: NavGroup[] = [
   {
     label: "Overview",
-    items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard, roles: ALL }],
+    items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard }],
   },
   {
     label: "Signals",
     items: [
-      { to: "/signals", label: "Signals feed", icon: Zap, roles: ALL },
-      { to: "/digest", label: "PAM digest preview", icon: MailCheck, roles: ALL },
-      { to: "/runs", label: "Research runs", icon: Activity, roles: STAFF },
-      { to: "/jobs", label: "Jobs (live backend)", icon: ListChecks, roles: STAFF },
+      { to: "/signals", label: "Signals feed", icon: Zap },
+      { to: "/digest", label: "PAM digest preview", icon: MailCheck },
+      { to: "/runs", label: "Research runs", icon: Activity },
+      { to: "/jobs", label: "Jobs", icon: ListChecks },
     ],
   },
   {
     label: "Accounts",
     items: [
-      { to: "/companies", label: "Companies (Logos)", icon: Building2, roles: ALL },
-      { to: "/pams", label: "PAMs", icon: Users, roles: STAFF },
-      { to: "/imports", label: "Imports", icon: FileSpreadsheet, roles: STAFF },
+      { to: "/companies", label: "Companies (Logos)", icon: Building2 },
+      { to: "/pams", label: "PAMs", icon: Users },
+      { to: "/imports", label: "Imports", icon: FileSpreadsheet },
     ],
   },
   {
     label: "Configuration",
     items: [
-      { to: "/templates", label: "Output templates", icon: FileText, roles: STAFF },
-      { to: "/schedules", label: "Schedules", icon: CalendarClock, roles: STAFF },
-      { to: "/integrations", label: "Providers & channels", icon: PlugZap, roles: ["admin", "auditor"] },
+      { to: "/templates", label: "Output templates", icon: FileText },
+      { to: "/schedules", label: "Schedules", icon: CalendarClock },
+      { to: "/integrations", label: "Providers & channels", icon: PlugZap },
     ],
   },
   {
     label: "Governance",
     items: [
-      { to: "/costs", label: "Costs (FinOps)", icon: BarChart3, roles: STAFF },
-      { to: "/audit", label: "Audit log", icon: ScrollText, roles: ["admin", "auditor"] },
-      { to: "/users", label: "Users & roles", icon: ShieldCheck, roles: ["admin", "auditor"] },
+      { to: "/costs", label: "Costs (FinOps)", icon: BarChart3 },
+      { to: "/audit", label: "Audit log", icon: ScrollText },
     ],
   },
 ]
-
-export const allowedPaths = (role: Role) =>
-  navGroups.flatMap((g) => g.items.filter((i) => i.roles.includes(role)).map((i) => i.to))

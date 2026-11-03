@@ -12,10 +12,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { api } from "@/api/client"
-import { backend, backendEnabled, errorMessage } from "@/api/http"
-import { useCommitBackendImport, useCommitImport, useImports } from "@/api/hooks"
-import { can, useSession } from "@/context/session"
+import { backend, errorMessage } from "@/api/http"
+import { useCommitBackendImport, useImports } from "@/api/hooks"
 import { fmtDateTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { BackendImportPreview, DeliveryChannel, ImportPreview, RunPlan } from "@/api/types"
@@ -98,29 +96,24 @@ function RunPlanPicker({ plan, onChange }: { plan: RunPlan; onChange: (p: RunPla
 }
 
 export default function Imports() {
-  const { user } = useSession()
   const navigate = useNavigate()
   const history = useImports()
-  const commitMock = useCommitImport()
   const commitReal = useCommitBackendImport()
   const input = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<(ImportPreview & Partial<BackendImportPreview>) | null>(null)
   const [plan, setPlan] = useState<RunPlan>({ mode: "now", channels: ["email", "whatsapp"] })
   const [loading, setLoading] = useState(false)
   const [drag, setDrag] = useState(false)
-  const editable = can.manageData(user!.role)
-  const committing = commitMock.isPending || commitReal.isPending
+  const committing = commitReal.isPending
 
-  const handle = async (file: File | string) => {
-    const name = typeof file === "string" ? file : file.name
-    if (!/\.(xlsx|csv)$/i.test(name)) {
+  const handle = async (file: File) => {
+    if (!/\.(xlsx|csv)$/i.test(file.name)) {
       toast.error("Only .xlsx or .csv files are accepted")
       return
     }
     setLoading(true)
     try {
-      if (backendEnabled && typeof file !== "string") setPreview(await backend.uploadImport(file))
-      else setPreview(await api.previewImport(name))
+      setPreview(await backend.uploadImport(file))
     } catch (e) {
       toast.error("Could not read the file", { description: errorMessage(e) })
     } finally {
@@ -132,7 +125,7 @@ export default function Imports() {
   const commit = async () => {
     if (!preview) return
     try {
-      if (backendEnabled && preview.id) {
+      if (preview.id) {
         if (plan.mode === "at" && !plan.runAt) return toast.error("Pick a date and time for the research run")
         if (plan.mode !== "none" && plan.channels.length === 0) return toast.error("Choose at least one delivery channel")
         const schedule: RunPlan = plan.mode === "at" ? { ...plan, runAt: new Date(plan.runAt!).toISOString() } : plan
@@ -144,10 +137,6 @@ export default function Imports() {
             action: { label: "View job", onClick: () => navigate(`/jobs/${res.run!.id}`) },
           })
         } else toast.success("Import committed", { description: res.import.summary })
-      } else {
-        const rec = await commitMock.mutateAsync(preview.fileName)
-        toast.success("Import committed", { description: rec.summary })
-        setPreview(null)
       }
     } catch (e) {
       toast.error("Commit failed", { description: errorMessage(e) })
@@ -169,7 +158,7 @@ export default function Imports() {
         }
       />
 
-      {editable && !preview && (
+      {!preview && (
         <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
           <div
             onDragOver={(e) => {
@@ -195,11 +184,6 @@ export default function Imports() {
               <Button onClick={() => input.current?.click()} disabled={loading}>
                 Browse files
               </Button>
-              {!backendEnabled && (
-                <Button variant="ghost" onClick={() => handle("ttbs_logos_pam_mapping_nov.xlsx")} disabled={loading}>
-                  Use sample file
-                </Button>
-              )}
             </div>
             <input ref={input} type="file" accept=".xlsx,.csv" className="hidden" onChange={(e) => e.target.files?.[0] && handle(e.target.files[0])} />
           </div>
@@ -298,7 +282,7 @@ export default function Imports() {
               </Table>
             </div>
 
-            {backendEnabled && preview.id && (
+            {preview.id && (
               <div className="space-y-2">
                 <p className="flex items-center gap-2 text-sm font-medium">
                   <CalendarClock className="size-4 text-muted-foreground" /> Research job
@@ -326,11 +310,9 @@ export default function Imports() {
       <Card className="py-0">
         <CardHeader className="pt-5">
           <CardTitle>Import history</CardTitle>
-          {backendEnabled && (
-            <CardDescription>
-              Research jobs started from an import appear under <Link to="/jobs" className="underline underline-offset-2">Jobs</Link>.
-            </CardDescription>
-          )}
+          <CardDescription>
+            Research jobs started from an import appear under <Link to="/jobs" className="underline underline-offset-2">Jobs</Link>.
+          </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
           <Table className="min-w-[40rem]">

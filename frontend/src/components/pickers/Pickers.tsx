@@ -92,7 +92,7 @@ export function PamPicker({
       query={query}
       setQuery={setQuery}
       loading={results.isFetching}
-      placeholder="Search 5,000 PAMs by name, email or segment"
+      placeholder="Search PAMs by name or email"
       trigger={
         <Button id={id} variant="outline" role="combobox" aria-expanded={open} className={cn("h-9 justify-between font-normal", !value && !allLabel && "text-muted-foreground", className)}>
           <span className="truncate">{label}</span>
@@ -208,7 +208,7 @@ export function CompanyPicker({ value, onChange, className }: { value: CompanyOp
       query={query}
       setQuery={setQuery}
       loading={results.isFetching}
-      placeholder="Search 10,000 logos"
+      placeholder="Search logos"
       trigger={
         <Button variant="outline" role="combobox" aria-expanded={open} className={cn("h-9 w-full justify-between font-normal", className)}>
           <span className="truncate">{value?.name ?? "Choose a company"}</span>

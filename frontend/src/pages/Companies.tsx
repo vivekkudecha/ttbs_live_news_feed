@@ -39,7 +39,6 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useCompanyPage } from "@/api/hooks"
-import { can, useSession } from "@/context/session"
 import { useDebounced } from "@/lib/use-debounced"
 import { fmtDate, initials } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -74,10 +73,7 @@ function CycleDots({ cycles }: { cycles: CompanyListRow["cycles"] }) {
 }
 
 export function CompaniesList() {
-  const { user } = useSession()
   const navigate = useNavigate()
-  const isPam = user!.role === "pam"
-  const manage = can.manageData(user!.role)
   const [params, setParams] = useSearchParams()
   const openId = params.get("company")
 
@@ -106,13 +102,11 @@ export function CompaniesList() {
     pamIds,
     latest: latest as LatestStatus[],
     sort: sorting[0],
-    scopePamId: isPam ? user!.pamId : undefined,
   })
   const page = query.data
 
   const columns = useMemo<ColumnDef<CompanyListRow>[]>(() => {
     const cols: ColumnDef<CompanyListRow>[] = []
-    if (manage)
       cols.push({
         id: "select",
         size: 40,
@@ -140,7 +134,7 @@ export function CompaniesList() {
         header: ({ column }) => <DataTableColumnHeader column={column} title="Company" />,
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-medium text-muted-foreground">{initials(row.original.name)}</span>
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground">{initials(row.original.name)}</span>
             <div className="min-w-0">
               <button
                 type="button"
@@ -165,7 +159,6 @@ export function CompaniesList() {
         cell: ({ row }) => <span className="text-muted-foreground">{row.original.segment}</span>,
       },
     )
-    if (!isPam)
       cols.push({
         id: "pam",
         accessorKey: "pamName",
@@ -174,7 +167,7 @@ export function CompaniesList() {
         cell: ({ row }) => (
           <span className="flex items-center gap-2">
             <Avatar className="size-6">
-              <AvatarFallback className="bg-accent text-[10px] font-medium text-accent-foreground">{initials(row.original.pamName)}</AvatarFallback>
+              <AvatarFallback className="bg-accent text-[11.5px] font-medium text-accent-foreground">{initials(row.original.pamName)}</AvatarFallback>
             </Avatar>
             <span className="truncate">{row.original.pamName}</span>
           </span>
@@ -249,7 +242,7 @@ export function CompaniesList() {
                   <DropdownMenuItem onClick={() => copy(c.name)}>
                     <Copy /> Copy company name
                   </DropdownMenuItem>
-                  {manage && (
+                  {(
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => setReassignIds([c.id])}>
@@ -260,7 +253,7 @@ export function CompaniesList() {
                       </DropdownMenuItem>
                     </>
                   )}
-                  {can.admin(user!.role) && (
+                  {(
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem variant="destructive" onClick={() => toast.info(`Stop tracking ${c.name}? Confirmation opens here (prototype).`)}>
@@ -278,7 +271,7 @@ export function CompaniesList() {
     return cols
     // openDrawer/navigate are stable for our purposes; columns rebuild when role changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manage, isPam, user])
+  }, [])
 
   const table = useReactTable({
     data: page?.rows ?? [],
@@ -290,7 +283,7 @@ export function CompaniesList() {
     manualSorting: true,
     manualFiltering: true,
     rowCount: page?.total ?? 0,
-    enableRowSelection: manage,
+    enableRowSelection: true,
     enableSortingRemoval: false,
     onSortingChange: (u) => {
       setSorting(u)
@@ -312,7 +305,7 @@ export function CompaniesList() {
   return (
     <div>
       <PageHeader
-        title={isPam ? "My companies" : "Companies"}
+        title="Companies"
         description="Every logo being tracked, its PAM and its signal history. Select a company to see its full timeline."
       />
 
@@ -337,7 +330,7 @@ export function CompaniesList() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <DataTableFacetedFilter title="Segment" value={segments} onChange={setFilter(setSegments)} counts={page?.facets.segment} options={["Enterprise", "Mid-market", "Emerging"].map((v) => ({ value: v, label: v }))} />
-          {!isPam && <PamMultiFilter value={pamIds} onChange={setFilter(setPamIds)} />}
+          <PamMultiFilter value={pamIds} onChange={setFilter(setPamIds)} />
           <DataTableFacetedFilter title="Latest cycle" value={latest} onChange={setFilter(setLatest)} counts={page?.facets.latest} options={latestStatusOptions} />
           {filtered && (
             <Button
@@ -362,7 +355,7 @@ export function CompaniesList() {
           <Button variant="outline" className="h-9" onClick={() => toast.success(`Export of ${(page?.total ?? 0).toLocaleString("en-IN")} companies started`, { description: "Large exports are generated on the server and emailed as a link." })}>
             <Download /> Export
           </Button>
-          {manage && (
+          {(
             <Button variant="outline" className="h-9" asChild>
               <Link to="/imports">
                 <Upload /> Import

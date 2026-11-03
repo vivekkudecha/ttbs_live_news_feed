@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import errors
+from app.api.page_routes import router as page_router
 from app.api.routes import router
 from app.core.config import get_settings
 from app.core.context import client_ip_var, request_id_var, user_agent_var
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
 
     errors.install(app)
     app.include_router(router)
+    app.include_router(page_router)
     return app
 
 
