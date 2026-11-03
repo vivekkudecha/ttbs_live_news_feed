@@ -38,7 +38,6 @@ import type {
   PamPage,
   PamQuery,
   RebalanceResult,
-  Region,
   ResearchResult,
   ResearchStatus,
   Role,
@@ -71,7 +70,6 @@ const hash = (n: number) => {
   const x = Math.sin(n * 9301.17 + 49297.31) * 233280.7
   return x - Math.floor(x)
 }
-const REGIONS: Region[] = ["North", "South", "East", "West"]
 const SEGMENTS: Segment[] = ["Enterprise", "Mid-market", "Emerging"]
 const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true })
 
@@ -93,7 +91,6 @@ interface CompanyRec {
   name: string
   lower: string
   industry: string
-  region: Region
   segment: Segment
   pam: number // index into pams, -1 = unassigned
 }
@@ -114,7 +111,6 @@ for (let i = 0; i < N_PAMS; i++) {
       name,
       email: `${first}.${initial}${last}`.toLowerCase() + `@ttbs.example`,
       whatsapp: `+91 9${String(800000000 + i * 7919).slice(0, 4)} ${String(10000 + i).slice(-5)}`,
-      region: REGIONS[i % 4],
       segment: SEGMENTS[i % 3],
       active: true,
       capacity: 6,
@@ -123,36 +119,35 @@ for (let i = 0; i < N_PAMS; i++) {
     }
   }
   pams.push(p)
-  pamLower.push(`${p.name} ${p.email} ${p.region}`.toLowerCase())
+  pamLower.push(`${p.name} ${p.email} ${p.segment}`.toLowerCase())
 }
 const pamIndex = new Map(pams.map((p, i) => [p.id, i]))
-const pamsByRegion: Record<Region, number[]> = { North: [], South: [], East: [], West: [] }
-pams.forEach((p, i) => pamsByRegion[p.region].push(i))
+const pamsBySegment: Record<Segment, number[]> = { Enterprise: [], "Mid-market": [], Emerging: [] }
+pams.forEach((p, i) => pamsBySegment[p.segment].push(i))
 
 const companies: CompanyRec[] = []
-const regionCursor: Record<Region, number> = { North: 0, South: 0, East: 0, West: 0 }
+const segmentCursor: Record<Segment, number> = { Enterprise: 0, "Mid-market": 0, Emerging: 0 }
 for (let i = 0; i < N_COMPANIES; i++) {
-  let name: string, industry: string, region: Region, segment: Segment
-  if (i < fx.companySeed.length) [name, industry, region, segment] = fx.companySeed[i]
+  let name: string, industry: string, segment: Segment
+  if (i < fx.companySeed.length) [name, industry, segment] = fx.companySeed[i]
   else {
     const j = i - fx.companySeed.length
     const core = CORE[Math.floor(j / PREFIX.length) % CORE.length]
     name = `${PREFIX[j % PREFIX.length]} ${core[0]} ${LEGAL[Math.floor(j / (PREFIX.length * CORE.length)) % LEGAL.length]}`
     industry = core[1]
-    region = REGIONS[Math.floor(hash(i) * 4)]
     segment = SEGMENTS[Math.floor(hash(i + 0.5) * 3)]
   }
-  // Seeded demo logos stay with the 8 named PAMs; the rest round-robin within their region.
+  // Seeded demo logos stay with the 8 named PAMs; the rest round-robin within their segment.
   let pam: number
   if (i < fx.companySeed.length) {
-    const named = pamsByRegion[region].filter((x) => x < fx.pams.length)
+    const named = pamsBySegment[segment].filter((x) => x < fx.pams.length)
     pam = named[i % named.length]
   } else {
-    const list = pamsByRegion[region]
-    pam = list[regionCursor[region]++ % list.length]
+    const list = pamsBySegment[segment]
+    pam = list[segmentCursor[segment]++ % list.length]
   }
   pamLoad[pam]++
-  companies.push({ id: `c${i + 1}`, name, lower: `${name} ${industry}`.toLowerCase(), industry, region, segment, pam })
+  companies.push({ id: `c${i + 1}`, name, lower: `${name} ${industry}`.toLowerCase(), industry, segment, pam })
 }
 const companyIndex = new Map(companies.map((c, i) => [c.id, i]))
 
@@ -244,10 +239,10 @@ runs.push(
   makeRun({ id: "R-0011", label: "10-day cycle · 12 – 22 Oct", trigger: "scheduled", templateId: "t1", templateVersion: 3, windowStart: "2026-10-12", windowEnd: "2026-10-22", startedAt: "2026-10-22T06:00:00+05:30", finishedAt: "2026-10-22T09:52:44+05:30", status: "completed", triggeredBy: "scheduler", seed: 11, scope: allIdx }, "all"),
   makeRun({ id: "R-0012", label: "10-day cycle · 22 Oct – 1 Nov", trigger: "scheduled", templateId: "t1", templateVersion: 3, windowStart: "2026-10-22", windowEnd: "2026-11-01", startedAt: "2026-11-01T06:00:00+05:30", finishedAt: "2026-11-01T09:48:10+05:30", status: "completed", triggeredBy: "scheduler", seed: 12, scope: allIdx }, "all"),
 )
-// A West-region ad-hoc run is in progress when the app opens (35% done), so the live view has something to show.
+// An Enterprise-segment ad-hoc run is in progress when the app opens (35% done), so the live view has something to show.
 runs.push(
   makeRun(
-    { id: "R-0013", label: "Ad-hoc: West region deep dive", trigger: "adhoc", templateId: "t1", templateVersion: 3, windowStart: "2026-10-23", windowEnd: "2026-11-02", startedAt: new Date(Date.now() - 22_000).toISOString(), finishedAt: null, status: "running", triggeredBy: "sneha.kulkarni", seed: 13, scope: allIdx.filter((i) => companies[i].region === "West") },
+    { id: "R-0013", label: "Ad-hoc: Enterprise segment deep dive", trigger: "adhoc", templateId: "t1", templateVersion: 3, windowStart: "2026-10-23", windowEnd: "2026-11-02", startedAt: new Date(Date.now() - 22_000).toISOString(), finishedAt: null, status: "running", triggeredBy: "sneha.kulkarni", seed: 13, scope: allIdx.filter((i) => companies[i].segment === "Enterprise") },
     0.35,
   ),
 )
@@ -322,7 +317,6 @@ function signalRow(run: RunState, i: number, withPriority = true): SignalRow {
     ...r,
     companyName: c.name,
     industry: c.industry,
-    region: c.region,
     pamName: c.pam >= 0 ? pams[c.pam].name : "Unassigned",
     priority: rank ? { rank, whyNow: t.whyNow, action: t.action } : undefined,
   }
@@ -453,7 +447,6 @@ function companyRow(i: number): CompanyListRow {
     id: c.id,
     name: c.name,
     industry: c.industry,
-    region: c.region,
     segment: c.segment,
     pamId: c.pam >= 0 ? pams[c.pam].id : null,
     pamName: c.pam >= 0 ? pams[c.pam].name : "Unassigned",
@@ -464,7 +457,7 @@ function companyRow(i: number): CompanyListRow {
     cycles,
   }
 }
-const pamOption = (p: number): PamOption => ({ id: pams[p].id, name: pams[p].name, email: pams[p].email, region: pams[p].region, segment: pams[p].segment, active: pams[p].active, load: pamLoad[p], capacity: pams[p].capacity })
+const pamOption = (p: number): PamOption => ({ id: pams[p].id, name: pams[p].name, email: pams[p].email, segment: pams[p].segment, active: pams[p].active, load: pamLoad[p], capacity: pams[p].capacity })
 
 const tokens = (q?: string) => (q ?? "").toLowerCase().split(/\s+/).filter(Boolean)
 const matchAll = (hay: string, toks: string[]) => toks.every((t) => hay.includes(t))
@@ -586,7 +579,6 @@ function logAudit(actor: string, role: AuditEntry["role"], action: string, entit
 function scopeIndices(key: string): number[] {
   if (key === "all") return allIdx
   const [kind, value] = key.split(":")
-  if (kind === "region") return allIdx.filter((i) => companies[i].region === value)
   if (kind === "segment") return allIdx.filter((i) => companies[i].segment === value)
   if (kind === "pam") return pamCompanies[pamIndex.get(value) ?? -1] ?? []
   return []
@@ -613,12 +605,11 @@ const server = {
     const t0 = performance.now()
     const toks = tokens(q.search)
     const scopeP = q.scopePamId ? (pamIndex.get(q.scopePamId) ?? -2) : -1
-    const regions = q.regions?.length ? new Set(q.regions) : null
     const segments = q.segments?.length ? new Set(q.segments) : null
     const pamSet = q.pamIds?.length ? new Set(q.pamIds.map((id) => pamIndex.get(id) ?? -2)) : null
     const latestSet = q.latest?.length ? new Set(q.latest) : null
     const latestRun = lastCompleted()
-    const facets = { region: {} as Record<string, number>, segment: {} as Record<string, number>, latest: {} as Record<string, number> }
+    const facets = { segment: {} as Record<string, number>, latest: {} as Record<string, number> }
     const hits: number[] = []
     for (let i = 0; i < companies.length; i++) {
       const c = companies[i]
@@ -627,14 +618,12 @@ const server = {
       if (pamSet && !pamSet.has(c.pam)) continue
       const code = latestRun.statuses[i]
       const latest: LatestStatus = code === 255 ? "none" : CODE[code]
-      const mR = !regions || regions.has(c.region)
       const mS = !segments || segments.has(c.segment)
       const mL = !latestSet || latestSet.has(latest)
       // Faceting: each facet counts rows matching every *other* filter.
-      if (mS && mL) facets.region[c.region] = (facets.region[c.region] ?? 0) + 1
-      if (mR && mL) facets.segment[c.segment] = (facets.segment[c.segment] ?? 0) + 1
-      if (mR && mS) facets.latest[latest] = (facets.latest[latest] ?? 0) + 1
-      if (mR && mS && mL) hits.push(i)
+      if (mL) facets.segment[c.segment] = (facets.segment[c.segment] ?? 0) + 1
+      if (mS) facets.latest[latest] = (facets.latest[latest] ?? 0) + 1
+      if (mS && mL) hits.push(i)
     }
     const sort = q.sort ?? { id: "name", desc: false }
     const dir = sort.desc ? -1 : 1
@@ -652,7 +641,7 @@ const server = {
       }
       hits.sort((a, b) => (key[a] - key[b]) * dir || collator.compare(companies[a].name, companies[b].name))
     } else if (sort.id === "pam") hits.sort((a, b) => collator.compare(pams[companies[a].pam]?.name ?? "", pams[companies[b].pam]?.name ?? "") * dir)
-    else if (sort.id === "region") hits.sort((a, b) => collator.compare(companies[a].region, companies[b].region) * dir || collator.compare(companies[a].name, companies[b].name))
+    else if (sort.id === "segment") hits.sort((a, b) => collator.compare(companies[a].segment, companies[b].segment) * dir || collator.compare(companies[a].name, companies[b].name))
     else hits.sort((a, b) => collator.compare(companies[a].name, companies[b].name) * dir)
     const page = paginate(hits, q.page, q.pageSize)
     return { ...page, rows: page.rows.map(companyRow), facets, tookMs: +(performance.now() - t0).toFixed(1) }
@@ -717,10 +706,9 @@ const server = {
   queryPams(q: PamQuery): PamPage {
     const t0 = performance.now()
     const toks = tokens(q.search)
-    const regions = q.regions?.length ? new Set(q.regions) : null
     const segments = q.segments?.length ? new Set(q.segments) : null
     const statusSet = q.status?.length ? new Set(q.status) : null
-    const facets = { region: {} as Record<string, number>, segment: {} as Record<string, number>, status: {} as Record<string, number> }
+    const facets = { segment: {} as Record<string, number>, status: {} as Record<string, number> }
     const hits: number[] = []
     let activeTotal = 0
     for (let p = 0; p < pams.length; p++) {
@@ -728,20 +716,18 @@ const server = {
       const st = x.active ? "active" : "inactive"
       if (x.active) activeTotal++
       if (toks.length && !matchAll(pamLower[p], toks)) continue
-      const mR = !regions || regions.has(x.region)
       const mS = !segments || segments.has(x.segment)
       const mT = !statusSet || statusSet.has(st)
       // Each facet counts rows matching every *other* filter.
-      if (mS && mT) facets.region[x.region] = (facets.region[x.region] ?? 0) + 1
-      if (mR && mT) facets.segment[x.segment] = (facets.segment[x.segment] ?? 0) + 1
-      if (mR && mS) facets.status[st] = (facets.status[st] ?? 0) + 1
-      if (mR && mS && mT) hits.push(p)
+      if (mT) facets.segment[x.segment] = (facets.segment[x.segment] ?? 0) + 1
+      if (mS) facets.status[st] = (facets.status[st] ?? 0) + 1
+      if (mS && mT) hits.push(p)
     }
     const sort = q.sort ?? { id: "name", desc: false }
     const dir = sort.desc ? -1 : 1
     const byName = (a: number, b: number) => collator.compare(pams[a].name, pams[b].name)
     if (sort.id === "load") hits.sort((a, b) => (pamLoad[a] / pams[a].capacity - pamLoad[b] / pams[b].capacity) * dir || byName(a, b))
-    else if (sort.id === "region") hits.sort((a, b) => collator.compare(pams[a].region, pams[b].region) * dir || byName(a, b))
+    else if (sort.id === "segment") hits.sort((a, b) => collator.compare(pams[a].segment, pams[b].segment) * dir || byName(a, b))
     else if (sort.id === "status") hits.sort((a, b) => (Number(pams[b].active) - Number(pams[a].active)) * dir || byName(a, b))
     else hits.sort((a, b) => byName(a, b) * dir)
     const page = paginate(hits, q.page, q.pageSize)
@@ -755,22 +741,22 @@ const server = {
     const names: Record<string, string> = {}
     for (const i of pamCompanies[leaving]) {
       const c = companies[i]
-      // Least-loaded active PAM in the same region (prefer same segment), within capacity.
+      // Least-loaded active PAM in the same segment, within capacity.
       let best = -1,
         bestScore = Infinity
-      for (const p of pamsByRegion[c.region]) {
+      for (const p of pamsBySegment[c.segment]) {
         if (p === leaving || !pams[p].active || load[p] >= pams[p].capacity) continue
-        const score = (pams[p].segment === c.segment ? 0 : 100) + (load[p] / pams[p].capacity) * 10
+        const score = load[p] / pams[p].capacity
         if (score < bestScore) {
           bestScore = score
           best = p
         }
       }
-      let reason = `Same region (${c.region}), lowest load`
+      let reason = `Same segment (${c.segment}), lowest load`
       if (best < 0) {
         for (let p = 0; p < pams.length; p++)
           if (p !== leaving && pams[p].active && (best < 0 || load[p] < load[best])) best = p
-        reason = `No capacity in ${c.region}; least-loaded overall`
+        reason = `No capacity in ${c.segment}; least-loaded overall`
       }
       load[best]++
       moves.push({ companyId: c.id, fromPamId: pamId, toPamId: pams[best].id, reason })
@@ -812,7 +798,7 @@ const server = {
       if (q.filter === "attention" && !attention) return
       if (q.filter === "done" && a.done !== a.total) return
       if (q.filter === "in_progress" && a.done === a.total) return
-      rows.push({ ...j, pamName: pams[p].name, region: pams[p].region })
+      rows.push({ ...j, pamName: pams[p].name })
     })
     rows.sort((a, b) => Number(b.email === "failed") - Number(a.email === "failed") || collator.compare(a.pamName, b.pamName))
     return paginate(rows, q.page, q.pageSize)
@@ -879,7 +865,7 @@ const server = {
     let jobs: PamJobRow[]
     if (p !== undefined) {
       const agg = pamAggs({ ...run, scope: Int32Array.from(scope) }).get(p)
-      jobs = agg ? [{ ...jobOf(run, p, agg), pamName: pams[p].name, region: pams[p].region }] : []
+      jobs = agg ? [{ ...jobOf(run, p, agg), pamName: pams[p].name }] : []
     } else jobs = server.pamJobs(run.id, { page: 0, pageSize: 6, filter: "attention" }).rows
     const next = schedules.filter((s) => s.enabled).sort((a, b) => a.nextRunAt.localeCompare(b.nextRunAt))[0] ?? null
     const jobsForEmail = p !== undefined ? jobs : null
@@ -909,8 +895,7 @@ const server = {
     const count = (k: string) => scopeIndices(k).length
     return [
       { key: "all", label: "All active companies", count: N_COMPANIES },
-      ...REGIONS.map((r) => ({ key: `region:${r}`, label: `Region = ${r}`, count: count(`region:${r}`) })),
-      { key: "segment:Enterprise", label: "Segment = Enterprise", count: count("segment:Enterprise") },
+      ...SEGMENTS.map((s) => ({ key: `segment:${s}`, label: `Segment = ${s}`, count: count(`segment:${s}`) })),
       { key: "pam:p1", label: `PAM = ${pams[0].name}`, count: count("pam:p1") },
     ]
   },

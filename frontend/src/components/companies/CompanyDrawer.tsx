@@ -141,7 +141,7 @@ export function CompanyDrawer({
                       </span>
                       <span className="inline-flex items-center gap-1.5">
                         <MapPin className="size-3.5" />
-                        {company.region} · {company.segment}
+                        {company.segment}
                       </span>
                     </div>
                   </SheetDescription>
@@ -196,7 +196,6 @@ export function CompanyDrawer({
                       {[
                         ["Legal name", company.name],
                         ["Industry", company.industry],
-                        ["Region", company.region],
                         ["Segment", company.segment],
                         ["Tracking", "Active"],
                         ["Company ID", company.id.toUpperCase()],

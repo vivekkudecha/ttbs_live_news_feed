@@ -3,7 +3,6 @@
 
 export type Role = "admin" | "manager" | "pam" | "auditor"
 
-export type Region = "North" | "South" | "East" | "West"
 export type Segment = "Enterprise" | "Mid-market" | "Emerging"
 
 export interface User {
@@ -21,7 +20,6 @@ export interface Pam {
   name: string
   email: string
   whatsapp: string
-  region: Region
   segment: Segment
   active: boolean
   capacity: number
@@ -33,7 +31,6 @@ export interface Company {
   id: string
   name: string
   industry: string
-  region: Region
   segment: Segment
   active: boolean
   pamId: string | null
@@ -96,7 +93,7 @@ export interface PriorityAction {
 }
 
 export type DeliveryStatus = "sent" | "pending" | "failed" | "skipped"
-export type RunStatus = "queued" | "running" | "completed" | "partial" | "failed"
+export type RunStatus = "scheduled" | "queued" | "running" | "completed" | "partial" | "failed" | "cancelled"
 
 export interface PamJob {
   pamId: string
@@ -182,8 +179,10 @@ export interface Schedule {
   templateId: string
   providerKey: string
   scope: string
+  /** Backend only: machine key behind the `scope` label (e.g. "segment:Enterprise"). */
+  scopeKey?: string
   enabled: boolean
-  budgetCap: number
+  budgetCap: number | null
   channels: ("email" | "whatsapp")[]
 }
 
@@ -257,7 +256,7 @@ export interface ImportPreview {
   reassignments: number
   duplicatesMerged: number
   issues: ImportRowIssue[]
-  sample: { company: string; pam: string; email: string; whatsapp: string; region: string; change: "new" | "updated" | "reassigned" | "unchanged" }[]
+  sample: { company: string; pam: string; email: string; whatsapp: string; segment?: string | null; change: "new" | "updated" | "reassigned" | "unchanged" }[]
 }
 
 export interface ImportRecord {
@@ -301,7 +300,6 @@ export interface CompanyQuery {
   page: number
   pageSize: number
   search?: string
-  regions?: string[]
   segments?: string[]
   pamIds?: string[]
   latest?: LatestStatus[]
@@ -314,7 +312,6 @@ export interface CompanyListRow {
   id: string
   name: string
   industry: string
-  region: Region
   segment: Segment
   pamId: string | null
   pamName: string
@@ -326,7 +323,7 @@ export interface CompanyListRow {
 }
 
 export interface CompanyPage extends Page<CompanyListRow> {
-  facets: { region: Record<string, number>; segment: Record<string, number>; latest: Record<string, number> }
+  facets: { segment: Record<string, number>; latest: Record<string, number> }
   tookMs: number
 }
 
@@ -334,7 +331,6 @@ export interface PamOption {
   id: string
   name: string
   email: string
-  region: Region
   segment: Segment
   active: boolean
   load: number
@@ -368,7 +364,6 @@ export interface CompanyDetail {
 export interface SignalRow extends ResearchResult {
   companyName: string
   industry: string
-  region: Region
   pamName: string
   priority?: { rank: number; whyNow: string; action: string }
 }
@@ -389,7 +384,6 @@ export interface SignalPage extends Page<SignalRow> {
 
 export interface PamJobRow extends PamJob {
   pamName: string
-  region: Region
 }
 
 export interface DashboardSummary {
@@ -467,14 +461,155 @@ export interface PamQuery {
   page: number
   pageSize: number
   search?: string
-  regions?: string[]
   segments?: string[]
   status?: ("active" | "inactive")[]
   sort?: SortDir
 }
 
 export interface PamPage extends Page<PamCard> {
-  facets: { region: Record<string, number>; segment: Record<string, number>; status: Record<string, number> }
+  facets: { segment: Record<string, number>; status: Record<string, number> }
   activeTotal: number
   tookMs: number
+}
+
+// ---------------------------------------------------------------------------
+// FastAPI backend contracts (/api/v1). Used when VITE_API_URL is set.
+// ---------------------------------------------------------------------------
+
+export type DeliveryChannel = "email" | "whatsapp"
+
+/** How research is scheduled after an import commit. */
+export interface RunPlan {
+  mode: "none" | "now" | "at"
+  runAt?: string
+  channels: DeliveryChannel[]
+}
+
+export interface BackendImportPreview extends ImportPreview {
+  id: string
+  validRows: number
+  errorRows: number
+}
+
+export interface Job {
+  id: string
+  label: string
+  trigger: "adhoc" | "scheduled" | "import"
+  scheduleId: string | null
+  importId: string | null
+  scopeKey: string
+  templateId: string
+  channels: DeliveryChannel[]
+  provider: string
+  model: string
+  status: RunStatus
+  scheduledFor: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  windowStart: string | null
+  windowEnd: string | null
+  triggeredBy: string
+  companies: number
+  done: number
+  withSignal: number
+  failed: number
+  cacheHits: number
+  cost: number
+  estimatedCost: number
+  budgetCap: number | null
+  error: string | null
+  notifications: { pending: number; sent: number; failed: number; skipped: number }
+}
+
+export interface JobResult {
+  id: string
+  runId: string
+  companyId: string
+  companyName: string
+  pamId: string | null
+  status: ResearchStatus | "running"
+  category: SignalCategory | null
+  keySignals: string | null
+  opportunity: string | null
+  outreach: string | null
+  sources: Source[]
+  tokensIn: number
+  tokensOut: number
+  cost: number
+  latencyMs: number
+  cached: boolean
+  attempts: number
+  error: string | null
+  finishedAt: string | null
+}
+
+export interface JobResultPage extends Page<JobResult> {
+  counts: Partial<Record<JobResult["status"], number>>
+}
+
+export interface JobNotification {
+  id: string
+  runId: string
+  pamId: string
+  pamName: string | null
+  channel: DeliveryChannel
+  recipient: string | null
+  status: "pending" | "sending" | "sent" | "failed" | "skipped"
+  attempts: number
+  lastError: string | null
+  nextAttemptAt: string | null
+  sentAt: string | null
+  subject: string | null
+}
+
+export interface ScheduleInput {
+  name: string
+  intervalDays: number
+  runAtTime: string
+  scopeKey: string
+  channels: DeliveryChannel[]
+  budgetCap?: number | null
+  enabled?: boolean
+}
+
+export interface QueueStats {
+  broker: { research: number | null; notify: number | null; maintenance: number | null }
+  db: { runsActive: number; researchPending: number; researchRunning: number; notificationsPending: number }
+}
+
+// ---- Research AI settings (live backend) ----------------------------------------------------
+export type AiProvider = "perplexity" | "gemini"
+
+/** One saved AI provider. The API key itself is never returned, only `keyHint`. */
+export interface LlmConfig {
+  provider: AiProvider
+  label: string
+  configured: boolean
+  active: boolean // exactly one provider is active; research runs use it
+  keyHint: string | null
+  model: string | null
+  modelProvider: string | null
+  verifiedAt: string | null
+  lastCheckOk: boolean | null
+  lastCheckError: string | null
+  lastCheckLatencyMs: number | null
+  updatedAt: string | null
+  updatedBy: string | null
+}
+
+export interface LlmSettings {
+  mode: "perplexity" | "fake" // server LLM_PROVIDER: "fake" = offline dev mode
+  active: AiProvider | null
+  providers: LlmConfig[]
+}
+
+export interface LlmModel {
+  id: string // "anthropic/claude-sonnet-5" | "gemini-3.6-flash"
+  provider: string // model owner, e.g. "anthropic", "google"
+  name: string
+}
+
+export interface LlmModelList {
+  models: LlmModel[]
+  providers: { key: string; count: number }[]
 }

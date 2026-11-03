@@ -10,7 +10,6 @@ import type {
   ImportRecord,
   Pam,
   Provider,
-  Region,
   Schedule,
   Segment,
   SignalCategory,
@@ -19,72 +18,72 @@ import type {
 } from "@/api/types"
 
 export const pams: Pam[] = [
-  { id: "p1", name: "Aarav Mehta", email: "aarav.mehta@ttbs.example", whatsapp: "+91 98100 11001", region: "North", segment: "Enterprise", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: true },
-  { id: "p2", name: "Priya Nair", email: "priya.nair@ttbs.example", whatsapp: "+91 98450 22002", region: "South", segment: "Enterprise", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: true },
-  { id: "p3", name: "Rohan Das", email: "rohan.das@ttbs.example", whatsapp: "+91 98300 33003", region: "East", segment: "Mid-market", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: true },
-  { id: "p4", name: "Sneha Kulkarni", email: "sneha.kulkarni@ttbs.example", whatsapp: "+91 98200 44004", region: "West", segment: "Enterprise", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: false },
-  { id: "p5", name: "Vikram Singh", email: "vikram.singh@ttbs.example", whatsapp: "+91 98110 55005", region: "North", segment: "Mid-market", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: true },
-  { id: "p6", name: "Ananya Iyer", email: "ananya.iyer@ttbs.example", whatsapp: "+91 98400 66006", region: "South", segment: "Emerging", active: true, capacity: 10, notifyEmail: true, notifyWhatsapp: true },
-  { id: "p7", name: "Karan Malhotra", email: "karan.malhotra@ttbs.example", whatsapp: "+91 98190 77007", region: "West", segment: "Mid-market", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: true },
-  { id: "p8", name: "Meera Banerjee", email: "meera.banerjee@ttbs.example", whatsapp: "+91 98310 88008", region: "East", segment: "Enterprise", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: true },
+  { id: "p1", name: "Aarav Mehta", email: "aarav.mehta@ttbs.example", whatsapp: "+91 98100 11001", segment: "Enterprise", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: true },
+  { id: "p2", name: "Priya Nair", email: "priya.nair@ttbs.example", whatsapp: "+91 98450 22002", segment: "Enterprise", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: true },
+  { id: "p3", name: "Rohan Das", email: "rohan.das@ttbs.example", whatsapp: "+91 98300 33003", segment: "Mid-market", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: true },
+  { id: "p4", name: "Sneha Kulkarni", email: "sneha.kulkarni@ttbs.example", whatsapp: "+91 98200 44004", segment: "Enterprise", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: false },
+  { id: "p5", name: "Vikram Singh", email: "vikram.singh@ttbs.example", whatsapp: "+91 98110 55005", segment: "Mid-market", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: true },
+  { id: "p6", name: "Ananya Iyer", email: "ananya.iyer@ttbs.example", whatsapp: "+91 98400 66006", segment: "Emerging", active: true, capacity: 10, notifyEmail: true, notifyWhatsapp: true },
+  { id: "p7", name: "Karan Malhotra", email: "karan.malhotra@ttbs.example", whatsapp: "+91 98190 77007", segment: "Mid-market", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: true },
+  { id: "p8", name: "Meera Banerjee", email: "meera.banerjee@ttbs.example", whatsapp: "+91 98310 88008", segment: "Enterprise", active: true, capacity: 12, notifyEmail: true, notifyWhatsapp: true },
 ]
 
 
-export const companySeed: [string, string, Region, Segment][] = [
-  ["Aranya Logistics Pvt Ltd", "Logistics", "North", "Enterprise"],
-  ["Bodhi Fincorp Ltd", "NBFC", "West", "Enterprise"],
-  ["Chandrika Healthcare Pvt Ltd", "Healthcare", "East", "Enterprise"],
-  ["Devika Retail Ventures Pvt Ltd", "Retail", "South", "Mid-market"],
-  ["Ekam Steel & Power Ltd", "Manufacturing", "East", "Enterprise"],
-  ["Falguni Foods Pvt Ltd", "FMCG", "North", "Mid-market"],
-  ["Gaurang Infra Projects Ltd", "Infrastructure", "West", "Enterprise"],
-  ["Hemadri Pharma Ltd", "Pharma", "South", "Enterprise"],
-  ["Ishaan EdTech Pvt Ltd", "Education", "North", "Emerging"],
-  ["Jaivardhan Auto Components Ltd", "Automotive", "West", "Mid-market"],
-  ["Kaveri Payments Pvt Ltd", "Fintech", "South", "Emerging"],
-  ["Lakshya Insurance Brokers Pvt Ltd", "Insurance", "North", "Mid-market"],
-  ["Madhavi Hospitality Pvt Ltd", "Hospitality", "West", "Mid-market"],
-  ["Nirmala Textiles Ltd", "Textiles", "South", "Mid-market"],
-  ["Ojas Renewable Energy Pvt Ltd", "Energy", "North", "Enterprise"],
-  ["Pranav Media Networks Pvt Ltd", "Media", "East", "Mid-market"],
-  ["Quila Realty Developers Pvt Ltd", "Real Estate", "North", "Mid-market"],
-  ["Rudra Cements Ltd", "Manufacturing", "East", "Enterprise"],
-  ["Saanvi Diagnostics Ltd", "Healthcare", "South", "Mid-market"],
-  ["Tanmay Software Labs Pvt Ltd", "IT Services", "South", "Emerging"],
-  ["Udaan Air Cargo Services Pvt Ltd", "Logistics", "West", "Mid-market"],
-  ["Vaidehi Microfinance Ltd", "NBFC", "East", "Mid-market"],
-  ["Warrior Security Services Pvt Ltd", "Facility Services", "North", "Mid-market"],
-  ["Yamuna Agro Industries Ltd", "Agri", "North", "Emerging"],
-  ["Zenith Clean Mobility Pvt Ltd", "Automotive", "South", "Emerging"],
-  ["Abhinav Cold Chain Pvt Ltd", "Logistics", "West", "Emerging"],
-  ["Bhavya Housing Finance Ltd", "Housing Finance", "West", "Mid-market"],
-  ["Charvi Fashion Retail Ltd", "Retail", "North", "Enterprise"],
-  ["Dhruv Electronics Mfg Pvt Ltd", "Electronics", "South", "Enterprise"],
-  ["Eshan Hospitals Pvt Ltd", "Healthcare", "North", "Enterprise"],
-  ["Firoza Travel Tech Ltd", "Travel", "North", "Mid-market"],
-  ["Girija Chemicals Ltd", "Chemicals", "West", "Mid-market"],
-  ["Harini Contact Solutions Pvt Ltd", "BPO", "South", "Mid-market"],
-  ["Indus Valley Ceramics Ltd", "Manufacturing", "West", "Mid-market"],
-  ["Jyotsna University Trust", "Education", "East", "Mid-market"],
-  ["Kalyani Small Finance Bank Ltd", "Banking", "East", "Enterprise"],
-  ["Lavanya Cosmetics Pvt Ltd", "D2C", "North", "Emerging"],
-  ["Mrinal Data Centres Pvt Ltd", "Data Centre", "South", "Enterprise"],
-  ["Navya Warehousing Ltd", "Logistics", "East", "Mid-market"],
-  ["Omkar Engineering Works Ltd", "Engineering", "West", "Enterprise"],
-  ["Pallavi Securities Ltd", "Broking", "North", "Mid-market"],
-  ["Rachit Quick Commerce Pvt Ltd", "E-commerce", "South", "Emerging"],
-  ["Shaurya Defence Systems Ltd", "Defence", "South", "Enterprise"],
-  ["Tejas Tyres India Pvt Ltd", "Automotive", "East", "Enterprise"],
-  ["Urvi Wellness Clinics Pvt Ltd", "Healthcare", "West", "Emerging"],
-  ["Vihaan Gaming Studios Pvt Ltd", "Media", "North", "Emerging"],
-  ["Yashvi Co-working Spaces Pvt Ltd", "Real Estate", "South", "Mid-market"],
-  ["Zoya Jewellery Retail Ltd", "Retail", "West", "Mid-market"],
+export const companySeed: [string, string, Segment][] = [
+  ["Aranya Logistics Pvt Ltd", "Logistics", "Enterprise"],
+  ["Bodhi Fincorp Ltd", "NBFC", "Enterprise"],
+  ["Chandrika Healthcare Pvt Ltd", "Healthcare", "Enterprise"],
+  ["Devika Retail Ventures Pvt Ltd", "Retail", "Mid-market"],
+  ["Ekam Steel & Power Ltd", "Manufacturing", "Enterprise"],
+  ["Falguni Foods Pvt Ltd", "FMCG", "Mid-market"],
+  ["Gaurang Infra Projects Ltd", "Infrastructure", "Enterprise"],
+  ["Hemadri Pharma Ltd", "Pharma", "Enterprise"],
+  ["Ishaan EdTech Pvt Ltd", "Education", "Emerging"],
+  ["Jaivardhan Auto Components Ltd", "Automotive", "Mid-market"],
+  ["Kaveri Payments Pvt Ltd", "Fintech", "Emerging"],
+  ["Lakshya Insurance Brokers Pvt Ltd", "Insurance", "Mid-market"],
+  ["Madhavi Hospitality Pvt Ltd", "Hospitality", "Mid-market"],
+  ["Nirmala Textiles Ltd", "Textiles", "Mid-market"],
+  ["Ojas Renewable Energy Pvt Ltd", "Energy", "Enterprise"],
+  ["Pranav Media Networks Pvt Ltd", "Media", "Mid-market"],
+  ["Quila Realty Developers Pvt Ltd", "Real Estate", "Mid-market"],
+  ["Rudra Cements Ltd", "Manufacturing", "Enterprise"],
+  ["Saanvi Diagnostics Ltd", "Healthcare", "Mid-market"],
+  ["Tanmay Software Labs Pvt Ltd", "IT Services", "Emerging"],
+  ["Udaan Air Cargo Services Pvt Ltd", "Logistics", "Mid-market"],
+  ["Vaidehi Microfinance Ltd", "NBFC", "Mid-market"],
+  ["Warrior Security Services Pvt Ltd", "Facility Services", "Mid-market"],
+  ["Yamuna Agro Industries Ltd", "Agri", "Emerging"],
+  ["Zenith Clean Mobility Pvt Ltd", "Automotive", "Emerging"],
+  ["Abhinav Cold Chain Pvt Ltd", "Logistics", "Emerging"],
+  ["Bhavya Housing Finance Ltd", "Housing Finance", "Mid-market"],
+  ["Charvi Fashion Retail Ltd", "Retail", "Enterprise"],
+  ["Dhruv Electronics Mfg Pvt Ltd", "Electronics", "Enterprise"],
+  ["Eshan Hospitals Pvt Ltd", "Healthcare", "Enterprise"],
+  ["Firoza Travel Tech Ltd", "Travel", "Mid-market"],
+  ["Girija Chemicals Ltd", "Chemicals", "Mid-market"],
+  ["Harini Contact Solutions Pvt Ltd", "BPO", "Mid-market"],
+  ["Indus Valley Ceramics Ltd", "Manufacturing", "Mid-market"],
+  ["Jyotsna University Trust", "Education", "Mid-market"],
+  ["Kalyani Small Finance Bank Ltd", "Banking", "Enterprise"],
+  ["Lavanya Cosmetics Pvt Ltd", "D2C", "Emerging"],
+  ["Mrinal Data Centres Pvt Ltd", "Data Centre", "Enterprise"],
+  ["Navya Warehousing Ltd", "Logistics", "Mid-market"],
+  ["Omkar Engineering Works Ltd", "Engineering", "Enterprise"],
+  ["Pallavi Securities Ltd", "Broking", "Mid-market"],
+  ["Rachit Quick Commerce Pvt Ltd", "E-commerce", "Emerging"],
+  ["Shaurya Defence Systems Ltd", "Defence", "Enterprise"],
+  ["Tejas Tyres India Pvt Ltd", "Automotive", "Enterprise"],
+  ["Urvi Wellness Clinics Pvt Ltd", "Healthcare", "Emerging"],
+  ["Vihaan Gaming Studios Pvt Ltd", "Media", "Emerging"],
+  ["Yashvi Co-working Spaces Pvt Ltd", "Real Estate", "Mid-market"],
+  ["Zoya Jewellery Retail Ltd", "Retail", "Mid-market"],
 ]
 
 
 export interface SignalTemplate {
   category: SignalCategory
-  keySignals: (c: { region: Region }) => string
+  keySignals: (c: { id: string }) => string
   opportunity: string
   outreach: string
   whyNow: string
@@ -92,12 +91,14 @@ export interface SignalTemplate {
   offerings: string[]
 }
 
-export const city = (r: Region) => ({ North: "Lucknow and Jaipur", South: "Coimbatore and Vizag", East: "Bhubaneswar and Guwahati", West: "Nagpur and Surat" })[r]
+const CITIES = ["Lucknow and Jaipur", "Coimbatore and Vizag", "Bhubaneswar and Guwahati", "Nagpur and Surat"]
+/** A stable pair of cities per company, for demo signal text. */
+export const city = (companyId: string) => CITIES[(parseInt(companyId.replace(/\D/g, ""), 10) || 0) % CITIES.length]
 
 export const signalPool: SignalTemplate[] = [
   {
     category: "Expansion",
-    keySignals: (c) => `Announced **3 new regional hubs** in **${city(c.region)}**, going live next quarter; hiring **400+ operations staff**.`,
+    keySignals: (c) => `Announced **3 new regional hubs** in **${city(c.id)}**, going live next quarter; hiring **400+ operations staff**.`,
     opportunity: "**Multi-site connectivity**: **SD-WAN iFLX** with **Smart ILL** primary links and **Managed Wi-Fi** for new hubs.",
     outreach: "Approach **Head-IT / Infra** with a **multi-site SD-WAN design** and phased rollout aligned to hub go-live.",
     whyNow: "New hubs go live next quarter, so connectivity vendors get shortlisted in the next 4–6 weeks.",
@@ -160,7 +161,7 @@ export const signalPool: SignalTemplate[] = [
   },
   {
     category: "Expansion",
-    keySignals: (c) => `Plans **40 new outlets** across **Tier-2 cities** including **${city(c.region)}** over the next 12 months.`,
+    keySignals: (c) => `Plans **40 new outlets** across **Tier-2 cities** including **${city(c.id)}** over the next 12 months.`,
     opportunity: "**SD-WAN** for store network, **WhatsApp Business** for customer engagement, **Managed Wi-Fi** in stores.",
     outreach: "Pitch a **retail store-in-a-box** connectivity package to **Head-Retail Ops and IT**.",
     whyNow: "Store rollout plan is approved; first wave opens next quarter.",
@@ -281,7 +282,7 @@ export const channels: Channel[] = [
 ]
 
 export const audit: AuditEntry[] = [
-  { id: "ev20", ts: "2026-11-02T09:15:04+05:30", actor: "sneha.kulkarni", role: "manager", action: "run.start", entity: "Run R-0013", detail: "Ad-hoc run on West region · template v3", ip: "10.20.4.18" },
+  { id: "ev20", ts: "2026-11-02T09:15:04+05:30", actor: "sneha.kulkarni", role: "manager", action: "run.start", entity: "Run R-0013", detail: "Ad-hoc run on Enterprise segment · template v3", ip: "10.20.4.18" },
   { id: "ev19", ts: "2026-11-02T09:10:12+05:30", actor: "sneha.kulkarni", role: "manager", action: "auth.login", entity: "User sneha.kulkarni", detail: "Successful login", ip: "10.20.4.18" },
   { id: "ev18", ts: "2026-11-02T09:02:40+05:30", actor: "admin", role: "admin", action: "auth.login", entity: "User admin", detail: "Successful login", ip: "10.20.1.5" },
   { id: "ev17", ts: "2026-11-02T08:55:01+05:30", actor: "unknown", role: "system", action: "auth.login_failed", entity: "User admin", detail: "Invalid password (attempt 2 of 5)", ip: "10.20.9.77" },
@@ -338,12 +339,12 @@ export const importPreview: ImportPreview = {
     { row: 47, company: "Nexus Freight Pvt Ltd", field: "PAM Email", message: "PAM email domain is not on the allow-list", severity: "warning" },
   ],
   sample: [
-    { company: "Sunrise Agritech LLP", pam: "Vikram Singh", email: "vikram.singh@ttbs.example", whatsapp: "98400 1234", region: "North", change: "new" },
-    { company: "Nexus Freight Pvt Ltd", pam: "Karan Malhotra", email: "karan.m@partner.example", whatsapp: "+91 98190 77007", region: "West", change: "new" },
-    { company: "Orchid Diagnostics Ltd", pam: "Ananya Iyer", email: "ananya.iyer@ttbs.example", whatsapp: "+91 98400 66006", region: "South", change: "new" },
-    { company: "Ishaan EdTech Pvt Ltd", pam: "Vikram Singh", email: "vikram.singh@ttbs.example", whatsapp: "+91 98110 55005", region: "North", change: "reassigned" },
-    { company: "Rudra Cements Ltd", pam: "Meera Banerjee", email: "meera.banerjee@ttbs.example", whatsapp: "+91 98310 88008", region: "East", change: "reassigned" },
-    { company: "Bodhi Fincorp Ltd", pam: "Sneha Kulkarni", email: "sneha.kulkarni@ttbs.example", whatsapp: "+91 98200 44004", region: "West", change: "updated" },
-    { company: "Aranya Logistics Pvt Ltd", pam: "Aarav Mehta", email: "aarav.mehta@ttbs.example", whatsapp: "+91 98100 11001", region: "North", change: "unchanged" },
+    { company: "Sunrise Agritech LLP", pam: "Vikram Singh", email: "vikram.singh@ttbs.example", whatsapp: "98400 1234", segment: "Enterprise", change: "new" },
+    { company: "Nexus Freight Pvt Ltd", pam: "Karan Malhotra", email: "karan.m@partner.example", whatsapp: "+91 98190 77007", segment: "Enterprise", change: "new" },
+    { company: "Orchid Diagnostics Ltd", pam: "Ananya Iyer", email: "ananya.iyer@ttbs.example", whatsapp: "+91 98400 66006", segment: "Enterprise", change: "new" },
+    { company: "Ishaan EdTech Pvt Ltd", pam: "Vikram Singh", email: "vikram.singh@ttbs.example", whatsapp: "+91 98110 55005", segment: "Enterprise", change: "reassigned" },
+    { company: "Rudra Cements Ltd", pam: "Meera Banerjee", email: "meera.banerjee@ttbs.example", whatsapp: "+91 98310 88008", segment: "Enterprise", change: "reassigned" },
+    { company: "Bodhi Fincorp Ltd", pam: "Sneha Kulkarni", email: "sneha.kulkarni@ttbs.example", whatsapp: "+91 98200 44004", segment: "Enterprise", change: "updated" },
+    { company: "Aranya Logistics Pvt Ltd", pam: "Aarav Mehta", email: "aarav.mehta@ttbs.example", whatsapp: "+91 98100 11001", segment: "Enterprise", change: "unchanged" },
   ],
 }

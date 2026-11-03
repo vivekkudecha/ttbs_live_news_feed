@@ -87,7 +87,6 @@ export function CompaniesList() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [search, setSearch] = useState("")
-  const [regions, setRegions] = useState<string[]>([])
   const [segments, setSegments] = useState<string[]>([])
   // Arriving from the PAMs table (?pam=ID) pre-filters to that PAM's logos.
   const [pamIds, setPamIds] = useState<string[]>(() => (params.get("pam") ? [params.get("pam")!] : []))
@@ -103,7 +102,6 @@ export function CompaniesList() {
     page: pagination.pageIndex,
     pageSize: pagination.pageSize,
     search: debouncedSearch,
-    regions,
     segments,
     pamIds,
     latest: latest as LatestStatus[],
@@ -160,15 +158,11 @@ export function CompaniesList() {
         ),
       },
       {
-        id: "region",
-        accessorKey: "region",
-        meta: { label: "Region" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Region" />,
-        cell: ({ row }) => (
-          <span className="text-muted-foreground">
-            {row.original.region} <span className="text-muted-foreground/60">·</span> {row.original.segment}
-          </span>
-        ),
+        id: "segment",
+        accessorKey: "segment",
+        meta: { label: "Segment" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Segment" />,
+        cell: ({ row }) => <span className="text-muted-foreground">{row.original.segment}</span>,
       },
     )
     if (!isPam)
@@ -309,7 +303,7 @@ export function CompaniesList() {
   })
 
   const selectedIds = Object.keys(rowSelection)
-  const filtered = regions.length + segments.length + pamIds.length + latest.length > 0 || search !== ""
+  const filtered = segments.length + pamIds.length + latest.length > 0 || search !== ""
   const setFilter = (fn: (v: string[]) => void) => (v: string[]) => {
     fn(v)
     resetPage()
@@ -342,7 +336,6 @@ export function CompaniesList() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <DataTableFacetedFilter title="Region" value={regions} onChange={setFilter(setRegions)} counts={page?.facets.region} options={["North", "South", "East", "West"].map((v) => ({ value: v, label: v }))} />
           <DataTableFacetedFilter title="Segment" value={segments} onChange={setFilter(setSegments)} counts={page?.facets.segment} options={["Enterprise", "Mid-market", "Emerging"].map((v) => ({ value: v, label: v }))} />
           {!isPam && <PamMultiFilter value={pamIds} onChange={setFilter(setPamIds)} />}
           <DataTableFacetedFilter title="Latest cycle" value={latest} onChange={setFilter(setLatest)} counts={page?.facets.latest} options={latestStatusOptions} />
@@ -352,7 +345,6 @@ export function CompaniesList() {
               size="sm"
               className="h-9 text-muted-foreground"
               onClick={() => {
-                setRegions([])
                 setSegments([])
                 setPamIds([])
                 setLatest([])

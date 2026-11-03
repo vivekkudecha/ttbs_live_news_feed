@@ -166,7 +166,6 @@ function PamJobsCard({ runId }: { runId: string }) {
                 <TableRow key={j.pamId}>
                   <TableCell className="pl-6">
                     <span className="font-medium">{j.pamName}</span>
-                    <p className="text-xs text-muted-foreground">{j.region}</p>
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={j.status} />

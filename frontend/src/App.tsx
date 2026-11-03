@@ -15,6 +15,8 @@ const Signals = lazy(() => import("@/pages/Signals"))
 const Digest = lazy(() => import("@/pages/Digest"))
 const RunsList = lazy(() => import("@/pages/Runs").then((m) => ({ default: m.RunsList })))
 const RunDetail = lazy(() => import("@/pages/Runs").then((m) => ({ default: m.RunDetail })))
+const JobsList = lazy(() => import("@/pages/Jobs").then((m) => ({ default: m.JobsList })))
+const JobDetail = lazy(() => import("@/pages/Jobs").then((m) => ({ default: m.JobDetail })))
 const CompaniesList = lazy(() => import("@/pages/Companies").then((m) => ({ default: m.CompaniesList })))
 const CompanyDetail = lazy(() => import("@/pages/Companies").then((m) => ({ default: m.CompanyDetail })))
 const Pams = lazy(() => import("@/pages/Pams"))
@@ -70,6 +72,8 @@ export default function App() {
                   <Route path="digest" element={<Digest />} />
                   <Route path="runs" element={<RunsList />} />
                   <Route path="runs/:id" element={<RunDetail />} />
+                  <Route path="jobs" element={<JobsList />} />
+                  <Route path="jobs/:id" element={<JobDetail />} />
                   <Route path="companies" element={<CompaniesList />} />
                   <Route path="companies/:id" element={<CompanyDetail />} />
                   <Route path="pams" element={<Pams />} />

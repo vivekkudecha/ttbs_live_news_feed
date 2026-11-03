@@ -1,6 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "./client"
-import type { CompanyQuery, PamQuery, SignalQuery } from "./types"
+import { backend, backendEnabled } from "./http"
+import type { AiProvider, CompanyQuery, PamQuery, RunPlan, ScheduleInput, SignalQuery } from "./types"
 
 /*
  * Data hooks. Rules that keep the UI smooth at 10k+ rows:
@@ -44,17 +45,18 @@ export const useSignalsInfinite = (q: Omit<SignalQuery, "page">) =>
 export const useDashboard = (pamId?: string) => useQuery({ queryKey: ["dashboard", pamId], queryFn: () => api.dashboard(pamId), refetchInterval: 10_000 })
 export const useDigest = (runId: string, pamId: string) =>
   useQuery({ queryKey: ["digest", runId, pamId], queryFn: () => api.digest(runId, pamId), enabled: !!runId && !!pamId, ...paged })
-export const useScopeOptions = () => useQuery({ queryKey: ["scopes"], queryFn: () => api.scopeOptions(), staleTime: 60_000 })
+export const useScopeOptions = () =>
+  useQuery({ queryKey: ["scopes"], queryFn: () => (backendEnabled ? backend.scopes() : api.scopeOptions()), staleTime: backendEnabled ? 10_000 : 60_000 })
 
 // ---- Small resources --------------------------------------------------------------------
 export const useTemplates = () => useQuery({ queryKey: ["templates"], queryFn: () => api.listTemplates() })
-export const useSchedules = () => useQuery({ queryKey: ["schedules"], queryFn: () => api.listSchedules() })
+export const useSchedules = () => useQuery({ queryKey: ["schedules"], queryFn: () => (backendEnabled ? backend.listSchedules() : api.listSchedules()) })
 export const useProviders = () => useQuery({ queryKey: ["providers"], queryFn: () => api.listProviders() })
 export const useChannels = () => useQuery({ queryKey: ["channels"], queryFn: () => api.listChannels() })
 export const useUsers = () => useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() })
 export const useAudit = () => useQuery({ queryKey: ["audit"], queryFn: () => api.listAudit() })
 export const useFinops = () => useQuery({ queryKey: ["finops"], queryFn: () => api.finops() })
-export const useImports = () => useQuery({ queryKey: ["imports"], queryFn: () => api.listImports() })
+export const useImports = () => useQuery({ queryKey: ["imports"], queryFn: () => (backendEnabled ? backend.listImports() : api.listImports()) })
 
 // ---- Mutations --------------------------------------------------------------------------
 function useInvalidate(keys: string[][]) {
@@ -71,8 +73,12 @@ export const useReassign = () => {
   return useMutation({ mutationFn: (v: { companyIds: string[]; toPamId: string; actor: string }) => api.reassignCompanies(v.companyIds, v.toPamId, v.actor), onSuccess: inv })
 }
 export const useStartRun = () => {
-  const inv = useInvalidate([["runs"], ["audit"]])
-  return useMutation({ mutationFn: (v: Parameters<typeof api.startRun>[0]) => api.startRun(v), onSuccess: inv })
+  const inv = useInvalidate([["runs"], ["jobs"], ["audit"]])
+  return useMutation({
+    mutationFn: (v: Parameters<typeof api.startRun>[0]): Promise<{ id: string }> =>
+      backendEnabled ? backend.startRun({ scopeKey: v.scopeKey, label: v.label, templateId: v.templateId }) : api.startRun(v),
+    onSuccess: inv,
+  })
 }
 export const useResend = () => {
   const inv = useInvalidate([["pamJobs"], ["run"], ["dashboard"], ["audit"]])
@@ -80,9 +86,75 @@ export const useResend = () => {
 }
 export const useToggleSchedule = () => {
   const inv = useInvalidate([["schedules"], ["audit"]])
-  return useMutation({ mutationFn: (v: { id: string; enabled: boolean; actor: string }) => api.toggleSchedule(v.id, v.enabled, v.actor), onSuccess: inv })
+  return useMutation({
+    mutationFn: async (v: { id: string; enabled: boolean; actor: string }) => {
+      if (backendEnabled) await backend.updateSchedule(v.id, { enabled: v.enabled })
+      else await api.toggleSchedule(v.id, v.enabled, v.actor)
+    },
+    onSuccess: inv,
+  })
 }
 export const useCommitImport = () => {
   const inv = useInvalidate([["imports"], ["audit"]])
   return useMutation({ mutationFn: (fileName: string) => api.commitImport(fileName), onSuccess: inv })
+}
+
+// ---- FastAPI backend only (VITE_API_URL) -----------------------------------------------------
+const ACTIVE = new Set(["scheduled", "queued", "running"])
+
+export const useCommitBackendImport = () => {
+  const inv = useInvalidate([["imports"], ["jobs"], ["scopes"]])
+  return useMutation({ mutationFn: (v: { id: string; schedule: RunPlan }) => backend.commitImport(v.id, v.schedule), onSuccess: inv })
+}
+export const useJobs = (q: { page: number; pageSize: number; status?: string }) =>
+  useQuery({
+    queryKey: ["jobs", q],
+    queryFn: () => backend.listJobs(q),
+    placeholderData: keepPreviousData,
+    refetchInterval: (query) => (query.state.data?.rows.some((r) => ACTIVE.has(r.status)) ? 3_000 : 15_000),
+  })
+export const useJob = (id: string) =>
+  useQuery({ queryKey: ["job", id], queryFn: () => backend.getJob(id), refetchInterval: (q) => (q.state.data && ACTIVE.has(q.state.data.status) ? 2_000 : false) })
+export const useJobResults = (id: string, q: { page: number; pageSize: number; status?: string }, live: boolean) =>
+  useQuery({ queryKey: ["jobResults", id, q], queryFn: () => backend.jobResults(id, q), placeholderData: keepPreviousData, refetchInterval: live ? 3_000 : false })
+export const useJobNotifications = (id: string, live: boolean) =>
+  useQuery({ queryKey: ["jobNotifications", id], queryFn: () => backend.jobNotifications(id), refetchInterval: live ? 3_000 : false })
+export const useQueues = () => useQuery({ queryKey: ["queues"], queryFn: () => backend.queues(), refetchInterval: 5_000 })
+
+const useJobInvalidate = () => useInvalidate([["jobs"], ["job"], ["jobResults"], ["jobNotifications"], ["queues"]])
+export const useCancelJob = () => useMutation({ mutationFn: (id: string) => backend.cancelJob(id), onSuccess: useJobInvalidate() })
+export const useRetryFailed = () => useMutation({ mutationFn: (id: string) => backend.retryFailed(id), onSuccess: useJobInvalidate() })
+export const useResendNotification = () => useMutation({ mutationFn: (id: string) => backend.resendNotification(id), onSuccess: useJobInvalidate() })
+export const useCreateSchedule = () => {
+  const inv = useInvalidate([["schedules"]])
+  return useMutation({ mutationFn: (v: ScheduleInput) => backend.createSchedule(v), onSuccess: inv })
+}
+export const useRunScheduleNow = () => {
+  const inv = useInvalidate([["jobs"], ["schedules"]])
+  return useMutation({ mutationFn: (id: string) => backend.runScheduleNow(id), onSuccess: inv })
+}
+
+// ---- Research AI settings (live backend) ------------------------------------------------
+export const useLlmSettings = () => useQuery({ queryKey: ["llmSettings"], queryFn: () => backend.llmSettings(), enabled: backendEnabled })
+/** Mutation (not a query): a typed key must never become part of a cache key. */
+export const useLoadLlmModels = () =>
+  useMutation({ mutationFn: (v: { provider: AiProvider; apiKey?: string }) => backend.llmModels(v.provider, v.apiKey) })
+export const useSaveLlmConfig = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { provider: AiProvider; apiKey?: string; model: string }) => backend.saveLlmConfig(v.provider, { apiKey: v.apiKey, model: v.model }),
+    onSuccess: (s) => qc.setQueryData(["llmSettings"], s),
+  })
+}
+export const useActivateLlm = () => {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: (p: AiProvider) => backend.activateLlm(p), onSuccess: (s) => qc.setQueryData(["llmSettings"], s) })
+}
+export const useTestLlmConfig = () => {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: (p: AiProvider) => backend.testLlmConfig(p), onSuccess: () => qc.invalidateQueries({ queryKey: ["llmSettings"] }) })
+}
+export const useRemoveLlmConfig = () => {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: (p: AiProvider) => backend.removeLlmConfig(p), onSuccess: () => qc.invalidateQueries({ queryKey: ["llmSettings"] }) })
 }

@@ -55,7 +55,6 @@ export default function Pams() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ whatsapp: false })
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [search, setSearch] = useState("")
-  const [regions, setRegions] = useState<string[]>([])
   const [segments, setSegments] = useState<string[]>([])
   const [status, setStatus] = useState<string[]>(["active"])
   const q = useDebounced(search, 250)
@@ -65,7 +64,6 @@ export default function Pams() {
     page: pagination.pageIndex,
     pageSize: pagination.pageSize,
     search: q,
-    regions,
     segments,
     status: status as ("active" | "inactive")[],
     sort: sorting[0],
@@ -125,15 +123,11 @@ export default function Pams() {
         ),
       },
       {
-        id: "region",
-        accessorKey: "region",
-        meta: { label: "Region" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Region" />,
-        cell: ({ row }) => (
-          <span className="text-muted-foreground">
-            {row.original.region} <span className="text-muted-foreground/60">·</span> {row.original.segment}
-          </span>
-        ),
+        id: "segment",
+        accessorKey: "segment",
+        meta: { label: "Segment" },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Segment" />,
+        cell: ({ row }) => <span className="text-muted-foreground">{row.original.segment}</span>,
       },
       {
         id: "load",
@@ -265,7 +259,7 @@ export default function Pams() {
     fn(v)
     resetPage()
   }
-  const filtered = regions.length + segments.length > 0 || search !== "" || status.join() !== "active"
+  const filtered = segments.length > 0 || search !== "" || status.join() !== "active"
   const selectedIds = Object.keys(rowSelection)
 
   return (
@@ -278,7 +272,7 @@ export default function Pams() {
         <Shuffle />
         <AlertTitle>Automatic rebalancing is on</AlertTitle>
         <AlertDescription>
-          When a PAM leaves (deactivated here or missing from an import), their logos move automatically to the least-loaded active PAM in the same region, then the same segment, within capacity.
+          When a PAM leaves (deactivated here or missing from an import), their logos move automatically to the least-loaded active PAM in the same segment, within capacity.
           History and past results stay with each company.
         </AlertDescription>
       </Alert>
@@ -289,7 +283,7 @@ export default function Pams() {
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               aria-label="Search PAMs"
-              placeholder="Search name, email or region"
+              placeholder="Search name, email or segment"
               className="h-9 pl-9 pr-8"
               value={search}
               onChange={(e) => {
@@ -304,7 +298,6 @@ export default function Pams() {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <DataTableFacetedFilter title="Region" value={regions} onChange={setFilter(setRegions)} counts={page?.facets.region} options={["North", "South", "East", "West"].map((v) => ({ value: v, label: v }))} />
             <DataTableFacetedFilter title="Segment" value={segments} onChange={setFilter(setSegments)} counts={page?.facets.segment} options={["Enterprise", "Mid-market", "Emerging"].map((v) => ({ value: v, label: v }))} />
             <DataTableFacetedFilter
               title="Status"
@@ -322,7 +315,6 @@ export default function Pams() {
                 size="sm"
                 className="h-9 text-muted-foreground"
                 onClick={() => {
-                  setRegions([])
                   setSegments([])
                   setStatus(["active"])
                   setSearch("")

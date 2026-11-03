@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { useChannels, useProviders } from "@/api/hooks"
+import { backendEnabled } from "@/api/http"
+import { AiProviderSettings } from "@/components/integrations/AiProviderSettings"
 import { can, useSession } from "@/context/session"
 
 export default function Integrations() {
@@ -26,6 +28,9 @@ export default function Integrations() {
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <Bot className="size-4 text-muted-foreground" /> Research providers (LLM + web search)
         </h2>
+        {backendEnabled ? (
+          <AiProviderSettings editable={editable} />
+        ) : (
         <div className="grid gap-6 md:grid-cols-2">
           {providers.data?.map((p) => (
             <Card key={p.key} className={p.status === "not_configured" ? "border-dashed" : ""}>
@@ -83,6 +88,7 @@ export default function Integrations() {
             </Card>
           ))}
         </div>
+        )}
       </section>
 
       <section>

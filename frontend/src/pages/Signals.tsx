@@ -48,7 +48,7 @@ function SignalCardRow({ r, showPam, pamFilter }: { r: SignalRow; showPam: boole
             </Badge>
           )}
           <span className="ml-auto text-xs text-muted-foreground">
-            {r.industry} · {r.region}
+            {r.industry}
             {showPam && ` · ${r.pamName}`}
           </span>
         </div>

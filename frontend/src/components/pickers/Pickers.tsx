@@ -56,7 +56,7 @@ function SearchShell({
   )
 }
 
-const pamMeta = (p: PamOption) => `${p.region} · ${p.load}/${p.capacity} logos`
+const pamMeta = (p: PamOption) => `${p.segment} · ${p.load}/${p.capacity} logos`
 
 /** Single PAM selector. `value=""` with `allLabel` acts as "All PAMs". */
 export function PamPicker({
@@ -92,7 +92,7 @@ export function PamPicker({
       query={query}
       setQuery={setQuery}
       loading={results.isFetching}
-      placeholder="Search 5,000 PAMs by name, email or region"
+      placeholder="Search 5,000 PAMs by name, email or segment"
       trigger={
         <Button id={id} variant="outline" role="combobox" aria-expanded={open} className={cn("h-9 justify-between font-normal", !value && !allLabel && "text-muted-foreground", className)}>
           <span className="truncate">{label}</span>
@@ -187,7 +187,7 @@ export function PamMultiFilter({ value, onChange, title = "PAM" }: { value: stri
                 <Check className="size-3" />
               </span>
               <span className="min-w-0 flex-1 truncate">{p.name}</span>
-              <span className="text-xs text-muted-foreground">{p.region}</span>
+              <span className="text-xs text-muted-foreground">{p.segment}</span>
             </CommandItem>
           ))}
       </CommandGroup>
