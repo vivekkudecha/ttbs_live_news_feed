@@ -1,7 +1,9 @@
 /**
- * Upload an Excel/CSV as a named dataset, watch it save, then decide what to do next.
+ * Upload an Excel/CSV, preview it, save it under a name, watch it save, then decide what to do next.
  *
- *   1. Label + file          → POST /imports (validated, queued)
+ *   1. File (≤ 1 GB)         → POST /imports/stage (streamed to disk, with upload progress)
+ *      Check                 → background: every row validated + compared (progress), GET /imports/{id}/preview
+ *      Name → save           → POST /imports/{id}/save (original file kept, time-stamped; rows saved in the background)
  *   2. Saving… progress bar  → background job, chunked + resumable; safe to close the dialog
  *   3. Saved                 → summary + skipped rows, then "Research these companies?" and a
  *                              quick-view grid to check / edit / delete rows.
@@ -20,11 +22,12 @@ import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useDataset, useRenameDataset, useResumeDataset, useUploadDataset } from "@/api/hooks"
-import { errorMessage } from "@/api/http"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useDataset, useRenameDataset, useResumeDataset, useSaveUpload, useUploadPreview } from "@/api/hooks"
+import { ApiError, backend, errorMessage, stageUpload } from "@/api/http"
 import { fmtDateTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { Dataset } from "@/api/types"
+import type { Dataset, ImportRowIssue, UploadPreview } from "@/api/types"
 import { DatasetGrid } from "./DatasetGrid"
 import { ResearchPlan } from "./ResearchPlan"
 
@@ -53,40 +56,74 @@ export function downloadTemplate() {
 
 const baseName = (f: string) => f.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim()
 
-// ---- Step 1: pick file + label ---------------------------------------------------------------
+// ---- Step 1: pick a file → preview it → save it under a name ----------------------------------
 
-function PickFile({ onUploaded }: { onUploaded: (d: Dataset) => void }) {
-  const upload = useUploadDataset()
+const CHANGE: Record<UploadPreview["rows"][number]["change"], { label: string; cls: string }> = {
+  new: { label: "New logo", cls: "bg-success/15 text-success" },
+  reassigned: { label: "Moves PAM", cls: "bg-warning/20 text-[color-mix(in_oklch,var(--warning),black_40%)] dark:text-warning" },
+  updated: { label: "Updated", cls: "bg-info/15 text-info" },
+  unchanged: { label: "Already known", cls: "bg-muted text-muted-foreground" },
+}
+
+function PreviewTable({ p }: { p: UploadPreview }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium">
+        Preview <span className="font-normal text-muted-foreground">· first {n(p.rowsShown)} of {n(p.validRows)} valid rows</span>
+      </p>
+      <div className="max-h-80 overflow-auto rounded-lg border">
+        <Table className="min-w-[52rem]">
+          <TableHeader className="sticky top-0 z-10 bg-muted [&_th]:bg-muted">
+            <TableRow>
+              <TableHead className="w-14 pl-4">Row</TableHead>
+              <TableHead>Company</TableHead>
+              <TableHead>PAM</TableHead>
+              <TableHead>WhatsApp</TableHead>
+              <TableHead>Segment</TableHead>
+              <TableHead className="pr-4">On save</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {p.rows.map((r) => (
+              <TableRow key={`${r.row}-${r.company}`}>
+                <TableCell className="tabular pl-4 text-muted-foreground">{r.row}</TableCell>
+                <TableCell className="max-w-64">
+                  <span className="block truncate font-medium">{r.company}</span>
+                  {r.industry && <span className="block truncate text-xs text-muted-foreground">{r.industry}</span>}
+                </TableCell>
+                <TableCell className="max-w-56">
+                  <span className="block truncate">{r.pamName}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{r.pamEmail}</span>
+                </TableCell>
+                <TableCell className="tabular text-sm">{r.pamWhatsapp}</TableCell>
+                <TableCell className="text-sm">{r.segment ?? "—"}</TableCell>
+                <TableCell className="pr-4">
+                  <Badge className={cn("font-normal", CHANGE[r.change].cls)}>{CHANGE[r.change].label}</Badge>
+                  {r.change === "reassigned" && r.currentPam && <span className="block text-xs text-muted-foreground">from {r.currentPam}</span>}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  )
+}
+
+const fmtBytes = (b: number) => (b >= 1 << 30 ? `${(b / (1 << 30)).toFixed(2)} GB` : b >= 1 << 20 ? `${(b / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`)
+const MAX_BYTES = 1 << 30 // 1 GB, as the server enforces
+
+function DropZone({ onFile, busy }: { onFile: (f: File) => void; busy?: ReactNode }) {
   const input = useRef<HTMLInputElement>(null)
-  const [file, setFile] = useState<File | null>(null)
-  const [label, setLabel] = useState("")
   const [drag, setDrag] = useState(false)
-
   const choose = (f: File | undefined) => {
     if (!f) return
     if (!/\.(xlsx|csv)$/i.test(f.name)) return toast.error("Only .xlsx or .csv files are accepted")
-    setFile(f)
-    if (!label.trim()) setLabel(baseName(f.name))
+    if (f.size > MAX_BYTES) return toast.error("The file is larger than 1 GB", { description: `${f.name} is ${fmtBytes(f.size)}` })
+    onFile(f)
   }
-
-  const go = () =>
-    file &&
-    upload.mutate(
-      { file, label },
-      {
-        onSuccess: (d) => onUploaded(d),
-        onError: (e) => toast.error("Upload failed", { description: errorMessage(e) }),
-      },
-    )
-
   return (
     <div className="space-y-5">
-      <div className="grid gap-2">
-        <Label htmlFor="ds-label">Dataset name</Label>
-        <Input id="ds-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. November logos" maxLength={200} />
-        <p className="text-xs text-muted-foreground">Saved with the upload time, e.g. “{label.trim() || "November logos"} · {fmtDateTime(new Date().toISOString())}”.</p>
-      </div>
-
       <div
         onDragOver={(e) => {
           e.preventDefault()
@@ -96,51 +133,214 @@ function PickFile({ onUploaded }: { onUploaded: (d: Dataset) => void }) {
         onDrop={(e) => {
           e.preventDefault()
           setDrag(false)
-          choose(e.dataTransfer.files[0])
+          if (!busy) choose(e.dataTransfer.files[0])
         }}
         className={cn("flex min-h-44 flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-colors", drag && "border-primary bg-primary/5")}
       >
-        {file ? (
-          <>
-            <FileSpreadsheet className="size-9 text-primary" />
-            <p className="mt-2 font-medium">{file.name}</p>
-            <p className="text-sm text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</p>
-            <Button variant="link" size="sm" onClick={() => input.current?.click()}>
-              Choose a different file
-            </Button>
-          </>
-        ) : (
+        {busy ?? (
           <>
             <UploadCloud className="size-9 text-primary" />
             <p className="mt-2 font-medium">Drop Excel or CSV here</p>
-            <p className="text-sm text-muted-foreground">.xlsx or .csv · max 10 MB</p>
+            <p className="text-sm text-muted-foreground">.xlsx or .csv · up to 1 GB · you will see a preview before anything is saved</p>
             <Button variant="outline" size="sm" className="mt-3" onClick={() => input.current?.click()}>
               Browse files
             </Button>
           </>
         )}
-        <input ref={input} type="file" accept=".xlsx,.csv" className="hidden" onChange={(e) => choose(e.target.files?.[0])} />
+        <input ref={input} type="file" accept=".xlsx,.csv" className="hidden" onChange={(e) => (choose(e.target.files?.[0]), (e.target.value = ""))} />
+      </div>
+      {!busy && (
+        <details className="rounded-lg border px-4 py-3 text-sm">
+          <summary className="cursor-pointer font-medium">Expected columns</summary>
+          <ul className="mt-3 space-y-1.5">
+            {COLUMNS.map(([c, d]) => (
+              <li key={c} className="flex items-start justify-between gap-2">
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{c}</code>
+                <span className="text-right text-xs text-muted-foreground">{d}</span>
+              </li>
+            ))}
+          </ul>
+          <Button variant="link" size="sm" className="mt-2 px-0" onClick={downloadTemplate}>
+            <Download /> Download template
+          </Button>
+        </details>
+      )}
+    </div>
+  )
+}
+
+function BusyState({ title, detail, percent, onCancel }: { title: string; detail: string; percent: number | null; onCancel?: () => void }) {
+  return (
+    <div className="w-full max-w-lg space-y-3 text-left">
+      <div className="flex items-center gap-2">
+        <Loader2 className="size-4 animate-spin text-primary" />
+        <p className="font-medium">{title}</p>
+        {percent != null && <span className="tabular ml-auto text-sm text-muted-foreground">{percent}%</span>}
+      </div>
+      {percent != null ? <Progress value={percent} className="h-2 [&>div]:bg-info" aria-label={`${title} ${percent}%`} /> : <Progress value={100} className="h-2 animate-pulse" />}
+      <p className="text-xs text-muted-foreground">{detail}</p>
+      {onCancel && (
+        <Button variant="ghost" size="sm" className="px-0" onClick={onCancel}>
+          Cancel
+        </Button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Pick → upload (progress) → server checks every row in the background (progress) → preview →
+ * name it → save. The file is sent once, streamed to disk on the server, never held in memory.
+ */
+function PickFile({ onUploaded }: { onUploaded: (d: Dataset) => void }) {
+  const [file, setFile] = useState<File | null>(null)
+  const [sent, setSent] = useState<{ sent: number; total: number } | null>(null)
+  const [stagedId, setStagedId] = useState<string | null>(null)
+  const [label, setLabel] = useState("")
+  const abortRef = useRef<(() => void) | null>(null)
+  const staged = useDataset(stagedId) // polls every second while "analyzing"
+  const ready = staged.data?.status === "previewed"
+  const preview = useUploadPreview(stagedId, ready)
+  const save = useSaveUpload()
+  const p = preview.data
+
+  const reset = (discard = true) => {
+    abortRef.current?.()
+    if (discard && stagedId && staged.data && ["analyzing", "previewed"].includes(staged.data.status)) void backend.discardUpload(stagedId).catch(() => undefined)
+    setFile(null)
+    setSent(null)
+    setStagedId(null)
+    setLabel("")
+  }
+
+  const start = (f: File) => {
+    reset()
+    setFile(f)
+    setSent({ sent: 0, total: f.size })
+    const up = stageUpload(f, (s, t) => setSent({ sent: s, total: t }))
+    abortRef.current = up.abort
+    up.promise
+      .then((d) => setStagedId(d.id))
+      .catch((e) => {
+        if (!(e instanceof ApiError && e.code === "aborted")) toast.error("Upload failed", { description: errorMessage(e) })
+        setFile(null)
+        setSent(null)
+      })
+      .finally(() => (abortRef.current = null))
+  }
+
+  const doSave = () =>
+    stagedId &&
+    label.trim() &&
+    save.mutate(
+      { id: stagedId, label: label.trim() },
+      { onSuccess: (d) => onUploaded(d), onError: (e) => toast.error("Could not save the upload", { description: errorMessage(e) }) },
+    )
+
+  // 1. Uploading the bytes.
+  if (file && !stagedId && sent)
+    return (
+      <DropZone
+        onFile={start}
+        busy={
+          <BusyState
+            title={`Uploading ${file.name}`}
+            detail={`${fmtBytes(sent.sent)} of ${fmtBytes(sent.total)} sent · nothing is saved until you name it`}
+            percent={sent.total ? Math.floor((sent.sent / sent.total) * 100) : null}
+            onCancel={() => reset()}
+          />
+        }
+      />
+    )
+
+  // 2. The server is checking every row.
+  if (stagedId && (!staged.data || staged.data.status === "analyzing" || (ready && !p)))
+    return (
+      <DropZone
+        onFile={start}
+        busy={
+          <BusyState
+            title={`Checking ${file?.name ?? "the file"}`}
+            detail={`${n(staged.data?.rowsRead ?? 0)} rows read so far · validating, finding duplicates, comparing with the logos and PAMs already saved`}
+            percent={staged.data?.progress ?? null}
+            onCancel={() => reset()}
+          />
+        }
+      />
+    )
+
+  // The check found a problem with the file as a whole.
+  if (stagedId && staged.data?.status === "failed")
+    return (
+      <div className="space-y-4">
+        <Alert variant="destructive">
+          <XCircle />
+          <AlertTitle>{file?.name ?? "The file"} cannot be saved</AlertTitle>
+          <AlertDescription>{staged.data.error}</AlertDescription>
+        </Alert>
+        <IssueList issues={staged.data.issues ?? []} errorRows={staged.data.errorRows} />
+        <Button variant="outline" onClick={() => reset(false)}>
+          Choose another file
+        </Button>
+      </div>
+    )
+
+  if (!stagedId || !p) return <DropZone onFile={start} />
+
+  // 3. Preview, then the name to save it under.
+  const stamp = fmtDateTime(new Date().toISOString())
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <FileSpreadsheet className="size-5 text-primary" />
+        <div className="min-w-0">
+          <p className="truncate font-medium">{p.fileName}</p>
+          <p className="text-xs text-muted-foreground">
+            {fmtBytes(p.sizeBytes)} · {n(p.rowsTotal)} rows · {n(p.pams)} PAMs · not saved yet
+          </p>
+        </div>
+        <Button variant="link" size="sm" className="ml-auto" onClick={() => reset()}>
+          Choose a different file
+        </Button>
       </div>
 
-      <details className="rounded-lg border px-4 py-3 text-sm">
-        <summary className="cursor-pointer font-medium">Expected columns</summary>
-        <ul className="mt-3 space-y-1.5">
-          {COLUMNS.map(([c, d]) => (
-            <li key={c} className="flex items-start justify-between gap-2">
-              <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{c}</code>
-              <span className="text-right text-xs text-muted-foreground">{d}</span>
-            </li>
-          ))}
-        </ul>
-        <Button variant="link" size="sm" className="mt-2 px-0" onClick={downloadTemplate}>
-          <Download /> Download template
-        </Button>
-      </details>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+        <Stat label="Valid rows" value={n(p.validRows)} />
+        <Stat label="Rows rejected" value={n(p.errorRows)} tone={p.errorRows ? "danger" : undefined} />
+        <Stat label="New logos" value={n(p.newCompanies)} />
+        <Stat label="Already known" value={n(p.unchanged + p.updatedCompanies)} />
+        <Stat label="Move to another PAM" value={n(p.reassignments)} />
+        <Stat label="New PAMs" value={n(p.newPams)} />
+        <Stat label="Duplicates merged" value={n(p.duplicatesMerged)} />
+      </div>
+      <IssueList issues={p.issues} errorRows={p.errorRows} />
+      <PreviewTable p={p} />
 
-      <div className="flex justify-end">
-        <Button onClick={go} disabled={!file || upload.isPending}>
-          {upload.isPending ? <Loader2 className="animate-spin" /> : <UploadCloud />}
-          {upload.isPending ? "Uploading & validating…" : "Upload & save"}
+      <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:items-end">
+        <div className="grid flex-1 gap-2">
+          <Label htmlFor="ds-label">Save this upload as</Label>
+          <Input
+            id="ds-label"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && doSave()}
+            placeholder={`e.g. ${baseName(p.fileName)}`}
+            maxLength={200}
+            autoFocus
+            aria-required="true"
+          />
+          <p className="text-xs text-muted-foreground">
+            Kept with its upload time: “{label.trim() || "your name"} · {stamp}”. The original file is stored too.{" "}
+            {!label.trim() && (
+              <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => setLabel(baseName(p.fileName))}>
+                Use the file name
+              </button>
+            )}
+          </p>
+        </div>
+        <Button onClick={doSave} disabled={!label.trim() || save.isPending}>
+          {save.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
+          {save.isPending ? "Saving…" : `Save ${n(p.validRows)} rows`}
         </Button>
       </div>
     </div>
@@ -187,15 +387,14 @@ function LabelEditor({ d }: { d: Dataset }) {
   )
 }
 
-function Issues({ d }: { d: Dataset }) {
-  const issues = d.issues ?? []
+function IssueList({ issues, errorRows }: { issues: ImportRowIssue[]; errorRows: number }) {
   if (!issues.length) return null
   const errors = issues.filter((i) => i.severity === "error").length
   return (
     <details className="rounded-lg border">
       <summary className="flex cursor-pointer items-center gap-2 px-4 py-3 text-sm font-medium">
         <AlertTriangle className="size-4 text-warning" />
-        {n(d.errorRows)} row{d.errorRows === 1 ? "" : "s"} skipped
+        {n(errorRows)} row{errorRows === 1 ? "" : "s"} rejected
         {issues.length - errors > 0 && ` · ${n(issues.length - errors)} warning${issues.length - errors === 1 ? "" : "s"}`}
         <ChevronDown className="ml-auto size-4 text-muted-foreground" />
       </summary>
@@ -218,6 +417,8 @@ function Issues({ d }: { d: Dataset }) {
     </details>
   )
 }
+
+const Issues = ({ d }: { d: Dataset }) => <IssueList issues={d.issues ?? []} errorRows={d.errorRows} />
 
 function Saving({ d }: { d: Dataset }) {
   const resume = useResumeDataset()
@@ -264,7 +465,7 @@ function Saving({ d }: { d: Dataset }) {
   )
 }
 
-function Saved({ d, onUse, onDone }: { d: Dataset; onUse?: (scopeKey: string) => void; onDone?: () => void }) {
+function Saved({ d, onUse, onDone }: { d: Dataset; onUse?: (importId: string) => void; onDone?: () => void }) {
   const companies = d.companies ?? d.saved
   return (
     <div className="space-y-5">
@@ -280,8 +481,9 @@ function Saved({ d, onUse, onDone }: { d: Dataset; onUse?: (scopeKey: string) =>
           {n(companies)} companies
         </Badge>
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <Stat label="New companies" value={n(d.newCompanies)} />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+        <Stat label="New logos" value={n(d.newCompanies)} />
+        <Stat label="Already known" value={n(d.unchanged ?? 0)} />
         <Stat label="Updated" value={n(d.updatedCompanies)} />
         <Stat label="Reassigned" value={n(d.reassignments)} />
         <Stat label="New PAMs" value={n(d.newPams)} />
@@ -293,7 +495,7 @@ function Saved({ d, onUse, onDone }: { d: Dataset; onUse?: (scopeKey: string) =>
         <TabsList>
           {!onUse && (
             <TabsTrigger value="research">
-              <Zap /> Research these companies
+              <Zap /> Research this upload
             </TabsTrigger>
           )}
           <TabsTrigger value="data">
@@ -302,7 +504,7 @@ function Saved({ d, onUse, onDone }: { d: Dataset; onUse?: (scopeKey: string) =>
         </TabsList>
         {!onUse && (
           <TabsContent value="research" className="mt-4">
-            <ResearchPlan scopeKey={`import:${d.id}`} label={d.label} companies={companies} onDone={onDone} />
+            <ResearchPlan importId={d.id} label={d.label} companies={companies} previousRuns={d.runs ?? 0} lastRunAt={d.lastRunAt} onDone={onDone} />
           </TabsContent>
         )}
         <TabsContent value="data" className="mt-4">
@@ -312,14 +514,14 @@ function Saved({ d, onUse, onDone }: { d: Dataset; onUse?: (scopeKey: string) =>
 
       {onUse && (
         <div className="flex justify-end">
-          <Button onClick={() => onUse(`import:${d.id}`)}>Use this dataset</Button>
+          <Button onClick={() => onUse(d.id)}>Use this upload</Button>
         </div>
       )}
     </div>
   )
 }
 
-export function UploadFlow({ datasetId, onUse, onDone }: { datasetId?: string; onUse?: (scopeKey: string) => void; onDone?: () => void }) {
+export function UploadFlow({ datasetId, onUse, onDone }: { datasetId?: string; onUse?: (importId: string) => void; onDone?: () => void }) {
   const [id, setId] = useState<string | null>(datasetId ?? null)
   const ds = useDataset(id)
   if (!id) return <PickFile onUploaded={(d) => setId(d.id)} />

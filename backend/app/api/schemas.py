@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 from app.core.timeutil import as_utc
-from app.db.models import AuditLog, ImportBatch, LlmProviderConfig, Notification, ResearchResult, Run, Schedule
+from app.db.models import AuditLog, ImportBatch, LlmProviderConfig, Notification, ResearchResult, Run
 from app.services.imports import summary_text
 from app.services.runs import EST_COST_PER_COMPANY, dataset_label
 
@@ -20,37 +20,15 @@ Channel = Literal["email", "whatsapp"]
 
 
 class RunCreate(In):
-    scope_key: str = "all"
+    """A run always researches one saved upload: pass importId (or scopeKey "import:<id>")."""
+
+    import_id: int | None = Field(default=None, gt=0)
+    scope_key: str | None = None
     label: str | None = Field(default=None, max_length=300)
     template_id: str = "t1"
     run_at: datetime | None = None
     channels: list[Channel] = Field(default_factory=lambda: ["email", "whatsapp"])
     budget_cap: float | None = Field(default=None, gt=0)
-
-
-class ScheduleCreate(In):
-    name: str = Field(min_length=1, max_length=200)
-    interval_days: int = Field(ge=1, le=90)
-    run_at_time: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
-    timezone: str = "Asia/Kolkata"
-    scope_key: str = "all"
-    template_id: str = "t1"
-    channels: list[Channel] = Field(default_factory=lambda: ["email", "whatsapp"])
-    budget_cap: float | None = Field(default=None, gt=0)
-    enabled: bool = True
-    next_run_at: datetime | None = None
-
-
-class ScheduleUpdate(In):
-    name: str | None = Field(default=None, min_length=1, max_length=200)
-    interval_days: int | None = Field(default=None, ge=1, le=90)
-    run_at_time: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
-    timezone: str | None = None
-    scope_key: str | None = None
-    template_id: str | None = None
-    channels: list[Channel] | None = None
-    budget_cap: float | None = Field(default=None, gt=0)
-    enabled: bool | None = None
 
 
 # --- Serializers ------------------------------------------------------------------------------
@@ -60,12 +38,15 @@ def iso(dt: datetime | None) -> str | None:
     return as_utc(dt).isoformat() if dt else None
 
 
-_LEGACY_STATUS = {"committed": "completed", "previewed": "failed"}
+_LEGACY_STATUS = {"committed": "completed"}  # "previewed" rows from before datasets were migrated to "failed" (0005)
 
 
-def dataset_out(b: ImportBatch, *, companies: int | None = None, with_issues: bool = False) -> dict[str, Any]:
-    """An uploaded dataset: label + timestamp, background-save progress, and what it changed."""
+def dataset_out(b: ImportBatch, *, companies: int | None = None, with_issues: bool = False,
+                runs: tuple[int, Any, float] | None = None) -> dict[str, Any]:
+    """An uploaded dataset: label + timestamp, background-save progress, what it changed, and
+    (in lists) how often it has been researched: (run count, last run created_at, total cost)."""
     sm = b.summary or {}
+    n_runs, last_run, run_cost = runs or (0, None, 0.0)
     valid = b.rows_valid or 0
     out: dict[str, Any] = {
         "id": str(b.id),
@@ -79,7 +60,13 @@ def dataset_out(b: ImportBatch, *, companies: int | None = None, with_issues: bo
         "validRows": valid,
         "errorRows": b.rows_error,
         "saved": min(b.rows_done, valid) if b.status != "committed" else valid,
-        "progress": 100 if b.status in ("completed", "committed") else (round(b.rows_done * 100 / valid) if valid else 0),
+        # analyzing: share of the file read so far (None if the workbook does not say how big it is);
+        # saving: share of valid rows saved.
+        "progress": 100 if b.status in ("completed", "committed", "previewed")
+        else sm.get("progress") if b.status == "analyzing"
+        else (round(b.rows_done * 100 / valid) if valid else 0),
+        "rowsRead": sm.get("rows_read", b.rows_total),
+        "sizeBytes": sm.get("size_bytes"),
         "companies": companies,
         "newCompanies": sm.get("new_companies", 0),
         "updatedCompanies": sm.get("updated_companies", 0),
@@ -90,6 +77,11 @@ def dataset_out(b: ImportBatch, *, companies: int | None = None, with_issues: bo
         "finishedAt": iso(b.committed_at),
         "error": b.error,
         "summary": summary_text(b),
+        "hasFile": bool(b.stored_file),
+        "unchanged": sm.get("unchanged", 0),
+        "runs": n_runs,
+        "lastRunAt": iso(last_run),
+        "researchCost": round(float(run_cost or 0), 4),
     }
     if with_issues:
         out["issues"] = b.issues or []
@@ -191,25 +183,6 @@ def notification_out(n: Notification) -> dict[str, Any]:
         "nextAttemptAt": iso(n.next_attempt_at),
         "sentAt": iso(n.sent_at),
         "subject": (n.payload or {}).get("subject"),
-    }
-
-
-def schedule_out(s: Schedule) -> dict[str, Any]:
-    return {
-        "id": str(s.id),
-        "name": s.name,
-        "intervalDays": s.interval_days,
-        "runAtTime": s.run_at_time,
-        "timezone": s.timezone,
-        "nextRunAt": iso(s.next_run_at),
-        "lastRunAt": iso(s.last_run_at),
-        "templateId": s.template_id,
-        "providerKey": "perplexity",
-        "scopeKey": s.scope_key,
-        "scope": s.scope_key,  # replaced with a label by the route
-        "enabled": s.enabled,
-        "budgetCap": s.budget_cap,
-        "channels": s.channels,
     }
 
 

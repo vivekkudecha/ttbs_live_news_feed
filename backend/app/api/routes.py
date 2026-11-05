@@ -1,10 +1,15 @@
 """HTTP routes, /api/v1. Handlers are thin: validate input → call a service inside one unit of
 work → serialise. Sync handlers run in FastAPI's threadpool (SQLAlchemy is sync)."""
 
+import hashlib
+import re
+import uuid
+from pathlib import Path
 from typing import Any, Literal
 
 import redis
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import case, func, select, text
 
 from app.api import read_models as rm
@@ -14,6 +19,7 @@ from app.core import cache
 from app.core.config import get_settings
 from app.core.errors import PayloadTooLarge, ValidationFailed
 from app.db.models import (
+    IMPORT_UNSAVED,
     NOTE_PENDING,
     RES_PENDING,
     RES_RUNNING,
@@ -28,7 +34,7 @@ from app.db.models import (
 )
 from app.db.session import unit_of_work
 from app.research import providers
-from app.services import audit, imports, llm_config, notifications, runs, schedules
+from app.services import audit, finops, imports, llm_config, notifications, runs, telemetry
 
 router = APIRouter(prefix="/api/v1")
 
@@ -70,41 +76,141 @@ def health() -> dict[str, Any]:
 # chunks. Poll GET /imports/{id} for progress. Row edits/deletes change master company/PAM data.
 
 
-@router.post("/imports", status_code=201)
-async def upload_dataset(file: UploadFile = File(...), label: str | None = Form(None), actor: str = Depends(current_actor)) -> dict[str, Any]:
+STREAM_CHUNK = 1024 * 1024  # 1 MB
+
+
+async def _stream_to_disk(file: UploadFile) -> tuple[str, Path, int, str]:
+    """Copy the upload to UPLOAD_DIR 1 MB at a time (never whole in memory), hashing as it goes.
+    Returns (original name, temp path, size, sha256). Over the limit → 413 and nothing is kept."""
     limit = get_settings().import_max_bytes
-    data = await file.read(limit + 1)
-    if len(data) > limit:
-        raise PayloadTooLarge(f"File is larger than {limit // (1024 * 1024)} MB")
-    name = (file.filename or "upload").replace("\\", "/").rsplit("/", 1)[-1]
+    folder = get_settings().upload_path
+    folder.mkdir(parents=True, exist_ok=True)
+    tmp = folder / f".incoming-{uuid.uuid4().hex}.part"
+    sha, size = hashlib.sha256(), 0
+    try:
+        with open(tmp, "wb") as out:
+            while chunk := await file.read(STREAM_CHUNK):
+                size += len(chunk)
+                if size > limit:
+                    raise PayloadTooLarge(f"File is larger than {limit // (1024 * 1024):,} MB")
+                sha.update(chunk)
+                out.write(chunk)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    if size == 0:
+        tmp.unlink(missing_ok=True)
+        raise ValidationFailed("The file is empty")
+    return (file.filename or "upload").replace("\\", "/").rsplit("/", 1)[-1], tmp, size, sha.hexdigest()
 
-    def work():
-        with unit_of_work() as uow:
-            batch = imports.create(uow, name, data, label, actor)
-            uow.after_commit(lambda: cache.bump("imports"))
-            return sch.dataset_out(batch, companies=0, with_issues=True)
 
+async def _stage(file: UploadFile, actor: str, label: str | None) -> dict[str, Any]:
     from starlette.concurrency import run_in_threadpool
 
+    name, tmp, size, digest = await _stream_to_disk(file)
+
+    def work():
+        try:
+            with unit_of_work() as uow:
+                b = imports.stage(uow, file_name=name, temp_path=tmp, size=size, sha256=digest, actor=actor, label=label)
+                uow.after_commit(lambda: cache.bump("imports"))
+                return sch.dataset_out(b, companies=0, with_issues=True)
+        finally:
+            tmp.unlink(missing_ok=True)  # moved into place on success; cleaned up on any error
+
     return await run_in_threadpool(work)
+
+
+@router.post("/imports/stage", status_code=201)
+async def stage_upload(file: UploadFile = File(...), actor: str = Depends(current_actor)) -> dict[str, Any]:
+    """Step 1 (files up to 1 GB): stream the file to the server; type and header are checked now,
+    every row in the background. Poll GET /imports/{id} for progress, then GET /imports/{id}/preview."""
+    return await _stage(file, actor, None)
+
+
+@router.post("/imports", status_code=201)
+async def upload_dataset(file: UploadFile = File(...), label: str | None = Form(None), actor: str = Depends(current_actor)) -> dict[str, Any]:
+    """One step: stage + save under `label` (required) as soon as the background check passes."""
+    if not (label or "").strip():
+        raise ValidationFailed("Give the upload a name to save it under", details={"field": "label"})
+    return await _stage(file, actor, label)
+
+
+@router.get("/imports/{import_id}/preview")
+def upload_preview(import_id: int) -> dict[str, Any]:
+    """What the checked file contains and what saving it would change (counts over every row,
+    the first 200 valid rows, up to 500 problems)."""
+    with unit_of_work() as uow:
+        return imports.preview_of(imports.get_dataset(uow, import_id))
+
+
+@router.post("/imports/{import_id}/save")
+def save_upload(import_id: int, body: sch.DatasetPatch, actor: str = Depends(current_actor)) -> dict[str, Any]:
+    """Step 2: save a checked upload under the user's name; rows are saved in the background."""
+    with unit_of_work() as uow:
+        b = imports.save(uow, import_id, body.label, actor)
+        return sch.dataset_out(b, companies=0)
+
+
+@router.delete("/imports/{import_id}", status_code=204)
+def discard_upload(import_id: int, actor: str = Depends(current_actor)) -> None:
+    """Drop an upload that was never saved, and its file."""
+    with unit_of_work() as uow:
+        imports.discard(uow, import_id, actor)
+        uow.after_commit(lambda: cache.bump("imports"))
 
 
 @router.get("/imports")
 def list_datasets() -> list[dict[str, Any]]:
     with unit_of_work() as uow:
-        batches = list(uow.session.scalars(select(ImportBatch).order_by(ImportBatch.id.desc()).limit(200)))
+        batches = list(uow.session.scalars(
+            select(ImportBatch).where(ImportBatch.status.not_in(IMPORT_UNSAVED)).order_by(ImportBatch.id.desc()).limit(200)
+        ))
+        ids = [b.id for b in batches]
         counts = dict(uow.session.execute(
             select(DatasetCompany.import_id, func.count(DatasetCompany.id))
-            .where(DatasetCompany.import_id.in_([b.id for b in batches])).group_by(DatasetCompany.import_id)
+            .where(DatasetCompany.import_id.in_(ids)).group_by(DatasetCompany.import_id)
         ).all()) if batches else {}
-        return [sch.dataset_out(b, companies=counts.get(b.id, 0)) for b in batches]
+        run_stats = {
+            iid: (n, last, cost) for iid, n, last, cost in uow.session.execute(
+                select(Run.import_id, func.count(Run.id), func.max(Run.created_at), func.coalesce(func.sum(Run.cost), 0.0))
+                .where(Run.import_id.in_(ids)).group_by(Run.import_id)
+            )
+        } if batches else {}
+        return [sch.dataset_out(b, companies=counts.get(b.id, 0), runs=run_stats.get(b.id)) for b in batches]
 
 
 @router.get("/imports/{import_id}")
 def get_dataset(import_id: int) -> dict[str, Any]:
     with unit_of_work() as uow:
         b = imports.get_dataset(uow, import_id)
-        return sch.dataset_out(b, companies=imports.member_count(uow, b.id), with_issues=True)
+        stats = uow.session.execute(
+            select(func.count(Run.id), func.max(Run.created_at), func.coalesce(func.sum(Run.cost), 0.0)).where(Run.import_id == b.id)
+        ).one()
+        return sch.dataset_out(b, companies=imports.member_count(uow, b.id), with_issues=True, runs=tuple(stats))
+
+
+@router.get("/imports/{import_id}/file")
+def download_dataset_file(import_id: int) -> FileResponse:
+    """The original file as uploaded, named "<name> · <upload time>"."""
+    from zoneinfo import ZoneInfo
+
+    from app.core.errors import NotFound
+    from app.core.timeutil import as_utc
+
+    with unit_of_work() as uow:
+        b = imports.get_dataset(uow, import_id)
+        label, created, original = b.label or "upload", b.created_at, b.file_name
+        try:
+            path = imports.stored_path(b)
+        except NotFound:
+            path = None
+    if path is None or not path.is_file():
+        raise NotFound("The original file was not kept for this upload (uploaded before files were stored)")
+    stamp = as_utc(created).astimezone(ZoneInfo(get_settings().timezone)).strftime("%Y-%m-%d %H-%M")
+    ext = original.rsplit(".", 1)[-1].lower() if "." in original else "xlsx"
+    safe = re.sub(r'[\\/:*?"<>|]+', " ", label).strip() or "upload"
+    return FileResponse(path, filename=f"{safe} {stamp}.{ext}", headers={"Cache-Control": "no-store"})
 
 
 @router.patch("/imports/{import_id}")
@@ -181,7 +287,7 @@ def _note_counts(uow, run_ids: list[int]) -> dict[int, dict[str, int]]:
 def create_run(body: sch.RunCreate, actor: str = Depends(current_actor)) -> dict[str, Any]:
     with unit_of_work() as uow:
         run = runs.create_run(
-            uow, scope_key=body.scope_key, actor=actor, label=body.label, run_at=body.run_at,
+            uow, scope_key=body.scope_key, import_id=body.import_id, actor=actor, label=body.label, run_at=body.run_at,
             channels=list(body.channels), template_id=body.template_id, budget_cap=body.budget_cap,
         )
         return sch.run_out(run)
@@ -268,6 +374,72 @@ def retry_failed(run_id: int, actor: str = Depends(current_actor)) -> dict[str, 
         return {"requeued": runs.retry_failed(uow, run_id, actor)}
 
 
+@router.get("/runs/{run_id}/timeline")
+def run_timeline(run_id: int) -> dict[str, Any]:
+    """The run end to end: its upload, lifecycle, every PAM digest, every problem (retries,
+    failures, skips), and per-minute research throughput."""
+    with unit_of_work() as uow:
+        run = runs.get_run(uow, run_id)
+        return telemetry.run_timeline(uow, run.id, run.import_id)
+
+
+@router.get("/runs/{run_id}/events")
+def run_events(
+    run_id: int, pg: tuple[int, int] = Depends(_page), kind: str | None = None, status: str | None = None,
+    company_id: int | None = Query(None, alias="companyId"),
+) -> dict[str, Any]:
+    """Every process event of a run (one per research attempt, delivery attempt, …), newest first."""
+    page, size = pg
+    with unit_of_work() as uow:
+        runs.get_run(uow, run_id)
+        return telemetry.query(uow, page=page, size=size, kind=kind, status=status, run_id=run_id, company_id=company_id)
+
+
+@router.get("/runs/{run_id}/audit")
+def run_audit(run_id: int, pg: tuple[int, int] = Depends(_page)) -> dict[str, Any]:
+    """The run's audit trail (hash-chained rows tagged with this run), oldest first."""
+    page, size = pg
+    with unit_of_work() as uow:
+        runs.get_run(uow, run_id)
+        return telemetry.run_audit(uow, run_id, page, size)
+
+
+@router.get("/runs/{run_id}/costs")
+def run_costs(run_id: int) -> dict[str, Any]:
+    with unit_of_work() as uow:
+        runs.get_run(uow, run_id)
+        return finops.run_costs(uow, run_id)
+
+
+# --- Telemetry ---------------------------------------------------------------------------------
+
+
+@router.get("/telemetry/summary")
+def telemetry_summary(hours: int = Query(24, ge=1, le=24 * 31)) -> dict[str, Any]:
+    def load():
+        with unit_of_work() as uow:
+            return telemetry.summary(uow, hours)
+
+    return cache.cached("telemetry", f"summary:{hours}", 10, load)
+
+
+@router.get("/telemetry/events")
+def telemetry_events(
+    pg: tuple[int, int] = Depends(_page), kind: str | None = None, status: str | None = None,
+    run_id: int | None = Query(None, alias="runId"), import_id: int | None = Query(None, alias="importId"),
+    hours: int | None = Query(None, ge=1, le=24 * 366),
+) -> dict[str, Any]:
+    """Event stream with filters. `kind` ending in "." is a prefix ("research.")."""
+    from datetime import timedelta
+
+    from app.core.timeutil import utcnow
+
+    page, size = pg
+    with unit_of_work() as uow:
+        return telemetry.query(uow, page=page, size=size, kind=kind, status=status, run_id=run_id, import_id=import_id,
+                               since=utcnow() - timedelta(hours=hours) if hours else None)
+
+
 # --- Notifications -----------------------------------------------------------------------------
 
 
@@ -283,55 +455,6 @@ def run_notifications(run_id: int, pg: tuple[int, int] = Depends(_page), status:
 def resend(notification_id: int, actor: str = Depends(current_actor)) -> dict[str, Any]:
     with unit_of_work() as uow:
         return sch.notification_out(notifications.resend(uow, notification_id, actor))
-
-
-# --- Schedules ---------------------------------------------------------------------------------
-
-
-def _schedule_rows(uow) -> list[dict[str, Any]]:
-    out = []
-    for s in schedules.list_all(uow):
-        row = sch.schedule_out(s)
-        row["scope"] = runs.scope_label(uow, s.scope_key)
-        out.append(row)
-    return out
-
-
-@router.get("/schedules")
-def list_schedules() -> list[dict[str, Any]]:
-    def load():
-        with unit_of_work() as uow:
-            return _schedule_rows(uow)
-
-    return cache.cached("schedules", "list", get_settings().cache_ttl_lists, load)
-
-
-@router.post("/schedules", status_code=201)
-def create_schedule(body: sch.ScheduleCreate, actor: str = Depends(current_actor)) -> dict[str, Any]:
-    with unit_of_work() as uow:
-        s = schedules.create(uow, body.model_dump(), actor)
-        return sch.schedule_out(s) | {"scope": runs.scope_label(uow, s.scope_key)}
-
-
-@router.patch("/schedules/{schedule_id}")
-def update_schedule(schedule_id: int, body: sch.ScheduleUpdate, actor: str = Depends(current_actor)) -> dict[str, Any]:
-    data = body.model_dump(exclude_unset=True)
-    if not data:
-        raise ValidationFailed("Nothing to update")
-    with unit_of_work() as uow:
-        s = schedules.update(uow, schedule_id, data, actor)
-        return sch.schedule_out(s) | {"scope": runs.scope_label(uow, s.scope_key)}
-
-
-@router.post("/schedules/{schedule_id}/run", status_code=201)
-def run_schedule_now(schedule_id: int, actor: str = Depends(current_actor)) -> dict[str, Any]:
-    with unit_of_work() as uow:
-        s = schedules.get(uow, schedule_id)
-        run = runs.create_run(
-            uow, scope_key=s.scope_key, actor=actor, label=f"{s.name} · manual", channels=s.channels,
-            template_id=s.template_id, budget_cap=s.budget_cap, schedule_id=s.id,
-        )
-        return sch.run_out(run)
 
 
 # --- Queues ------------------------------------------------------------------------------------

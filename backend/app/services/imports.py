@@ -1,5 +1,13 @@
-"""Excel/CSV uploads as named datasets: parse → validate → save in the background (chunked,
-resumable) → edit / delete rows (changes go to master data).
+"""Excel/CSV uploads (up to 1 GB) as named datasets.
+
+    stage    stream the file to disk (1 MB at a time, SHA-256 on the way), check type + header → "analyzing"
+    analyze  background: read every row once (streaming), validate, de-duplicate, compare with the
+             database in batches → counts, issues, 200-row sample → "previewed"
+    save     the user names it → "queued"; `process` streams the stored file into master data in
+             resumable chunks → "completed"
+    discard  unsaved previews are dropped (by the user, or after IMPORT_PREVIEW_TTL_HOURS)
+
+Nothing ever holds the whole file in memory; the file itself is kept, time-stamped, under UPLOAD_DIR.
 
 Expected columns (case-insensitive, aliases accepted):
     Company*, Industry, Segment, PAM Name*, PAM Email*, PAM WhatsApp*
@@ -10,35 +18,45 @@ import csv
 import hashlib
 import io
 import logging
+import os
 import re
+import time
 import uuid
 import zipfile
-from dataclasses import dataclass
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import timedelta
+from itertools import islice
+from pathlib import Path
 from typing import Any
 
 from email_validator import EmailNotValidError, validate_email
 from openpyxl import load_workbook
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, insert, select, update
 
-from app.core import cache
+from app.core import cache, metrics
 from app.core.config import get_settings
 from app.core.errors import Conflict, NotFound, PayloadTooLarge, UnsupportedMedia, ValidationFailed
 from app.core.timeutil import as_utc, utcnow
 from app.db.models import (
     IMPORT_ACTIVE,
+    IMPORT_ANALYZING,
     IMPORT_COMPLETED,
+    IMPORT_DISCARDED,
     IMPORT_FAILED,
+    IMPORT_PREVIEWED,
     IMPORT_PROCESSING,
     IMPORT_QUEUED,
     SEGMENTS,
     Company,
+    CompanyAssignment,
     DatasetCompany,
     ImportBatch,
     Pam,
 )
 from app.db.session import UnitOfWork, unit_of_work
-from app.services import assignments, audit
+from app.services import assignments, audit, telemetry
 
 log = logging.getLogger(__name__)
 
@@ -79,37 +97,69 @@ def _canon_segment(v: str) -> str | None:
 # --- Parsing ---------------------------------------------------------------------------------
 
 
-def _read_table(file_name: str, data: bytes) -> list[list[Any]]:
-    s = get_settings()
-    if len(data) > s.import_max_bytes:
-        raise PayloadTooLarge(f"File is larger than {s.import_max_bytes // (1024 * 1024)} MB")
-    if not data:
+def sniff(path: Path, file_name: str) -> str:
+    """'xlsx' | 'csv' from the name, confirmed by the first bytes."""
+    with open(path, "rb") as f:
+        head = f.read(4)
+    if not head:
         raise ValidationFailed("The file is empty")
     lower = file_name.lower()
     if lower.endswith(".xlsx"):
-        if not data.startswith(b"PK"):
+        if not head.startswith(b"PK"):
             raise UnsupportedMedia("File has an .xlsx name but is not an Excel workbook")
-        try:
-            wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)  # formulas → cached values
-        except (zipfile.BadZipFile, KeyError, ValueError, OSError) as e:
-            raise ValidationFailed("Could not read the workbook; is it a valid .xlsx file?") from e
-        try:
-            ws = wb.worksheets[0]
-            rows = []
-            for row in ws.iter_rows(values_only=True):
-                rows.append(list(row))
-                if len(rows) > s.import_max_rows + 1:
-                    break
-            return rows
-        finally:
-            wb.close()
+        return "xlsx"
     if lower.endswith(".csv"):
-        try:
-            text = data.decode("utf-8-sig")
-        except UnicodeDecodeError:
-            text = data.decode("cp1252", errors="replace")
-        return [r for r in csv.reader(io.StringIO(text))][: s.import_max_rows + 2]
+        return "csv"
     raise UnsupportedMedia("Only .xlsx or .csv files are accepted")
+
+
+def _csv_encoding(path: Path) -> str:
+    """UTF-8 unless the first MB is not valid UTF-8 (then Windows-1252, as Excel saves CSV)."""
+    with open(path, "rb") as f:
+        sample = f.read(1 << 20)
+    try:
+        sample.decode("utf-8-sig")
+        return "utf-8-sig"
+    except UnicodeDecodeError as e:
+        return "utf-8-sig" if e.start >= len(sample) - 3 else "cp1252"  # a character cut at the sample edge
+
+
+@contextmanager
+def open_table(path: Path, kind: str) -> Iterator[tuple[Iterator[list[Any]], Callable[[], float | None]]]:
+    """Stream the first sheet / the CSV row by row. Yields (rows, progress) where progress() is the
+    fraction read so far (None when unknown)."""
+    if kind == "csv":
+        size = max(path.stat().st_size, 1)
+        raw = open(path, "rb")  # noqa: SIM115 - closed below
+        text = io.TextIOWrapper(raw, encoding=_csv_encoding(path), errors="replace", newline="")
+        try:
+            yield csv.reader(text), lambda: min(raw.tell() / size, 1.0)
+        finally:
+            text.close()
+        return
+    from openpyxl.utils.exceptions import InvalidFileException
+
+    # A file handle, not a path: openpyxl judges paths by extension, and staged files end in ".part".
+    fh = open(path, "rb")  # noqa: SIM115 - closed below
+    try:
+        wb = load_workbook(fh, read_only=True, data_only=True)  # streaming reader; formulas → cached values
+    except (zipfile.BadZipFile, KeyError, ValueError, OSError, InvalidFileException) as e:
+        fh.close()
+        raise ValidationFailed("Could not read the workbook; is it a valid .xlsx file?") from e
+    try:
+        ws = wb.worksheets[0]
+        expected = ws.max_row or None  # from the sheet's dimension tag; may be missing
+        read = [0]
+
+        def rows() -> Iterator[list[Any]]:
+            for row in ws.iter_rows(values_only=True):
+                read[0] += 1
+                yield list(row)
+
+        yield rows(), (lambda: min(read[0] / expected, 1.0) if expected else None)
+    finally:
+        wb.close()
+        fh.close()
 
 
 def _map_headers(header: list[Any]) -> tuple[dict[str, int], list[str]]:
@@ -136,49 +186,66 @@ def _cell(row: list[Any], idx: int | None) -> str:
     return re.sub(r"\s+", " ", str(v)).strip()
 
 
+_LABELS = {"company": "Company", "pam_name": "PAM Name", "pam_email": "PAM Email", "pam_whatsapp": "PAM WhatsApp"}
+
+
+def read_header(rows: Iterator[list[Any]]) -> tuple[dict[str, int], int]:
+    """Consume rows up to the header. Returns (column mapping, 1-based header row number)."""
+    for i, row in enumerate(rows):
+        if any(c not in (None, "") for c in row):
+            mapping, _unknown = _map_headers(row)
+            missing = [f for f in REQUIRED if f not in mapping]
+            if missing:
+                raise ValidationFailed(
+                    "Missing required column(s): " + ", ".join(_LABELS[m] for m in missing),
+                    details={"missing": [_LABELS[m] for m in missing]},
+                )
+            return mapping, i + 1
+        if i > 50:
+            break
+    raise ValidationFailed("The file has no header row")
+
+
+def check_header(path: Path, kind: str) -> None:
+    """Fast, synchronous: wrong type or missing columns are reported before the background check."""
+    with open_table(path, kind) as (rows, _):
+        read_header(rows)
+
+
 @dataclass
-class ParsedFile:
-    rows: list[dict[str, Any]]
-    issues: list[dict[str, Any]]
-    total: int
-    errors: int
-    duplicates_merged: int
+class Scan:
+    """Running totals of one pass over a file."""
+
+    total: int = 0
+    valid: int = 0
+    errors: int = 0
+    duplicates: int = 0
+    issues: list[dict[str, Any]] = field(default_factory=list)
 
 
-def parse_file(file_name: str, data: bytes) -> ParsedFile:
+def _key_hash(key: str) -> int:
+    return int.from_bytes(hashlib.blake2b(key.encode(), digest_size=8).digest(), "big")
+
+
+def valid_rows(rows: Iterator[list[Any]], mapping: dict[str, int], header_row: int, scan: Scan) -> Iterator[dict[str, Any]]:
+    """Validate and normalise rows one at a time. The first row of a logo wins; later duplicates are
+    reported and skipped (only an 8-byte hash per logo is remembered, so millions of rows fit)."""
     s = get_settings()
-    table = _read_table(file_name, data)
-    # Skip leading blank rows to find the header.
-    start = next((i for i, r in enumerate(table) if any(c not in (None, "") for c in r)), None)
-    if start is None:
-        raise ValidationFailed("The file has no header row")
-    mapping, _unknown = _map_headers(table[start])
-    missing = [f for f in REQUIRED if f not in mapping]
-    if missing:
-        labels = {"company": "Company", "pam_name": "PAM Name", "pam_email": "PAM Email", "pam_whatsapp": "PAM WhatsApp"}
-        raise ValidationFailed(
-            "Missing required column(s): " + ", ".join(labels[m] for m in missing),
-            details={"missing": [labels[m] for m in missing]},
-        )
-    body = table[start + 1 :]
-    if len(body) > s.import_max_rows:
-        raise PayloadTooLarge(f"Too many rows: limit is {s.import_max_rows:,}")
-
-    issues: list[dict[str, Any]] = []
-    by_key: dict[str, dict[str, Any]] = {}
+    seen: set[int] = set()
     pam_names: dict[str, str] = {}
-    total = errors = dupes = 0
 
-    def issue(rown: int, company: str, field: str, msg: str, sev: str) -> None:
-        if len(issues) < MAX_ISSUES:
-            issues.append({"row": rown, "company": company, "field": field, "message": msg, "severity": sev})
+    def issue(rown: int, company: str, fld: str, msg: str, sev: str) -> None:
+        if len(scan.issues) < MAX_ISSUES:
+            scan.issues.append({"row": rown, "company": company, "field": fld, "message": msg, "severity": sev})
 
-    for offset, row in enumerate(body):
-        rown = start + offset + 2  # 1-based sheet row number
+    for offset, row in enumerate(rows):
+        rown = header_row + offset + 1  # 1-based sheet row number
         values = {f: _cell(row, mapping.get(f)) for f in HEADER_ALIASES}
         if not any(values.values()):
             continue
-        total += 1
+        scan.total += 1
+        if scan.total > s.import_max_rows:
+            raise PayloadTooLarge(f"Too many rows: the limit is {s.import_max_rows:,}")
         company = values["company"]
         row_errors = 0
         if not company:
@@ -203,31 +270,31 @@ def parse_file(file_name: str, data: bytes) -> ParsedFile:
             if not segment:
                 issue(rown, company, "Segment", f"Unknown segment '{values['segment']}'; left blank", "warning")
         if row_errors:
-            errors += 1
+            scan.errors += 1
             continue
 
+        key = name_key(company)
+        h = _key_hash(key)
+        if h in seen:
+            scan.duplicates += 1
+            issue(rown, company, "Company", "Same logo as an earlier row; the earlier row is used", "warning")
+            continue
+        seen.add(h)
         if email in pam_names and pam_names[email].lower() != values["pam_name"].lower():
             issue(rown, company, "PAM Name", f"{email} also appears as '{pam_names[email]}'; using the first name", "warning")
         pam_names.setdefault(email, values["pam_name"])
-
-        key = name_key(company)
-        if key in by_key:
-            dupes += 1
-            issue(rown, company, "Company", f"Duplicate of row {by_key[key]['row']}; this later row wins", "warning")
-        by_key[key] = {
-            "row": rown,
-            "company": company,
-            "name_key": key,
-            "industry": values["industry"] or None,
-            "segment": segment,
-            "pam_name": pam_names[email],
-            "pam_email": email,
-            "pam_whatsapp": wa,
+        scan.valid += 1
+        yield {
+            "row": rown, "company": company, "name_key": key, "industry": values["industry"] or None, "segment": segment,
+            "pam_name": pam_names[email], "pam_email": email, "pam_whatsapp": wa,
         }
 
-    if total == 0:
-        raise ValidationFailed("The file has a header but no data rows")
-    return ParsedFile(rows=list(by_key.values()), issues=issues, total=total, errors=errors, duplicates_merged=dupes)
+
+def stream_valid_rows(path: Path, kind: str, skip: int = 0) -> Iterator[dict[str, Any]]:
+    """Valid, de-duplicated rows of a stored file, skipping the first `skip` (a resume cursor)."""
+    with open_table(path, kind) as (rows, _):
+        mapping, header_row = read_header(rows)
+        yield from islice(valid_rows(rows, mapping, header_row, Scan()), skip, None)
 
 
 # --- Diff against the database ----------------------------------------------------------------
@@ -267,7 +334,7 @@ def _diff(uow: UnitOfWork, rows: list[dict[str, Any]]) -> tuple[list[dict[str, A
             change = "unchanged"
         key = {"new": "new_companies", "updated": "updated_companies", "reassigned": "reassignments"}.get(change, "unchanged")
         counts[key] += 1
-        out.append({**r, "change": change})
+        out.append({**r, "change": change, "current_pam": c.pam.name if c is not None and c.pam is not None else None})
     counts["new_pams"] = len({r["pam_email"] for r in rows} - set(pams))
     return out, counts
 
@@ -275,35 +342,269 @@ def _diff(uow: UnitOfWork, rows: list[dict[str, Any]]) -> tuple[list[dict[str, A
 # --- Datasets: create → background save (chunked, resumable) ------------------------------------
 
 
-def create(uow: UnitOfWork, file_name: str, data: bytes, label: str | None, actor: str) -> ImportBatch:
-    """Parse + validate the file and store it as a queued dataset. Rows are saved to master data
-    by `process` in the background; nothing else is written here."""
-    parsed = parse_file(file_name, data)
+PREVIEW_ROWS = 200
+_PREVIEW_KEYS = ("new_companies", "updated_companies", "reassignments", "unchanged", "new_pams")
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-")[:60] or "upload"
+
+
+def _ext(file_name: str) -> str:
+    return "csv" if file_name.lower().endswith(".csv") else "xlsx"
+
+
+def stored_path(b: ImportBatch) -> Path:
+    folder = get_settings().upload_path.resolve()
+    path = (folder / (b.stored_file or "")).resolve()
+    if not b.stored_file or path.parent != folder:
+        raise NotFound("The original file is not available for this upload")
+    return path
+
+
+def _file_name_for(b: ImportBatch, label: str | None) -> str:
+    """"<UTC timestamp>_<id>_<name>.<ext>": built only from a slug, so it can never leave the folder."""
+    stamp = as_utc(b.created_at or utcnow()).strftime("%Y%m%d-%H%M%S")
+    return f"{stamp}_{b.id}_{_slug(label) if label else 'unsaved'}.{_ext(b.file_name)}"
+
+
+def stage(uow: UnitOfWork, *, file_name: str, temp_path: Path, size: int, sha256: str, actor: str,
+          label: str | None = None) -> ImportBatch:
+    """Register a streamed upload and queue the background check. `temp_path` (already on disk, in
+    UPLOAD_DIR) is moved into place. With `label` the upload is saved as soon as the check passes."""
+    kind = sniff(temp_path, file_name)
+    check_header(temp_path, kind)
     now = utcnow()
-    label = (label or "").strip()[:200] or file_name.rsplit(".", 1)[0][:200]
-    batch = ImportBatch(
-        file_name=file_name[:255],
-        file_sha256=hashlib.sha256(data).hexdigest(),
-        uploaded_by=actor,
-        label=label,
-        status=IMPORT_QUEUED if parsed.rows else IMPORT_FAILED,
-        rows_total=parsed.total,
-        rows_valid=len(parsed.rows),
-        rows_error=parsed.errors,
-        rows=parsed.rows,
-        issues=parsed.issues,
-        summary={"new_companies": 0, "updated_companies": 0, "reassignments": 0, "new_pams": 0, "unchanged": 0,
-                 "duplicates_merged": parsed.duplicates_merged},
-        error=None if parsed.rows else "Every row has errors; nothing to save",
-        heartbeat_at=now,
+    label = (label or "").strip()[:200]
+    b = ImportBatch(
+        file_name=file_name[:255], file_sha256=sha256, uploaded_by=actor, label=label, status=IMPORT_ANALYZING,
+        rows=[], issues=[], summary={"size_bytes": size, "auto_save": bool(label), "progress": 0},
+        heartbeat_at=now, created_at=now,
     )
-    uow.session.add(batch)
+    uow.session.add(b)
     uow.session.flush()
-    audit.record(uow, "dataset.upload", "import", batch.id,
-                 {"label": label, "file": batch.file_name, "rows": parsed.total, "valid": len(parsed.rows), "errors": parsed.errors}, actor=actor)
-    if parsed.rows:
-        _enqueue(uow, batch.id)
-    return batch
+    b.stored_file = _file_name_for(b, None)
+    os.replace(temp_path, get_settings().upload_path / b.stored_file)
+    audit.record(uow, "dataset.receive", "import", b.id,
+                 {"file": b.file_name, "size_bytes": size, "sha256": sha256, "stored_as": b.stored_file}, actor=actor)
+    telemetry.event(uow, "dataset.receive", import_id=b.id, actor=actor,
+                    message=f"{b.file_name}: {size / 1048576:,.1f} MB received; checking rows in the background",
+                    size_bytes=size, sha256=sha256[:16])
+    from app.worker.tasks import analyze_import
+
+    uow.after_commit(lambda: analyze_import.apply_async((b.id,)))
+    return b
+
+
+def _lease(batch_id: int, status: str) -> str | None:
+    s = get_settings()
+    now = utcnow()
+    with unit_of_work() as uow:
+        b = uow.session.get(ImportBatch, batch_id, with_for_update=True)
+        if b is None or b.status != status:
+            return None
+        fresh = b.heartbeat_at and as_utc(b.heartbeat_at) > now - timedelta(seconds=s.import_stall_seconds)
+        if b.worker_token and fresh:
+            return None
+        b.worker_token, b.heartbeat_at = uuid.uuid4().hex, now
+        return b.worker_token
+
+
+def analyze(batch_id: int) -> str:
+    """One streaming pass over the stored file: validate, de-duplicate, compare with the database in
+    batches, keep a 200-row sample. Progress and a heartbeat are written every ~2 s."""
+    token = _lease(batch_id, IMPORT_ANALYZING)
+    if token is None:
+        return "skipped"
+    st = get_settings()
+    with unit_of_work() as uow:
+        b = uow.session.get(ImportBatch, batch_id)
+        path, file_name, t_start = stored_path(b), b.file_name, time.monotonic()
+    scan = Scan()
+    counts = dict.fromkeys(_PREVIEW_KEYS, 0)
+    emails: set[str] = set()
+    sample: list[dict[str, Any]] = []
+
+    def compare(batch: list[dict[str, Any]]) -> None:
+        with unit_of_work() as uow:
+            diffed, c = _diff(uow, batch)
+        for k in ("new_companies", "updated_companies", "reassignments", "unchanged"):
+            counts[k] += c.get(k, 0)
+        for r in diffed[: max(0, PREVIEW_ROWS - len(sample))]:
+            sample.append({
+                "row": r["row"], "company": r["company"], "industry": r["industry"], "segment": r["segment"],
+                "pamName": r["pam_name"], "pamEmail": r["pam_email"], "pamWhatsapp": r["pam_whatsapp"],
+                "change": r["change"], "currentPam": r["current_pam"],
+            })
+
+    try:
+        with open_table(path, sniff(path, file_name)) as (rows, progress):
+            mapping, header_row = read_header(rows)
+            batch: list[dict[str, Any]] = []
+            last_beat = time.monotonic()
+            for r in valid_rows(rows, mapping, header_row, scan):
+                emails.add(r["pam_email"])
+                batch.append(r)
+                if len(batch) >= st.import_analyze_batch:
+                    compare(batch)
+                    batch = []
+                if time.monotonic() - last_beat > 2:
+                    last_beat = time.monotonic()
+                    if not _beat(batch_id, token, scan, progress()):
+                        return "lease lost"
+            if batch:
+                compare(batch)
+    except (ValidationFailed, PayloadTooLarge, UnsupportedMedia, NotFound) as e:  # the file itself is the problem
+        return _analysis_failed(batch_id, token, e.message, permanent=True)
+    except Exception as e:  # infrastructure (DB blip, …): retry from the start
+        log.exception("upload check failed", extra={"import_id": batch_id})
+        return _analysis_failed(batch_id, token, f"{type(e).__name__}: {e}", permanent=False)
+
+    with unit_of_work() as uow:
+        known = 0
+        for chunk in _chunks(sorted(emails)):
+            known += uow.session.scalar(select(func.count(Pam.id)).where(Pam.email.in_(chunk))) or 0
+        counts["new_pams"] = len(emails) - known
+        b = uow.session.get(ImportBatch, batch_id, with_for_update=True)
+        if b is None or b.worker_token != token or b.status != IMPORT_ANALYZING:
+            return "lease lost"
+        took_ms = int((time.monotonic() - t_start) * 1000)
+        b.rows_total, b.rows_valid, b.rows_error, b.issues = scan.total, scan.valid, scan.errors, scan.issues
+        b.summary = {
+            **(b.summary or {}), "progress": 100, "rows_read": scan.total, "duplicates_merged": scan.duplicates,
+            "pams": len(emails), "preview_rows": sample, "analyze_ms": took_ms,
+            **{f"preview_{k}": v for k, v in counts.items()},
+            **dict.fromkeys(_PREVIEW_KEYS, 0),  # filled in as rows are saved
+        }
+        b.worker_token = None
+        if scan.valid == 0:
+            b.status, b.error = IMPORT_FAILED, "Every row has errors; nothing to save"
+        else:
+            b.status = IMPORT_PREVIEWED
+        telemetry.event(uow, "dataset.analyzed", telemetry.OK if scan.valid else telemetry.ERROR, import_id=b.id,
+                        actor="system", duration_ms=took_ms,
+                        message=f"{scan.total:,} rows read: {scan.valid:,} valid, {scan.errors:,} rejected, "
+                                f"{scan.duplicates:,} duplicates; {counts['new_companies']:,} new logos, "
+                                f"{counts['reassignments']:,} would move PAM",
+                        rows=scan.total, valid=scan.valid, errors=scan.errors, **counts)
+        if scan.valid and (b.summary or {}).get("auto_save") and b.label:
+            _save(uow, b, b.label, b.uploaded_by)
+        uow.after_commit(lambda: cache.bump("imports"))
+    return b.status
+
+
+def _beat(batch_id: int, token: str, scan: Scan, fraction: float | None) -> bool:
+    with unit_of_work() as uow:
+        b = uow.session.get(ImportBatch, batch_id)
+        if b is None or b.worker_token != token or b.status != IMPORT_ANALYZING:
+            return False
+        b.heartbeat_at = utcnow()
+        b.rows_total = scan.total
+        b.summary = {**(b.summary or {}), "rows_read": scan.total,
+                     "progress": round(fraction * 100) if fraction is not None else None}
+    return True
+
+
+def _analysis_failed(batch_id: int, token: str, error: str, *, permanent: bool) -> str:
+    st = get_settings()
+    with unit_of_work() as uow:
+        b = uow.session.get(ImportBatch, batch_id)
+        if b is None or b.worker_token != token:
+            return "lease lost"
+        b.worker_token, b.failures, b.error = None, b.failures + 1, error[:1000]
+        if permanent or b.failures >= st.import_max_failures:
+            b.status = IMPORT_FAILED
+            telemetry.event(uow, "dataset.analyzed", telemetry.ERROR, import_id=b.id, actor="system", message=b.error)
+            uow.after_commit(lambda: cache.bump("imports"))
+            return "failed"
+        telemetry.event(uow, "dataset.analyzed", telemetry.RETRY, import_id=b.id, actor="system", attempt=b.failures, message=b.error)
+        from app.worker.tasks import analyze_import
+
+        delay = min(2 ** b.failures, 60)
+        uow.after_commit(lambda: analyze_import.apply_async((batch_id,), countdown=delay))
+        return "retry"
+
+
+def preview_of(b: ImportBatch) -> dict[str, Any]:
+    """The checked file, as shown before saving (same shape whatever the file size)."""
+    sm = b.summary or {}
+    return {
+        "id": str(b.id), "status": b.status, "fileName": b.file_name, "sizeBytes": sm.get("size_bytes", 0),
+        "rowsTotal": b.rows_total, "validRows": b.rows_valid, "errorRows": b.rows_error,
+        "duplicatesMerged": sm.get("duplicates_merged", 0), "pams": sm.get("pams", 0),
+        "newCompanies": sm.get("preview_new_companies", 0), "updatedCompanies": sm.get("preview_updated_companies", 0),
+        "reassignments": sm.get("preview_reassignments", 0), "unchanged": sm.get("preview_unchanged", 0),
+        "newPams": sm.get("preview_new_pams", 0), "issues": b.issues or [], "rows": sm.get("preview_rows", []),
+        "rowsShown": len(sm.get("preview_rows", [])),
+    }
+
+
+def save(uow: UnitOfWork, batch_id: int, label: str, actor: str) -> ImportBatch:
+    b = get_dataset(uow, batch_id)
+    if b.status != IMPORT_PREVIEWED:
+        raise Conflict(f"This upload cannot be saved now (it is {b.status})")
+    label = (label or "").strip()[:200]
+    if not label:
+        raise ValidationFailed("Give the upload a name to save it under", details={"field": "label"})
+    _save(uow, b, label, actor)
+    uow.after_commit(lambda: cache.bump("imports"))
+    return b
+
+
+def _save(uow: UnitOfWork, b: ImportBatch, label: str, actor: str) -> None:
+    """Name it, give the kept file its final "<timestamp>_<id>_<name>" name, queue the chunked save."""
+    folder = get_settings().upload_path
+    new_name = _file_name_for(b, label)
+    try:
+        os.replace(folder / b.stored_file, folder / new_name)
+        b.stored_file = new_name
+    except OSError:
+        log.warning("could not rename the stored upload; keeping its current name", extra={"import_id": b.id}, exc_info=True)
+    b.label, b.status, b.heartbeat_at, b.error, b.failures = label, IMPORT_QUEUED, utcnow(), None, 0
+    sm = b.summary or {}
+    audit.record(uow, "dataset.upload", "import", b.id,
+                 {"label": label, "file": b.file_name, "stored_as": b.stored_file, "sha256": b.file_sha256,
+                  "size_bytes": sm.get("size_bytes"), "rows": b.rows_total, "valid": b.rows_valid, "errors": b.rows_error},
+                 actor=actor)
+    telemetry.event(uow, "dataset.upload", import_id=b.id, actor=actor,
+                    message=f"'{label}' ({b.file_name}): {b.rows_total:,} rows, {b.rows_valid:,} valid, {b.rows_error:,} rejected",
+                    rows=b.rows_total, valid=b.rows_valid, errors=b.rows_error, duplicates_merged=sm.get("duplicates_merged", 0))
+    _enqueue(uow, b.id)
+
+
+def discard(uow: UnitOfWork, batch_id: int, actor: str) -> None:
+    """Drop an upload that was never saved (and its file)."""
+    b = get_dataset(uow, batch_id)
+    if b.status not in (IMPORT_ANALYZING, IMPORT_PREVIEWED) and not (b.status == IMPORT_FAILED and not b.label):
+        raise Conflict("Only uploads that have not been saved can be discarded")
+    _discard(uow, b, actor)
+
+
+def _discard(uow: UnitOfWork, b: ImportBatch, actor: str) -> None:
+    try:
+        stored_path(b).unlink(missing_ok=True)
+    except NotFound:
+        pass
+    b.status, b.worker_token = IMPORT_DISCARDED, None
+    audit.record(uow, "dataset.discard", "import", b.id, {"file": b.file_name}, actor=actor)
+    telemetry.event(uow, "dataset.discard", telemetry.INFO, import_id=b.id, actor=actor, message=f"{b.file_name} discarded without saving")
+
+
+def discard_stale_previews(uow: UnitOfWork, limit: int = 100) -> int:
+    cutoff = utcnow() - timedelta(hours=get_settings().import_preview_ttl_hours)
+    stale = list(uow.session.scalars(
+        select(ImportBatch).where(ImportBatch.status == IMPORT_PREVIEWED, ImportBatch.created_at <= cutoff).limit(limit)
+    ))
+    for b in stale:
+        _discard(uow, b, "system")
+    return len(stale)
+
+
+def stalled_checks(uow: UnitOfWork, limit: int = 50) -> list[int]:
+    cutoff = utcnow() - timedelta(seconds=get_settings().import_stall_seconds)
+    return list(uow.session.scalars(
+        select(ImportBatch.id).where(ImportBatch.status == IMPORT_ANALYZING, ImportBatch.heartbeat_at <= cutoff).limit(limit)
+    ))
 
 
 def _enqueue(uow: UnitOfWork, batch_id: int, countdown: float = 0) -> None:
@@ -337,21 +638,43 @@ def process(batch_id: int) -> str:
     if token is None:
         return "skipped"
     s = get_settings()
+    stream: Iterator[dict[str, Any]] | None = None
+    with unit_of_work() as uow:
+        b = uow.session.get(ImportBatch, batch_id)
+        if not b.rows:  # streamed upload: read the stored file from the cursor (legacy uploads keep rows in the DB)
+            try:
+                stream = stream_valid_rows(stored_path(b), sniff(stored_path(b), b.file_name), skip=b.rows_done)
+            except Exception as e:  # file missing/unreadable
+                return _chunk_failed(batch_id, token, e)
+    try:
+        return _process_loop(batch_id, token, s, stream)
+    finally:
+        if stream is not None:
+            stream.close()
+
+
+def _process_loop(batch_id: int, token: str, s, stream: Iterator[dict[str, Any]] | None) -> str:
     while True:
         try:
+            pending = list(islice(stream, s.import_chunk_size)) if stream is not None else None
             with unit_of_work() as uow:
                 b = uow.session.get(ImportBatch, batch_id, with_for_update=True)
                 if b is None or b.worker_token != token or b.status != IMPORT_PROCESSING:
                     return "lease lost"
-                chunk = (b.rows or [])[b.rows_done: b.rows_done + s.import_chunk_size]
+                chunk = pending if pending is not None else (b.rows or [])[b.rows_done: b.rows_done + s.import_chunk_size]
                 if not chunk:
                     _finish(uow, b)
                     return "completed"
+                t0 = utcnow()
                 counts = _apply(uow, b, chunk)
                 b.summary = {**(b.summary or {}), **{k: (b.summary or {}).get(k, 0) + v for k, v in counts.items()}}
                 b.rows_done += len(chunk)
                 b.heartbeat_at = utcnow()
                 b.failures, b.error = 0, None
+                telemetry.event(uow, "dataset.chunk", import_id=b.id, actor="system",
+                                duration_ms=int((utcnow() - t0).total_seconds() * 1000),
+                                message=f"rows {b.rows_done - len(chunk) + 1}-{b.rows_done} of {b.rows_valid} saved", **counts)
+            metrics.DATASET_ROWS.inc(len(chunk))
         except Exception as e:  # rolled back: the cursor did not move, so nothing is half-saved
             log.exception("dataset chunk failed", extra={"import_id": batch_id})
             return _chunk_failed(batch_id, token, e)
@@ -366,9 +689,13 @@ def _chunk_failed(batch_id: int, token: str, e: Exception) -> str:
         b.failures += 1
         b.error = f"{type(e).__name__}: {e}"[:1000]
         b.worker_token = None
+        telemetry.event(uow, "dataset.chunk", telemetry.ERROR if b.failures >= s.import_max_failures else telemetry.RETRY,
+                        import_id=b.id, actor="system", attempt=b.failures, message=b.error)
         if b.failures >= s.import_max_failures:
             b.status = IMPORT_FAILED
             audit.record(uow, "dataset.failed", "import", b.id, {"label": b.label, "saved": b.rows_done, "error": b.error}, actor="system")
+            telemetry.event(uow, "dataset.failed", telemetry.ERROR, import_id=b.id, actor="system",
+                            message=f"Stopped after {b.failures} failures at row {b.rows_done}: {b.error}")
             uow.after_commit(lambda: cache.bump("imports", "runs"))
             return "failed"
         _enqueue(uow, b.id, countdown=min(2 ** b.failures, 60))
@@ -380,52 +707,94 @@ def _finish(uow: UnitOfWork, b: ImportBatch) -> None:
     b.committed_at = utcnow()
     b.worker_token = None
     sm = b.summary or {}
-    audit.record(uow, "dataset.saved", "import", b.id,
-                 {"label": b.label, "rows": b.rows_done, **{k: sm.get(k, 0) for k in ("new_companies", "updated_companies", "reassignments", "new_pams")}},
-                 actor=b.uploaded_by)
+    changes = {k: sm.get(k, 0) for k in ("new_companies", "updated_companies", "reassignments", "new_pams", "unchanged")}
+    audit.record(uow, "dataset.saved", "import", b.id, {"label": b.label, "rows": b.rows_done, **changes}, actor=b.uploaded_by)
+    took = (as_utc(b.committed_at) - as_utc(b.started_at)).total_seconds() if b.started_at else None
+    telemetry.event(uow, "dataset.saved", import_id=b.id, actor=b.uploaded_by,
+                    duration_ms=int(took * 1000) if took is not None else None,
+                    message=f"{b.rows_done} rows: {changes['new_companies']} new logos, {changes['reassignments']} reassigned, "
+                            f"{changes['unchanged']} already known, {changes['new_pams']} new PAMs", **changes)
     uow.after_commit(lambda: cache.bump("imports", "runs"))
 
 
 def _apply(uow: UnitOfWork, b: ImportBatch, rows: list[dict[str, Any]]) -> dict[str, int]:
-    """Upsert PAMs + companies, record ownership history, add dataset membership. Idempotent."""
+    """Upsert PAMs + companies, record ownership history, add dataset membership, for one chunk.
+    Set-based (a few statements per chunk, not per row) so million-row files save quickly; the
+    ownership history is written exactly as `assignments.assign` would. Idempotent on re-apply."""
     s = uow.session
-    diffed, counts = _diff(uow, rows)
     companies, pams = _load_existing(uow, rows)
-    for r in rows:
-        p = pams.get(r["pam_email"])
-        if p is None:
-            p = Pam(name=r["pam_name"], email=r["pam_email"], whatsapp=r["pam_whatsapp"], active=True)
-            s.add(p)
-            pams[p.email] = p
-        else:
-            p.name, p.whatsapp, p.active = r["pam_name"], r["pam_whatsapp"], True
-    s.flush()
+    counts = {"new_companies": 0, "updated_companies": 0, "reassignments": 0, "unchanged": 0}
+    counts["new_pams"] = len({r["pam_email"] for r in rows} - set(pams))
 
-    now = utcnow()
-    for r in diffed:
+    # PAMs: create the new ones, refresh the known ones (the upload is the latest word on name/number).
+    for r in rows:
+        pm = pams.get(r["pam_email"])
+        if pm is None:
+            pams[r["pam_email"]] = Pam(name=r["pam_name"], email=r["pam_email"], whatsapp=r["pam_whatsapp"], active=True)
+            s.add(pams[r["pam_email"]])
+        else:
+            pm.name, pm.whatsapp, pm.active = r["pam_name"], r["pam_whatsapp"], True
+
+    # Companies: classify against what is saved, then insert all new ones in one flush.
+    new_rows, moves = [], []  # moves: (company, new pam email) for known logos changing owner
+    for r in rows:
         c = companies.get(r["name_key"])
         if c is None:
-            c = Company(name=r["company"], name_key=r["name_key"], industry=r["industry"], segment=r["segment"], active=True)
+            counts["new_companies"] += 1
+            c = Company(name=r["company"], name_key=r["name_key"], industry=r["industry"], segment=r["segment"], active=True,
+                        last_import_id=b.id)
+            companies[r["name_key"]] = c
             s.add(c)
-            s.flush()
-            companies[c.name_key] = c
+            new_rows.append(r)
+            continue
+        if c.pam is None or c.pam.email != r["pam_email"]:
+            counts["reassignments"] += 1
+            moves.append((c, r["pam_email"]))
+        elif (r["industry"] and r["industry"] != c.industry) or (r["segment"] and r["segment"] != c.segment) or not c.active:
+            counts["updated_companies"] += 1
         else:
-            c.name = r["company"]
-            if r["industry"]:
-                c.industry = r["industry"]
-            if r["segment"]:
-                c.segment = r["segment"]
-            c.active = True
-        assignments.assign(uow, c, pams[r["pam_email"]].id, reason="import", actor=b.uploaded_by, ts=now)
-        c.last_import_id = b.id
+            counts["unchanged"] += 1
+        c.name = r["company"]
+        if r["industry"]:
+            c.industry = r["industry"]
+        if r["segment"]:
+            c.segment = r["segment"]
+        c.active, c.last_import_id = True, b.id
+    s.flush()  # new PAMs + companies get ids (batched INSERTs)
 
+    # Ownership history: close the open rows of moving logos in one UPDATE, open the new ones in bulk.
+    now = utcnow()
+    moving = [c for c, email in moves if c.pam_id != pams[email].id]
+    for ids in _chunks([c.id for c in moving]):
+        s.execute(update(CompanyAssignment).where(CompanyAssignment.company_id.in_(ids), CompanyAssignment.valid_to.is_(None))
+                  .values(valid_to=now))
+    opened = [(companies[r["name_key"]], pams[r["pam_email"]].id) for r in new_rows]
+    opened += [(c, pams[email].id) for c, email in moves if c.pam_id != pams[email].id]
+    if opened:
+        s.execute(insert(CompanyAssignment), [
+            {"company_id": c.id, "pam_id": pid, "valid_from": now, "valid_to": None, "reason": "import", "actor": b.uploaded_by}
+            for c, pid in opened
+        ])
+        for c, pid in opened:
+            c.pam_id = pid
+
+    # Membership + this upload's own logo → PAM mapping (what its runs, and re-runs, deliver to).
     ids = [companies[r["name_key"]].id for r in rows]
-    have = set(s.scalars(select(DatasetCompany.company_id).where(DatasetCompany.import_id == b.id, DatasetCompany.company_id.in_(ids))))
+    have: dict[int, DatasetCompany] = {}
+    for chunk in _chunks(ids):
+        have.update({m.company_id: m for m in s.scalars(
+            select(DatasetCompany).where(DatasetCompany.import_id == b.id, DatasetCompany.company_id.in_(chunk))
+        )})
+    fresh = []
     for r in rows:
-        cid = companies[r["name_key"]].id
-        if cid not in have:
-            s.add(DatasetCompany(import_id=b.id, company_id=cid, row_no=r.get("row", 0)))
-            have.add(cid)
+        cid, pid = companies[r["name_key"]].id, pams[r["pam_email"]].id
+        if cid in have:
+            have[cid].pam_id = pid  # chunk re-applied after a crash: same values, idempotent
+        else:
+            fresh.append({"import_id": b.id, "company_id": cid, "row_no": r.get("row", 0), "pam_id": pid})
+            have[cid] = None  # type: ignore[assignment]  # same logo twice in one chunk cannot happen (de-duplicated)
+    if fresh:
+        s.execute(insert(DatasetCompany), fresh)
     s.flush()
     return {k: counts.get(k, 0) for k in ("new_companies", "updated_companies", "reassignments", "new_pams", "unchanged")}
 
@@ -435,10 +804,11 @@ def resume(uow: UnitOfWork, batch_id: int, actor: str) -> ImportBatch:
     b = get_dataset(uow, batch_id)
     if b.status == IMPORT_COMPLETED:
         raise Conflict("This dataset is already saved")
-    if not b.rows:
+    if not b.rows and not (b.stored_file and b.rows_valid):
         raise Conflict("This upload has no valid rows to save")
     b.status, b.worker_token, b.failures, b.error, b.heartbeat_at = IMPORT_QUEUED, None, 0, None, utcnow()
     audit.record(uow, "dataset.resume", "import", b.id, {"label": b.label, "from_row": b.rows_done}, actor=actor)
+    telemetry.event(uow, "dataset.resume", telemetry.INFO, import_id=b.id, actor=actor, message=f"Resumed from row {b.rows_done + 1}")
     _enqueue(uow, b.id)
     return b
 
@@ -529,6 +899,11 @@ def update_row(uow: UnitOfWork, batch_id: int, company_id: int, patch: dict[str,
             if wa:
                 target.whatsapp = wa
         assignments.assign(uow, c, target.id, reason="manual", actor=actor, ts=utcnow())
+        # The edited row is this upload's mapping too: its next run delivers to the new PAM.
+        uow.session.execute(
+            update(DatasetCompany).where(DatasetCompany.import_id == batch_id, DatasetCompany.company_id == c.id)
+            .values(pam_id=target.id)
+        )
 
     uow.session.flush()
     uow.session.expire(c, ["pam"])  # pam_id may have changed: reload the relationship

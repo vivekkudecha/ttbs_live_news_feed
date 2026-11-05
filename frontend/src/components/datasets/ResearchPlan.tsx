@@ -1,23 +1,24 @@
 /**
- * "Research these companies?" — shown when a dataset finishes saving.
- * Now · at a time · every N days (creates a schedule) · not now.
+ * "Research this upload?" — shown when an upload finishes saving, and when re-running an earlier one.
+ * Now · at a time (once) · not now. Every run covers exactly this upload's logos and delivers to the
+ * PAMs this upload mapped them to.
  */
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
-import { CalendarClock, Clock, Loader2, Play, Repeat } from "lucide-react"
+import { CalendarClock, Clock, Info, Loader2, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useCreateSchedule, useStartRun } from "@/api/hooks"
-import { errorMessage } from "@/api/http"
+import { useStartRun } from "@/api/hooks"
+import { ApiError, errorMessage } from "@/api/http"
 import { fmtDateTime, fmtUsd } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { DeliveryChannel } from "@/api/types"
 
 const PER_COMPANY_USD = 0.0125
-type Mode = "now" | "at" | "every" | "later"
+type Mode = "now" | "at" | "later"
 
 /** datetime-local value one hour from now (browser time). */
 const inAnHour = () => {
@@ -39,53 +40,50 @@ export function ChannelPicker({ value, onChange }: { value: DeliveryChannel[]; o
   )
 }
 
-export function ResearchPlan({ scopeKey, label, companies, onDone }: { scopeKey: string; label: string; companies: number; onDone?: () => void }) {
+export function ResearchPlan({
+  importId,
+  label,
+  companies,
+  previousRuns = 0,
+  lastRunAt,
+  onDone,
+}: {
+  importId: string
+  label: string
+  companies: number
+  previousRuns?: number
+  lastRunAt?: string | null
+  onDone?: () => void
+}) {
   const navigate = useNavigate()
   const start = useStartRun()
-  const schedule = useCreateSchedule()
   const [mode, setMode] = useState<Mode>("now")
   const [runAt, setRunAt] = useState(inAnHour)
-  const [every, setEvery] = useState("10")
-  const [time, setTime] = useState("06:00")
   const [channels, setChannels] = useState<DeliveryChannel[]>(["email", "whatsapp"])
-  const busy = start.isPending || schedule.isPending
 
   const options: { key: Mode; icon: typeof Play; title: string; hint: string }[] = [
-    { key: "now", icon: Play, title: "Research now", hint: "Starts immediately" },
+    { key: "now", icon: Play, title: previousRuns ? "Run again now" : "Research now", hint: "Starts immediately" },
     { key: "at", icon: Clock, title: "At a time", hint: "Once, later" },
-    { key: "every", icon: Repeat, title: "Every few days", hint: "Recurring schedule" },
-    { key: "later", icon: CalendarClock, title: "Not now", hint: "Just keep the data" },
+    { key: "later", icon: CalendarClock, title: "Not now", hint: "Keep the upload; run it any time" },
   ]
 
   const submit = async () => {
     if (mode === "later") return onDone?.()
     if (channels.length === 0) return toast.error("Choose at least one delivery channel")
     try {
-      if (mode === "every") {
-        const s = await schedule.mutateAsync({ name: `${label} · every ${every} days`, intervalDays: Number(every), runAtTime: time, scopeKey, channels })
-        toast.success("Schedule created", { description: `First run ${fmtDateTime(s.nextRunAt)} IST` })
-        onDone?.()
-        navigate("/schedules")
-        return
-      }
-      const run = await start.mutateAsync({
-        label: `Research · ${label}`,
-        templateId: "t1",
-        scopeKey,
-        runAt: mode === "at" ? new Date(runAt).toISOString() : undefined,
-        channels,
-      })
-      toast.success(mode === "at" ? `Run #${run.id} scheduled` : `Run #${run.id} started`, { description: `${companies.toLocaleString("en-IN")} companies` })
+      const run = await start.mutateAsync({ importId, runAt: mode === "at" ? new Date(runAt).toISOString() : undefined, channels })
+      toast.success(mode === "at" ? `Run #${run.id} scheduled` : `Run #${run.id} started`, { description: `${companies.toLocaleString("en-IN")} logos from “${label}”` })
       onDone?.()
       navigate(`/runs/${run.id}`)
     } catch (e) {
-      toast.error("Could not start research", { description: errorMessage(e) })
+      const budget = e instanceof ApiError && e.code === "budget_exceeded"
+      toast.error(budget ? "Monthly budget reached" : "Could not start research", { description: errorMessage(e) })
     }
   }
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {options.map((o) => (
           <button
             key={o.key}
@@ -112,18 +110,6 @@ export function ResearchPlan({ scopeKey, label, companies, onDone }: { scopeKey:
               <Input id="plan-at" type="datetime-local" value={runAt} onChange={(e) => setRunAt(e.target.value)} />
             </div>
           )}
-          {mode === "every" && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor="plan-every">Every (days)</Label>
-                <Input id="plan-every" type="number" min={1} max={90} value={every} onChange={(e) => setEvery(e.target.value)} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="plan-time">At (IST)</Label>
-                <Input id="plan-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-              </div>
-            </div>
-          )}
           <div className="grid gap-2">
             <Label>Send digests by</Label>
             <ChannelPicker value={channels} onChange={setChannels} />
@@ -131,15 +117,24 @@ export function ResearchPlan({ scopeKey, label, companies, onDone }: { scopeKey:
         </div>
       )}
 
+      {previousRuns > 0 && mode !== "later" && (
+        <p className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" />
+          This upload has run {previousRuns} time{previousRuns === 1 ? "" : "s"}
+          {lastRunAt ? ` (last ${fmtDateTime(lastRunAt)})` : ""}. A re-run researches the same logos for the PAMs this upload mapped them to;
+          answers still fresh from an earlier run come from the cache at no cost.
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {mode === "later"
-            ? "You can start research any time from Research runs or Schedules."
-            : `${companies.toLocaleString("en-IN")} companies · est. ${fmtUsd(companies * PER_COMPANY_USD)} per run`}
+            ? "Run it any time from Research runs → New run, or from Imports."
+            : `${companies.toLocaleString("en-IN")} logos · est. up to ${fmtUsd(companies * PER_COMPANY_USD)}`}
         </p>
-        <Button onClick={submit} disabled={busy || companies === 0}>
-          {busy && <Loader2 className="animate-spin" />}
-          {mode === "now" ? "Start research" : mode === "at" ? "Schedule run" : mode === "every" ? "Create schedule" : "Done"}
+        <Button onClick={submit} disabled={start.isPending || companies === 0}>
+          {start.isPending && <Loader2 className="animate-spin" />}
+          {mode === "now" ? (previousRuns ? "Run again" : "Start research") : mode === "at" ? "Schedule run" : "Done"}
         </Button>
       </div>
     </div>

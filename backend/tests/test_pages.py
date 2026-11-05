@@ -21,7 +21,8 @@ def test_empty_database_pages(client):
     c = client.post("/api/v1/companies/query", json={"page": 0, "pageSize": 50}).json()
     assert c["total"] == 0 and c["rows"] == []
     assert client.post("/api/v1/pams/query", json={"page": 0, "pageSize": 50}).json()["total"] == 0
-    assert client.get("/api/v1/finops").json()["monthSpend"] == 0
+    f = client.get("/api/v1/finops").json()
+    assert f["totals"]["total"] == 0 and f["budget"]["monthSpend"] == 0 and f["byRun"] == []
     assert client.post("/api/v1/signals/query", json={"runId": "999", "page": 0, "pageSize": 20}).json()["total"] == 0
 
 
@@ -128,7 +129,8 @@ def test_live_grid_and_changes(client):
 def test_finops_templates_channels_session(client):
     _seed(client)
     f = client.get("/api/v1/finops").json()
-    assert f["monthBudget"] > 0 and len(f["series"]) == 6 and f["byProvider"][0]["name"] == "Offline (fake)"
+    assert f["currency"] == "USD" and f["budget"]["monthly"] > 0 and f["series"][-1]["date"] == f["to"]
+    assert f["totals"]["calls"] == 3 and f["byModel"][0]["provider"] == "fake" and len(f["byPam"]) == 2
     t = client.get("/api/v1/templates").json()
     assert t[0]["id"] == "t1" and "{company}" in t[0]["versions"][0]["researchPrompt"]
     assert [c["key"] for c in client.get("/api/v1/channels").json()] == ["email", "whatsapp"]

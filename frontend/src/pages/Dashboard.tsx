@@ -13,20 +13,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useDashboard } from "@/api/hooks"
 import { useSession } from "@/context/session"
 import { fmtDate, fmtDateTime, fmtUsd, pct } from "@/lib/format"
-import { NewRunDialog } from "./Schedules"
+import { NewRunDialog } from "@/components/runs/NewRunDialog"
 
 const n = (x: number) => x.toLocaleString("en-IN")
 
 /** Before the first research run: what to do next, in order. */
 function GettingStarted({ greeting, logos }: { greeting: string; logos: number }) {
   const steps = [
-    { done: logos > 0, title: "Upload the company → PAM Excel", hint: logos > 0 ? `${n(logos)} logos imported` : "Imports → upload .xlsx or .csv", to: "/imports" },
     { done: false, title: "Connect a research AI", hint: "Providers & channels → Perplexity or Gemini key + model", to: "/integrations" },
-    { done: false, title: "Run research", hint: "Research now, at a time, or on a recurring schedule", to: "/schedules" },
+    { done: logos > 0, title: "Upload this run's logos", hint: logos > 0 ? `${n(logos)} logos known so far` : "Excel/CSV: Company, PAM Name, PAM Email, PAM WhatsApp", to: "/imports" },
+    { done: false, title: "Run research", hint: "Research the upload now or at a set time; each PAM gets their own results", to: "/runs" },
   ]
   return (
     <div className="space-y-8">
-      <PageHeader title={greeting} description="No research has run yet. Results, signals and digests appear here after the first run." actions={logos > 0 ? <NewRunDialog /> : undefined} />
+      <PageHeader title={greeting} description="No research has run yet. Results, signals and digests appear here after the first run." actions={<NewRunDialog />} />
       <Card>
           <CardHeader>
             <CardTitle>Get started</CardTitle>
@@ -254,16 +254,16 @@ export default function Dashboard() {
               <CardDescription>Recent and upcoming research cycles</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {d.nextSchedule && (
-                <div className="flex items-center gap-3 rounded-lg border border-dashed p-3">
+              {d.nextRun && (
+                <Link to={`/runs/${d.nextRun.id}`} className="flex items-center gap-3 rounded-lg border border-dashed p-3 hover:bg-muted/60">
                   <CalendarClock className="size-4 text-muted-foreground" />
                   <div className="min-w-0 flex-1 text-sm">
-                    <p className="font-medium">Next: {d.nextSchedule.name}</p>
+                    <p className="truncate font-medium">Next: {d.nextRun.label}</p>
                     <p className="text-xs text-muted-foreground">
-                      {fmtDateTime(d.nextSchedule.nextRunAt)} IST · every {d.nextSchedule.intervalDays} days
+                      {fmtDateTime(d.nextRun.scheduledFor)} IST · {n(d.nextRun.companies)} logos
                     </p>
                   </div>
-                </div>
+                </Link>
               )}
               {d.recentRuns.map((r) => (
                 <Link key={r.id} to={`/runs/${r.id}`} className="block rounded-lg p-2 hover:bg-muted/60">

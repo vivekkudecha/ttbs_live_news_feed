@@ -31,13 +31,20 @@ class Settings(BaseSettings):
     default_actor: str = "admin"  # until auth (Phase 1) lands; see app/api/deps.py
 
     # --- Imports -----------------------------------------------------------------------
-    import_max_bytes: int = 10 * 1024 * 1024
-    import_max_rows: int = 50_000
+    # Uploads are streamed to disk and read row by row, so size is bounded by disk, not memory.
+    import_max_bytes: int = 1024 * 1024 * 1024  # 1 GB
+    # Duplicate detection keeps one 8-byte hash per logo while checking a file (~60 B/row in
+    # Python): 10M rows ≈ 600 MB on the worker during the check.
+    import_max_rows: int = 10_000_000
     import_default_country_code: str = "91"
     pam_default_capacity: int = 500
-    import_chunk_size: int = 500  # rows saved per transaction (one resumable step)
+    import_chunk_size: int = 1000  # rows saved per transaction (one resumable step)
+    import_analyze_batch: int = 2000  # rows compared with the database per query while checking a file
+    import_preview_ttl_hours: int = 24  # checked-but-never-saved uploads (and their files) are discarded after this
     import_stall_seconds: int = 60  # no heartbeat for this long → the sweeper resumes the upload
     import_max_failures: int = 5  # consecutive chunk failures before the upload is marked failed
+    # Original uploaded files are kept here (relative paths resolve against backend/).
+    upload_dir: str = "storage/uploads"
 
     # --- Research ----------------------------------------------------------------------
     # "perplexity": the API key + model come ONLY from the database (set in the UI under
@@ -86,12 +93,34 @@ class Settings(BaseSettings):
     cache_ttl_job_finished: int = 300
     cache_ttl_lists: int = 15
 
-    # --- FinOps --------------------------------------------------------------------------
+    # --- FinOps (all amounts USD) ----------------------------------------------------------
     monthly_budget_usd: float = 500.0
     budget_soft_limit_pct: int = 80
+    # Hard cap: no new run may start once month-to-date spend reaches the budget.
+    budget_hard_cap: bool = True
+    # Per-message delivery prices for the cost ledger. Set them from your Meta (WhatsApp) and
+    # mail provider rate cards; 0 means "not billed / unknown" and is shown as such.
+    notify_price_email_usd: float = 0.0
+    notify_price_whatsapp_usd: float = 0.0
+
+    # --- Telemetry -----------------------------------------------------------------------
+    # Every pipeline step is stored in process_events (run timeline, telemetry page).
+    telemetry_events: bool = True
+    # Prometheus: the API serves /metrics; each Celery worker serves its own on this port
+    # (0 = off). Threads pool = one process per worker, so one port per worker host.
+    metrics_worker_port: int = 9464
+    # OpenTelemetry traces are exported only when an OTLP/HTTP collector is configured,
+    # e.g. http://localhost:4318. Empty = tracing off (no overhead).
+    otel_exporter_otlp_endpoint: str = ""
+    otel_service_name: str = "ttbs-newsfeed"
 
     timezone: str = "Asia/Kolkata"
     max_page_size: int = 200
+
+    @property
+    def upload_path(self) -> Path:
+        p = Path(self.upload_dir)
+        return p if p.is_absolute() else Path(__file__).resolve().parents[2] / p
 
     @property
     def is_sqlite(self) -> bool:

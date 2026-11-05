@@ -35,7 +35,7 @@ def test_preview_validates_and_ignores_region(client):
 
 
 def test_upload_errors_use_envelope(client):
-    r = client.post("/api/v1/imports", files={"file": ("x.pdf", b"%PDF", "application/pdf")})
+    r = client.post("/api/v1/imports", files={"file": ("x.pdf", b"%PDF", "application/pdf")}, data={"label": "x"})
     assert r.status_code == 415
     body = r.json()["error"]
     assert body["code"] == "unsupported_media_type" and body["request_id"]
@@ -71,7 +71,7 @@ def test_commit_schedule_now_runs_full_pipeline(client):
 def test_second_run_uses_result_cache(client):
     imp = upload(client).json()
     research(client, imp["id"])
-    run2 = client.post("/api/v1/runs", json={"scopeKey": "all", "channels": []}).json()
+    run2 = research(client, imp["id"], []).json()  # re-run the same upload
     run2 = client.get(f"/api/v1/runs/{run2['id']}").json()
     assert run2["status"] == "completed" and run2["cacheHits"] == 3 and run2["cost"] == 0
 
@@ -138,26 +138,10 @@ def test_scheduled_for_later_then_dispatcher_starts_it(client):
     assert client.get(f"/api/v1/runs/{run['id']}").json()["status"] == "completed"
 
 
-def test_recurring_schedule_fires_and_advances(client):
-    upload(client).json()
-    s = client.post("/api/v1/schedules", json={"name": "10-day cycle", "intervalDays": 10, "runAtTime": "06:00", "channels": ["email"]})
-    assert s.status_code == 201, s.text
-    sid = s.json()["id"]
-    assert client.get("/api/v1/schedules").json()[0]["scope"] == "All active companies"
-
-    from app.db.models import Schedule
-
-    with unit_of_work() as uow:
-        uow.session.get(Schedule, int(sid)).next_run_at = datetime.now(UTC) - timedelta(minutes=1)
-    created = maintenance.fire_due_schedules()
-    assert len(created) == 1
-    sch = client.get("/api/v1/schedules").json()[0]
-    assert datetime.fromisoformat(sch["nextRunAt"]) > datetime.now(UTC) + timedelta(days=9)
-    assert client.get(f"/api/v1/runs/{created[0]}").json()["status"] == "completed"
-
-    off = client.patch(f"/api/v1/schedules/{sid}", json={"enabled": False})
-    assert off.json()["enabled"] is False
-    assert client.patch(f"/api/v1/schedules/{sid}", json={"runAtTime": "25:00"}).status_code == 422
+def test_recurring_schedules_are_retired(client):
+    upload(client)
+    assert client.post("/api/v1/schedules", json={"name": "10-day cycle", "intervalDays": 10, "runAtTime": "06:00"}).status_code in (404, 405)
+    assert "schedules_fired" not in maintenance.tick()
 
 
 def test_sweeper_recovers_lost_notifications(client, monkeypatch):
@@ -198,10 +182,13 @@ def test_cache_fails_open_when_redis_down(client, monkeypatch):
     assert client.get("/api/v1/health").json()["redis"].startswith("error")
 
 
-def test_unknown_scope_and_bad_body(client):
-    r = client.post("/api/v1/runs", json={"scopeKey": "region:West"})
-    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_failed"
-    r = client.post("/api/v1/runs", json={"scopeKey": "all", "bogus": 1})
+def test_runs_require_an_upload_and_bad_body(client):
+    for body in ({"scopeKey": "region:West"}, {"scopeKey": "all"}, {}):
+        r = client.post("/api/v1/runs", json=body)
+        assert r.status_code == 422 and r.json()["error"]["code"] == "upload_required", body
+    r = client.post("/api/v1/runs", json={"importId": 999})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "upload_required"
+    r = client.post("/api/v1/runs", json={"importId": 1, "bogus": 1})
     assert r.status_code == 422 and r.json()["error"]["details"][0]["field"] == "bogus"
 
 

@@ -1,7 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "./client"
 import { backend } from "./http"
-import type { AiProvider, CompanyQuery, DatasetRowPatch, DeliveryChannel, DatasetRowQuery, PamQuery, ScheduleInput, SignalQuery } from "./types"
+import type { AiProvider, CompanyQuery, DatasetRowPatch, DeliveryChannel, DatasetRowQuery, PamQuery, SignalQuery } from "./types"
 
 /*
  * Data hooks. Rules that keep the UI smooth at 10k+ rows:
@@ -49,11 +49,11 @@ export const useScopeOptions = () =>
 
 // ---- Small resources --------------------------------------------------------------------
 export const useTemplates = () => useQuery({ queryKey: ["templates"], queryFn: () => api.listTemplates() })
-export const useSchedules = () => useQuery({ queryKey: ["schedules"], queryFn: () => backend.listSchedules() })
 export const useChannels = () => useQuery({ queryKey: ["channels"], queryFn: () => api.listChannels() })
 export const useUsers = () => useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() })
 export const useAudit = () => useQuery({ queryKey: ["audit"], queryFn: () => api.listAudit() })
-export const useFinops = () => useQuery({ queryKey: ["finops"], queryFn: () => api.finops() })
+export const useFinops = (range: { from?: string; to?: string } = {}) =>
+  useQuery({ queryKey: ["finops", range], queryFn: () => api.finops(range), placeholderData: keepPreviousData, refetchInterval: 30_000 })
 
 // ---- Mutations --------------------------------------------------------------------------
 function useInvalidate(keys: string[][]) {
@@ -69,24 +69,18 @@ export const useReassign = () => {
   const inv = useInvalidate([["companies"], ["company"], ["pams"], ["pamSearch"], ["audit"]])
   return useMutation({ mutationFn: (v: { companyIds: string[]; toPamId: string; actor: string }) => api.reassignCompanies(v.companyIds, v.toPamId), onSuccess: inv })
 }
+/** Start (or schedule) a run of one saved upload. Omit `label` for "<upload> · run N". */
 export const useStartRun = () => {
-  const inv = useInvalidate([["runs"], ["jobs"], ["schedules"], ["audit"]])
+  const inv = useInvalidate([["runs"], ["jobs"], ["scopes"], ["datasets"], ["audit"], ["finops"]])
   return useMutation({
-    mutationFn: (v: { label: string; templateId: string; scopeKey: string; actor?: string; runAt?: string; channels?: DeliveryChannel[] }): Promise<{ id: string }> =>
-      backend.startRun({ scopeKey: v.scopeKey, label: v.label, templateId: v.templateId, runAt: v.runAt, channels: v.channels }),
+    mutationFn: (v: { importId: string; label?: string; templateId?: string; runAt?: string; channels?: DeliveryChannel[] }): Promise<{ id: string }> =>
+      backend.startRun(v),
     onSuccess: inv,
   })
 }
 export const useResend = () => {
   const inv = useInvalidate([["pamJobs"], ["run"], ["dashboard"], ["audit"]])
   return useMutation({ mutationFn: (v: { runId: string; pamId: string; actor: string }) => api.resendDigest(v.runId, v.pamId), onSuccess: inv })
-}
-export const useToggleSchedule = () => {
-  const inv = useInvalidate([["schedules"], ["audit"]])
-  return useMutation({
-    mutationFn: (v: { id: string; enabled: boolean; actor: string }) => backend.updateSchedule(v.id, { enabled: v.enabled }),
-    onSuccess: inv,
-  })
 }
 
 // ---- Jobs, queues, schedules ------------------------------------------------------------------
@@ -111,14 +105,20 @@ const useJobInvalidate = () => useInvalidate([["jobs"], ["job"], ["jobResults"],
 export const useCancelJob = () => useMutation({ mutationFn: (id: string) => backend.cancelJob(id), onSuccess: useJobInvalidate() })
 export const useRetryFailed = () => useMutation({ mutationFn: (id: string) => backend.retryFailed(id), onSuccess: useJobInvalidate() })
 export const useResendNotification = () => useMutation({ mutationFn: (id: string) => backend.resendNotification(id), onSuccess: useJobInvalidate() })
-export const useCreateSchedule = () => {
-  const inv = useInvalidate([["schedules"]])
-  return useMutation({ mutationFn: (v: ScheduleInput) => backend.createSchedule(v), onSuccess: inv })
-}
-export const useRunScheduleNow = () => {
-  const inv = useInvalidate([["jobs"], ["schedules"]])
-  return useMutation({ mutationFn: (id: string) => backend.runScheduleNow(id), onSuccess: inv })
-}
+
+// ---- Run timeline, audit, costs; telemetry ---------------------------------------------------
+export const useRunTimeline = (id: string, live: boolean) =>
+  useQuery({ queryKey: ["runTimeline", id], queryFn: () => backend.runTimeline(id), enabled: !!id, refetchInterval: live ? 4_000 : false })
+export const useRunEvents = (id: string, q: { page: number; pageSize: number; kind?: string; status?: string }, live: boolean) =>
+  useQuery({ queryKey: ["runEvents", id, q], queryFn: () => backend.runEvents(id, q), enabled: !!id, placeholderData: keepPreviousData, refetchInterval: live ? 4_000 : false })
+export const useRunAudit = (id: string, q: { page: number; pageSize: number }, live: boolean) =>
+  useQuery({ queryKey: ["runAudit", id, q], queryFn: () => backend.runAudit(id, q), enabled: !!id, placeholderData: keepPreviousData, refetchInterval: live ? 5_000 : false })
+export const useRunCosts = (id: string, live: boolean) =>
+  useQuery({ queryKey: ["runCosts", id], queryFn: () => backend.runCosts(id), enabled: !!id, refetchInterval: live ? 5_000 : false })
+export const useTelemetrySummary = (hours: number) =>
+  useQuery({ queryKey: ["telemetrySummary", hours], queryFn: () => backend.telemetrySummary(hours), placeholderData: keepPreviousData, refetchInterval: 15_000 })
+export const useTelemetryEvents = (q: Parameters<typeof backend.telemetryEvents>[0]) =>
+  useQuery({ queryKey: ["telemetryEvents", q], queryFn: () => backend.telemetryEvents(q), placeholderData: keepPreviousData, refetchInterval: 10_000 })
 
 // ---- Research AI settings (live backend) ------------------------------------------------
 export const useLlmSettings = () => useQuery({ queryKey: ["llmSettings"], queryFn: () => backend.llmSettings() })
@@ -145,7 +145,7 @@ export const useRemoveLlmConfig = () => {
   return useMutation({ mutationFn: (p: AiProvider) => backend.removeLlmConfig(p), onSuccess: () => qc.invalidateQueries({ queryKey: ["llmSettings"] }) })
 }
 // ---- Datasets ------------------------------------------------------------------------------
-const SAVING = new Set(["queued", "processing"])
+const SAVING = new Set(["analyzing", "queued", "processing"])
 
 /** All datasets; polls every 2 s while any is still being saved. */
 export const useDatasets = () =>
@@ -166,6 +166,12 @@ export const useDatasetRows = (id: string | null, q: DatasetRowQuery) =>
   useQuery({ queryKey: ["datasetRows", id, q], queryFn: () => backend.datasetRows(id!, q), enabled: !!id, placeholderData: keepPreviousData })
 
 const useDatasetInvalidate = () => useInvalidate([["datasets"], ["dataset"], ["datasetRows"], ["scopes"], ["companies"], ["pams"], ["audit"]])
+export const useUploadPreview = (id: string | null, ready: boolean) =>
+  useQuery({ queryKey: ["uploadPreview", id], queryFn: () => backend.uploadPreview(id!), enabled: !!id && ready, staleTime: Infinity })
+export const useSaveUpload = () => {
+  const inv = useInvalidate([["datasets"], ["dataset"], ["audit"]])
+  return useMutation({ mutationFn: (v: { id: string; label: string }) => backend.saveUpload(v.id, v.label), onSuccess: inv })
+}
 export const useUploadDataset = () => {
   const inv = useInvalidate([["datasets"], ["audit"]])
   return useMutation({ mutationFn: (v: { file: File; label?: string }) => backend.uploadDataset(v.file, v.label), onSuccess: inv })

@@ -2,8 +2,8 @@ import {
   Activity,
   BarChart3,
   Building2,
-  CalendarClock,
   FileSpreadsheet,
+  Gauge,
   FileText,
   LayoutDashboard,
   MailCheck,
@@ -43,14 +43,13 @@ export const navGroups: NavGroup[] = [
     items: [
       { to: "/companies", label: "Companies (Logos)", icon: Building2 },
       { to: "/pams", label: "PAMs", icon: Users },
-      { to: "/imports", label: "Imports", icon: FileSpreadsheet },
+      { to: "/imports", label: "Uploads", icon: FileSpreadsheet },
     ],
   },
   {
     label: "Configuration",
     items: [
       { to: "/templates", label: "Output templates", icon: FileText },
-      { to: "/schedules", label: "Schedules", icon: CalendarClock },
       { to: "/integrations", label: "Providers & channels", icon: PlugZap },
     ],
   },
@@ -58,6 +57,7 @@ export const navGroups: NavGroup[] = [
     label: "Governance",
     items: [
       { to: "/costs", label: "Costs (FinOps)", icon: BarChart3 },
+      { to: "/telemetry", label: "Telemetry", icon: Gauge },
       { to: "/audit", label: "Audit log", icon: ScrollText },
     ],
   },

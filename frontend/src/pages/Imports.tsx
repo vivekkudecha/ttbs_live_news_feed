@@ -1,11 +1,13 @@
 /**
- * Imports: every uploaded Excel is a named, time-stamped dataset. Upload opens the dialog
- * (label → file → background save with progress → research / view & edit data). Datasets that
- * are still saving show live progress here and resume on their own after interruptions.
+ * Uploads: every research run starts from one. Each uploaded Excel/CSV is a named, time-stamped
+ * upload; logos and PAMs already known are matched (not duplicated) and owner changes go to the
+ * history. Uploads still saving show live progress and resume on their own after interruptions.
+ * Each row shows how often the upload has been researched, and can be run again.
  */
 import { useState } from "react"
+import { Link, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
-import { Download, FileSpreadsheet, FolderOpen, Loader2, RotateCcw, Search, Zap } from "lucide-react"
+import { Download, FileSpreadsheet, FolderOpen, History, Loader2, RotateCcw, Search, Zap } from "lucide-react"
 import { EmptyState } from "@/components/common/EmptyState"
 import { PageHeader } from "@/components/common/PageHeader"
 import { StatusBadge } from "@/components/common/StatusBadge"
@@ -17,8 +19,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { UploadDialog, downloadTemplate } from "@/components/datasets/UploadFlow"
 import { useDatasets, useResumeDataset } from "@/api/hooks"
-import { errorMessage } from "@/api/http"
-import { fmtDateTime } from "@/lib/format"
+import { datasetFileUrl, errorMessage } from "@/api/http"
+import { fmtDateTime, fmtUsd } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Dataset } from "@/api/types"
 
@@ -41,15 +43,17 @@ function SaveState({ d }: { d: Dataset }) {
 export default function Imports() {
   const datasets = useDatasets()
   const resume = useResumeDataset()
-  const [open, setOpen] = useState<string | null>(null)
+  const [params, setParams] = useSearchParams()
+  const open = params.get("open")
+  const setOpen = (id: string | null) => setParams(id ? { open: id } : {}, { replace: true })
   const [search, setSearch] = useState("")
   const rows = (datasets.data ?? []).filter((d) => !search.trim() || `${d.label} ${d.fileName} ${d.uploadedBy}`.toLowerCase().includes(search.trim().toLowerCase()))
 
   return (
     <div>
       <PageHeader
-        title="Imports"
-        description="Each uploaded Excel is kept as a named, time-stamped dataset. Rows are saved in the background and the save resumes by itself after any interruption."
+        title="Uploads"
+        description="Every research run starts from an upload. Logos and PAMs already in the system are matched, not duplicated; owner changes are kept in the history."
         actions={
           <>
             <Button variant="outline" onClick={downloadTemplate}>
@@ -65,7 +69,7 @@ export default function Imports() {
       ) : datasets.isError ? (
         <p className="text-sm text-destructive">{errorMessage(datasets.error)}</p>
       ) : !datasets.data?.length ? (
-        <EmptyState icon={FileSpreadsheet} title="No datasets yet">
+        <EmptyState icon={FileSpreadsheet} title="No uploads yet">
           <p>Upload the company → PAM Excel to get started. Columns: Company, PAM Name, PAM Email, PAM WhatsApp, and optionally Industry and Segment.</p>
           <div className="mt-4 flex justify-center">
             <UploadDialog />
@@ -75,19 +79,20 @@ export default function Imports() {
         <div className="space-y-4">
           <div className="relative sm:w-80">
             <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input aria-label="Search datasets" placeholder="Search datasets" className="h-9 pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input aria-label="Search uploads" placeholder="Search uploads" className="h-9 pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Card className="py-0">
             <CardContent className="overflow-x-auto p-0">
-              <Table className="min-w-[56rem]">
+              <Table className="min-w-[64rem]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-5">Dataset</TableHead>
+                    <TableHead className="pl-5">Upload</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Rows saved</TableHead>
                     <TableHead className="text-right">Skipped</TableHead>
-                    <TableHead className="text-right">Companies</TableHead>
+                    <TableHead className="text-right">Logos</TableHead>
                     <TableHead>Changes</TableHead>
+                    <TableHead>Research runs</TableHead>
                     <TableHead className="pr-5 text-right" />
                   </TableRow>
                 </TableHeader>
@@ -110,7 +115,23 @@ export default function Imports() {
                       <TableCell className={cn("tabular text-right", d.errorRows > 0 && "text-destructive")}>{n(d.errorRows)}</TableCell>
                       <TableCell className="tabular text-right">{d.companies === null ? "—" : n(d.companies)}</TableCell>
                       <TableCell className="whitespace-normal text-xs text-muted-foreground">
-                        {d.status === "failed" && d.error ? <span className="text-destructive">{d.error}</span> : `${n(d.newCompanies)} new · ${n(d.updatedCompanies)} updated · ${n(d.reassignments)} reassigned · ${n(d.newPams)} new PAMs`}
+                        {d.status === "failed" && d.error ? (
+                          <span className="text-destructive">{d.error}</span>
+                        ) : (
+                          `${n(d.newCompanies)} new · ${n(d.unchanged ?? 0)} known · ${n(d.reassignments)} reassigned · ${n(d.newPams)} new PAMs`
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm" onClick={(e) => e.stopPropagation()}>
+                        {d.runs ? (
+                          <Link to={`/runs?q=${encodeURIComponent(d.label)}`} className="hover:underline">
+                            <span className="tabular font-medium">{n(d.runs)}×</span>
+                            <span className="block text-xs text-muted-foreground">
+                              last {fmtDateTime(d.lastRunAt)} · {fmtUsd(d.researchCost, 2)}
+                            </span>
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">Not run yet</span>
+                        )}
                       </TableCell>
                       <TableCell className="pr-5 text-right" onClick={(e) => e.stopPropagation()}>
                         {d.status === "failed" && d.validRows > 0 ? (
@@ -129,7 +150,15 @@ export default function Imports() {
                           </Button>
                         ) : (
                           <Button size="sm" variant="ghost" onClick={() => setOpen(d.id)}>
-                            {d.status === "completed" ? <Zap /> : <FolderOpen />} {d.status === "completed" ? "Research / edit" : "Open"}
+                            {d.status !== "completed" ? <FolderOpen /> : d.runs ? <History /> : <Zap />}{" "}
+                            {d.status !== "completed" ? "Open" : d.runs ? "Run again / edit" : "Research / edit"}
+                          </Button>
+                        )}
+                        {d.hasFile && (
+                          <Button size="icon-sm" variant="ghost" asChild>
+                            <a href={datasetFileUrl(d.id)} download aria-label={`Download the original file of “${d.label}”`} title="Download the original file">
+                              <Download />
+                            </a>
                           </Button>
                         )}
                       </TableCell>
@@ -137,8 +166,8 @@ export default function Imports() {
                   ))}
                   {rows.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-20 text-center text-sm text-muted-foreground">
-                        No datasets match “{search}”.
+                      <TableCell colSpan={8} className="h-20 text-center text-sm text-muted-foreground">
+                        No uploads match “{search}”.
                       </TableCell>
                     </TableRow>
                   )}

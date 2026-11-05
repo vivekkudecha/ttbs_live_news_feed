@@ -1,82 +1,64 @@
 /**
- * Which companies a run or schedule covers: all active companies or one uploaded dataset.
- * Lets the user preview / edit the chosen dataset, or upload a new one without leaving the dialog.
+ * Pick an earlier upload to re-run. Lists saved uploads only (every run starts from one), with how
+ * often each has been researched. Lets the user preview / edit the chosen upload's rows.
  */
 import { useState } from "react"
-import { ArrowLeft, Table2, UploadCloud } from "lucide-react"
+import { Table2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useScopeOptions } from "@/api/hooks"
+import { fmtDate } from "@/lib/format"
+import type { ScopeOption } from "@/api/types"
 import { DatasetGrid } from "./DatasetGrid"
-import { UploadFlow } from "./UploadFlow"
 
-export function DatasetPicker({ value, onChange, label = "Companies" }: { value: string; onChange: (key: string) => void; label?: string }) {
+const importIdOf = (key: string) => (key.startsWith("import:") ? key.slice("import:".length) : key)
+
+export function UploadPicker({
+  value,
+  onChange,
+  label = "Select records from previous history",
+}: {
+  value: string | null
+  onChange: (importId: string, option: ScopeOption) => void
+  label?: string
+}) {
   const scopes = useScopeOptions()
-  const [uploading, setUploading] = useState(false)
   const [preview, setPreview] = useState(false)
-  const datasetId = value.startsWith("import:") ? value.slice("import:".length) : null
-  const datasets = scopes.data?.filter((s) => s.key.startsWith("import:")) ?? []
-
-  if (uploading)
-    return (
-      <div className="space-y-3 rounded-lg border p-4">
-        <div className="flex items-center justify-between">
-          <p className="font-medium">Upload a new dataset</p>
-          <Button variant="ghost" size="sm" onClick={() => setUploading(false)}>
-            <ArrowLeft /> Back
-          </Button>
-        </div>
-        <UploadFlow
-          onUse={(key) => {
-            onChange(key)
-            setUploading(false)
-            void scopes.refetch()
-          }}
-        />
-      </div>
-    )
+  // Only saved uploads ("import:<id>"): anything else (e.g. an older server's "all") is not a run source.
+  const uploads = (scopes.data ?? []).filter((s) => s.key.startsWith("import:"))
 
   return (
     <div className="grid gap-2">
       <Label>{label}</Label>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Select
-          value={value}
-          onValueChange={(v) => {
-            onChange(v)
-            setPreview(false)
-          }}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder={scopes.isLoading ? "Loading…" : "Choose companies"} />
-          </SelectTrigger>
-          <SelectContent>
-            {scopes.data
-              ?.filter((s) => s.key === "all")
-              .map((s) => (
-                <SelectItem key={s.key} value={s.key}>
-                  {s.label} ({s.count.toLocaleString("en-IN")})
-                </SelectItem>
-              ))}
-            {datasets.length > 0 && <div className="px-2 pb-1 pt-2 text-xs font-medium text-muted-foreground">Uploaded datasets</div>}
-            {datasets.map((s) => (
-              <SelectItem key={s.key} value={s.key}>
-                {s.label} ({s.count.toLocaleString("en-IN")})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button variant="outline" className="shrink-0" onClick={() => setUploading(true)}>
-          <UploadCloud /> Upload new
-        </Button>
-      </div>
-      {datasetId && (
+      <Select
+        value={value ? `import:${value}` : undefined}
+        onValueChange={(key) => {
+          const opt = uploads.find((u) => u.key === key)
+          if (opt) onChange(importIdOf(key), opt)
+          setPreview(false)
+        }}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder={scopes.isLoading ? "Loading…" : uploads.length ? "Select an earlier upload" : "No saved uploads yet"} />
+        </SelectTrigger>
+        <SelectContent>
+          {uploads.map((s) => (
+            <SelectItem key={s.key} value={s.key}>
+              <span className="truncate">{s.label}</span>
+              <span className="tabular ml-2 text-xs text-muted-foreground">
+                {s.count.toLocaleString("en-IN")} logos · {s.runs ? `run ${s.runs}× · last ${fmtDate(s.lastRunAt)}` : "never run"}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {value && (
         <div>
           <Button variant="link" size="sm" className="px-0" onClick={() => setPreview((p) => !p)}>
-            <Table2 /> {preview ? "Hide data" : "Preview & edit this dataset"}
+            <Table2 /> {preview ? "Hide data" : "Preview & edit this upload"}
           </Button>
-          {preview && <DatasetGrid datasetId={datasetId} pageSize={8} className="mt-2" />}
+          {preview && <DatasetGrid datasetId={value} pageSize={8} className="mt-2" />}
         </div>
       )}
     </div>

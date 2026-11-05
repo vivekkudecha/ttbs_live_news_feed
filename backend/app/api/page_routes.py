@@ -4,7 +4,7 @@ templates, channels, session). Reads use read_models; writes go through services
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import Field
 
 from app.api import read_models as rm
@@ -13,7 +13,7 @@ from app.api.deps import current_actor
 from app.core.errors import ValidationFailed
 from app.core.timeutil import as_utc, utcnow
 from app.db.session import unit_of_work
-from app.services import accounts, audit, notifications
+from app.services import accounts, audit, finops, notifications
 
 router = APIRouter(prefix="/api/v1")
 
@@ -219,9 +219,20 @@ def deactivate_pam(pam_id: str, actor: str = Depends(current_actor)) -> dict[str
 
 
 @router.get("/finops")
-def finops() -> dict[str, Any]:
+def finops_report(start: str | None = Query(None, alias="from"), end: str | None = Query(None, alias="to")) -> dict[str, Any]:
+    """Cost analysis for a date range (IST dates, inclusive; default: this month). USD."""
     with unit_of_work() as uow:
-        return rm.finops(uow)
+        return finops.report(uow, start, end)
+
+
+@router.get("/finops/ledger.csv")
+def finops_ledger_csv(start: str | None = Query(None, alias="from"), end: str | None = Query(None, alias="to")) -> Response:
+    """Every ledger row in the range, labelled (run, upload, PAM, logo), for Excel."""
+    with unit_of_work() as uow:
+        body = finops.ledger_csv(uow, start, end)
+    name = f"ttbs-cost-ledger-{start or 'month'}-{end or 'today'}.csv"
+    return Response("﻿" + body, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})
 
 
 @router.get("/templates")

@@ -21,7 +21,7 @@ def _digest(prev_hash: str, row: dict[str, Any]) -> str:
 
 
 def _content(a: AuditLog) -> dict[str, Any]:
-    return {
+    out = {
         "ts": a.ts.isoformat() if a.ts else None,
         "actor": a.actor,
         "action": a.action,
@@ -29,6 +29,9 @@ def _content(a: AuditLog) -> dict[str, Any]:
         "entity_id": a.entity_id,
         "detail": a.detail,
     }
+    if a.run_id is not None:  # rows written before run correlation existed hash exactly as before
+        out["run_id"] = a.run_id
+    return out
 
 
 def record(
@@ -39,7 +42,10 @@ def record(
     detail: dict[str, Any] | None = None,
     *,
     actor: str | None = None,
+    run_id: int | None = None,
 ) -> AuditLog:
+    """Append one audit row. `run_id` ties the entry to a research run (its notifications included),
+    so GET /runs/{id}/audit returns the run's full trail."""
     uow.advisory_lock(LOCK_AUDIT_CHAIN)  # serialise the chain across concurrent writers
     s = uow.session
     prev = s.execute(select(AuditLog.hash).order_by(AuditLog.id.desc()).limit(1)).scalar() or GENESIS
@@ -54,6 +60,7 @@ def record(
         ip=client_ip_var.get(),
         user_agent=(user_agent_var.get() or "")[:300] or None,
         prev_hash=prev,
+        run_id=run_id if run_id is not None else (int(entity_id) if entity_type == "run" and entity_id is not None else None),
     )
     entry.hash = _digest(prev, _content(entry))
     s.add(entry)

@@ -27,19 +27,24 @@ def _members(import_id):
 
 def test_crashed_worker_resumes_from_last_saved_chunk(client, monkeypatch):
     _small_chunks(monkeypatch)
+    real_apply = tasks.process_import.apply_async
     monkeypatch.setattr(tasks.process_import, "apply_async", lambda *a, **k: None)  # worker never picks it up
     ds = upload(client).json()
+    assert ds["status"] == "analyzing"  # the file is checked in the background, then saved
+    ds = client.get(f"/api/v1/imports/{ds['id']}").json()
     assert ds["status"] == "queued" and ds["saved"] == 0
 
-    # A worker saved 1 chunk, then died (its lease/heartbeat went stale).
+    # A worker saved 1 chunk (streamed from the stored file), then died (its lease/heartbeat went stale).
+    from itertools import islice
+
     with unit_of_work() as uow:
         b = uow.session.get(ImportBatch, int(ds["id"]))
-        chunk = b.rows[:1]
+        chunk = list(islice(imports.stream_valid_rows(imports.stored_path(b), "xlsx"), 1))
         imports._apply(uow, b, chunk)
         b.rows_done, b.status, b.worker_token = 1, "processing", "dead-worker"
         b.heartbeat_at = utcnow() - timedelta(minutes=5)
-    monkeypatch.undo()
-    _small_chunks(monkeypatch)
+    # Restore only the task (undo() would also drop the test's UPLOAD_DIR, where the file is kept).
+    monkeypatch.setattr(tasks.process_import, "apply_async", real_apply)
     assert client.get(f"/api/v1/imports/{ds['id']}").json()["progress"] == 33
 
     assert maintenance.recover_stuck()["imports"] == 1  # sweeper resumes it
@@ -89,6 +94,7 @@ def test_gives_up_after_max_failures_and_can_be_resumed(client, monkeypatch):
 def test_all_invalid_rows_fail_without_saving(client):
     bad = [["Bad Co", "", "", "", "X", "not-an-email", "1"]]
     ds = upload(client, bad).json()
+    ds = client.get(f"/api/v1/imports/{ds['id']}").json()
     assert ds["status"] == "failed" and ds["validRows"] == 0 and ds["issues"]
     assert client.post(f"/api/v1/imports/{ds['id']}/resume").status_code == 409
 
@@ -148,10 +154,87 @@ def test_rename_and_scope_options_use_dataset_labels(client):
     r = client.patch(f"/api/v1/imports/{ds['id']}", json={"label": "November logos"})
     assert r.json()["label"] == "November logos"
     opts = client.get("/api/v1/scopes").json()
-    assert opts[0] == {"key": "all", "label": "All active companies", "count": 4}
-    labels = [(o["key"], o["label"].split(" · ")[0], o["count"]) for o in opts[1:]]
-    assert labels == [(f"import:{int(ds['id']) + 1}", "Dec adds", 1), (f"import:{ds['id']}", "November logos", 3)]
-    assert not any(o["key"].startswith("segment:") for o in opts)
-    # A run on a dataset covers exactly its members.
+    # Only uploads: every run starts from one (no "all companies" / segment scopes any more).
+    labels = [(o["key"], o["label"].split(" · ")[0], o["count"], o["runs"]) for o in opts]
+    assert labels == [(f"import:{int(ds['id']) + 1}", "Dec adds", 1, 0), (f"import:{ds['id']}", "November logos", 3, 0)]
+    # A run on a dataset covers exactly its members, and is labelled by upload + run number.
     run = client.post("/api/v1/runs", json={"scopeKey": f"import:{ds['id']}", "channels": []}).json()
-    assert run["companies"] == 3 and run["label"].startswith("Adhoc: November logos")
+    assert run["companies"] == 3 and run["label"] == "November logos · run 1" and run["trigger"] == "upload"
+    again = client.post("/api/v1/runs", json={"importId": int(ds["id"]), "channels": []}).json()
+    assert again["label"] == "November logos · run 2" and again["trigger"] == "rerun"
+    assert client.get("/api/v1/scopes").json()[1]["runs"] == 2
+
+
+def test_preview_shows_rows_and_changes_without_saving(client):
+    from tests.conftest import xlsx
+
+    upload(client, label="Nov")  # Pine → Aarav already known
+    moved = [["Pine Labs Pvt Ltd", "Fintech", "Enterprise", "Priya Nair", "priya@ttbs.example", "9845022002"],
+             ["Brand New Co", "", "", "Priya Nair", "priya@ttbs.example", "9845022002"],
+             ["Bad Row", "", "", "Priya Nair", "not-an-email", "9845022002"]]
+    headers = ["Company", "Industry", "Segment", "PAM Name", "PAM Email", "PAM WhatsApp"]
+    before = client.get("/api/v1/imports").json()
+    staged = client.post("/api/v1/imports/stage", files={"file": ("dec.xlsx", xlsx(moved, headers), "application/octet-stream")})
+    assert staged.status_code == 201 and staged.json()["status"] == "analyzing"
+    p = client.get(f"/api/v1/imports/{staged.json()['id']}/preview").json()  # checked in the background (eager here)
+    assert p["status"] == "previewed" and p["rowsTotal"] == 3
+    assert client.get(f"/api/v1/imports/{p['id']}").json()["status"] == "previewed" and p["validRows"] == 2 and p["errorRows"] == 1
+    assert p["newCompanies"] == 1 and p["reassignments"] == 1 and p["newPams"] == 0
+    pine = next(r for r in p["rows"] if r["company"] == "Pine Labs Pvt Ltd")
+    assert pine["change"] == "reassigned" and pine["currentPam"] == "Aarav Mehta" and pine["pamName"] == "Priya Nair"
+    assert any(i["field"] == "PAM Email" for i in p["issues"])
+    assert client.get("/api/v1/imports").json() == before  # nothing was saved, and the preview is not listed
+
+    # Discarding drops it and its file; saving needs a name, then the rows are saved in the background.
+    from app.core.config import get_settings
+
+    assert client.post(f"/api/v1/imports/{p['id']}/save", json={"label": "  "}).status_code == 422
+    saved = client.post(f"/api/v1/imports/{p['id']}/save", json={"label": "Dec moves"}).json()
+    assert saved["label"] == "Dec moves"
+    done = client.get(f"/api/v1/imports/{p['id']}").json()
+    assert done["status"] == "completed" and done["companies"] == 2 and done["reassignments"] == 1
+    assert client.post(f"/api/v1/imports/{p['id']}/save", json={"label": "again"}).status_code == 409
+    other = client.post("/api/v1/imports/stage", files={"file": ("x.xlsx", xlsx(moved, headers), "application/octet-stream")}).json()
+    assert client.delete(f"/api/v1/imports/{other['id']}").status_code == 204
+    assert not any(f.name.startswith(other["id"]) or f"_{other['id']}_" in f.name for f in get_settings().upload_path.iterdir())
+    assert client.delete(f"/api/v1/imports/{p['id']}").status_code == 409  # saved uploads are not discardable
+
+
+def test_upload_needs_a_name_and_keeps_the_original_file(client):
+    from app.core.config import get_settings
+
+    r = upload(client, label=None)
+    assert r.status_code == 422 and r.json()["error"]["details"] == {"field": "label"}
+    d = upload(client, label="Nov logos").json()
+    assert d["hasFile"] is True
+    stored = list(get_settings().upload_path.iterdir())
+    assert len(stored) == 1 and stored[0].name.endswith(f"_{d['id']}_Nov-logos.xlsx") and stored[0].name[:8].isdigit()
+    f = client.get(f"/api/v1/imports/{d['id']}/file")
+    assert f.status_code == 200 and f.content[:2] == b"PK"  # the xlsx as uploaded
+    assert "Nov%20logos%20" in f.headers["content-disposition"]  # "<name> <upload time>.xlsx" (RFC 5987)
+
+
+def test_large_csv_is_streamed_checked_and_saved(client, monkeypatch):
+    """A CSV bigger than one save chunk and one compare batch: counts, duplicates (first row wins),
+    progress and the size limit all work without holding the file in memory."""
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "import_chunk_size", 300)
+    monkeypatch.setattr(get_settings(), "import_analyze_batch", 250)
+    lines = ["Company,PAM Name,PAM Email,PAM WhatsApp"]
+    lines += [f"Logo {i:05d} Pvt Ltd,PAM {i % 7},pam{i % 7}@ttbs.example,98100{i % 7:05d}" for i in range(2000)]
+    lines += ["LOGO 00001 PVT. LTD,PAM 9,pam9@ttbs.example,9810000009"]  # duplicate of row 3: the first row wins
+    data = ("\n".join(lines) + "\n").encode()
+    r = client.post("/api/v1/imports", files={"file": ("big.csv", data, "text/csv")}, data={"label": "Big"})
+    assert r.status_code == 201, r.text
+    d = client.get(f"/api/v1/imports/{r.json()['id']}").json()
+    assert d["status"] == "completed" and d["rowsTotal"] == 2001 and d["validRows"] == 2000 and d["duplicatesMerged"] == 1
+    assert d["companies"] == 2000 and d["newCompanies"] == 2000 and d["newPams"] == 7 and d["sizeBytes"] == len(data)
+    p = client.get(f"/api/v1/imports/{d['id']}/preview").json()
+    assert p["rowsShown"] == 200 and p["newCompanies"] == 2000
+    assert any("earlier row is used" in i["message"] for i in p["issues"])
+
+    monkeypatch.setattr(get_settings(), "import_max_bytes", 1000)
+    r = client.post("/api/v1/imports", files={"file": ("big.csv", data, "text/csv")}, data={"label": "Too big"})
+    assert r.status_code == 413
+    assert not [f for f in get_settings().upload_path.iterdir() if f.suffix == ".part"]  # nothing left behind

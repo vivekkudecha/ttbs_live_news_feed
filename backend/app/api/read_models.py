@@ -6,7 +6,6 @@ bulk (no N+1 queries).
 """
 
 import re
-from calendar import monthrange
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -33,11 +32,11 @@ from app.db.models import (
     Pam,
     ResearchResult,
     Run,
-    Schedule,
 )
 from app.db.session import UnitOfWork
 from app.research.prompts import INSTRUCTIONS, OUTPUT_RULES, PROMPT_VERSION, TTBS_CONTEXT, build_prompt
 from app.services import accounts, runs
+from app.services import finops as finops_svc
 
 # Which signal to act on first (same weights the UI used).
 CAT_WEIGHT = {"Contract": 6, "Funding": 5, "Cybersecurity": 5, "Expansion": 4, "Leadership": 3, "Digital": 3}
@@ -199,8 +198,9 @@ def run_summaries(uow: UnitOfWork, run_list: list[Run]) -> list[dict[str, Any]]:
         out.append({
             "id": str(r.id),
             "label": r.label,
-            "trigger": "scheduled" if r.trigger == "scheduled" else "adhoc",
+            "trigger": r.trigger,  # upload | rerun | (historical) scheduled | adhoc | import
             "scheduleId": str(r.schedule_id) if r.schedule_id else None,
+            "importId": str(r.import_id) if r.import_id else None,
             "templateId": r.template_id,
             "templateVersion": PROMPT_VERSION,
             "provider": PROVIDER_LABEL.get(r.provider, r.provider),
@@ -368,18 +368,13 @@ def _latest_finished(uow: UnitOfWork) -> Run | None:
     ).first()
 
 
-def _month_start(now: datetime) -> datetime:
-    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-
-def _month_spend(uow: UnitOfWork) -> float:
-    start = _month_start(utcnow())
-    return round(uow.session.scalar(select(func.coalesce(func.sum(ResearchResult.cost), 0.0)).where(ResearchResult.finished_at >= start)) or 0.0, 2)
-
-
-def _next_schedule(uow: UnitOfWork) -> dict[str, Any] | None:
-    s = uow.session.scalars(select(Schedule).where(Schedule.enabled.is_(True)).order_by(Schedule.next_run_at).limit(1)).first()
-    return sch.schedule_out(s) | {"scope": runs.scope_label(uow, s.scope_key)} if s else None
+def _next_run(uow: UnitOfWork) -> dict[str, Any] | None:
+    """The next upload scheduled to run at a later time (recurring schedules are retired)."""
+    r = uow.session.scalars(select(Run).where(Run.status == "scheduled").order_by(Run.scheduled_for).limit(1)).first()
+    if r is None:
+        return None
+    return {"id": str(r.id), "label": r.label, "scheduledFor": sch.iso(r.scheduled_for), "companies": r.total,
+            "importId": str(r.import_id) if r.import_id else None}
 
 
 def dashboard(uow: UnitOfWork, pam_id: str | None) -> dict[str, Any]:
@@ -391,8 +386,8 @@ def dashboard(uow: UnitOfWork, pam_id: str | None) -> dict[str, Any]:
         "logos": uow.session.scalar(company_q) or 0,
         "activePams": uow.session.scalar(select(func.count(Pam.id)).where(Pam.active.is_(True))) or 0,
         "recentRuns": list_runs(uow, 4),
-        "nextSchedule": _next_schedule(uow),
-        "monthSpend": _month_spend(uow),
+        "nextRun": _next_run(uow),
+        "monthSpend": round(finops_svc.month_spend(uow), 2),
         "monthBudget": get_settings().monthly_budget_usd,
     }
     run = _latest_finished(uow) or uow.session.scalars(select(Run).order_by(Run.id.desc()).limit(1)).first()
@@ -739,51 +734,6 @@ def live_changes(uow: UnitOfWork, run_id: str, since: datetime | None) -> dict[s
 
 
 # --- FinOps, templates, channels ---------------------------------------------------------------------
-
-
-def finops(uow: UnitOfWork) -> dict[str, Any]:
-    s = get_settings()
-    now = utcnow()
-    month = _month_start(now)
-    first = (month - timedelta(days=150)).replace(day=1)
-    by_month: dict[str, float] = defaultdict(float)
-    spend = signals = cached = 0.0
-    paid_costs: list[float] = []
-    for fin, cost, status, was_cached in uow.session.execute(
-        select(ResearchResult.finished_at, ResearchResult.cost, ResearchResult.status, ResearchResult.cached).where(ResearchResult.finished_at >= first)
-    ):
-        fin = _aware(fin)
-        by_month[fin.strftime("%Y-%m")] += cost or 0
-        if fin >= month:
-            spend += cost or 0
-            signals += status == RES_SIGNAL
-            cached += bool(was_cached)
-            if not was_cached and cost:
-                paid_costs.append(cost)
-    series, cursor = [], first
-    while cursor <= month:
-        series.append({"month": cursor.strftime("%b"), "llm": round(by_month.get(cursor.strftime("%Y-%m"), 0.0), 2), "messaging": 0})
-        cursor = (cursor + timedelta(days=32)).replace(day=1)
-    days = monthrange(now.year, now.month)[1]
-    elapsed = max((now - month).total_seconds() / 86400, 1)
-    by_provider = [
-        {"name": PROVIDER_LABEL.get(p, p), "cost": round(c or 0, 2)}
-        for p, c in uow.session.execute(
-            select(Run.provider, func.sum(ResearchResult.cost)).join(Run, Run.id == ResearchResult.run_id)
-            .where(ResearchResult.finished_at >= month).group_by(Run.provider)
-        )
-    ]
-    avg = sum(paid_costs) / len(paid_costs) if paid_costs else 0
-    return {
-        "monthBudget": s.monthly_budget_usd,
-        "monthSpend": round(spend, 2),
-        "forecast": round(spend / elapsed * days, 2),
-        "softLimitPct": s.budget_soft_limit_pct,
-        "costPerSignal": round(spend / signals, 4) if signals else 0,
-        "cacheSavings": round(cached * avg, 2),
-        "series": series,
-        "byProvider": by_provider,
-    }
 
 
 def templates(uow: UnitOfWork) -> list[dict[str, Any]]:

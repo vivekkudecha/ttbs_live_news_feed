@@ -1,10 +1,11 @@
 """Dispatcher + sweeper, run every `dispatcher_interval_s` by Celery beat.
 
-1. Fire due schedules (create a run per schedule, advance next_run_at).
-2. Promote 'scheduled' runs whose time has come to 'queued' and enqueue them.
-3. Recover lost work: queue messages can be lost (Redis restart, worker crash). The database is
+1. Promote 'scheduled' runs (an upload set to run at a later time) whose time has come.
+2. Recover lost work: queue messages can be lost (Redis restart, worker crash). The database is
    the source of truth, so anything that should be moving but is not gets re-enqueued. Every
-   task is idempotent, so a duplicate is harmless.
+   task is idempotent, so a duplicate is harmless. Each recovery is a telemetry event.
+
+Recurring schedules are retired: every run starts from an upload (rows stay for history).
 """
 
 import logging
@@ -12,9 +13,8 @@ from datetime import timedelta
 
 from sqlalchemy import select, update
 
-from app.core import cache
+from app.core import cache, metrics
 from app.core.config import get_settings
-from app.core.errors import ValidationFailed
 from app.core.timeutil import utcnow
 from app.db.models import (
     NOTE_PENDING,
@@ -27,10 +27,9 @@ from app.db.models import (
     Notification,
     ResearchResult,
     Run,
-    Schedule,
 )
 from app.db.session import UnitOfWork, unit_of_work
-from app.services import audit, runs, schedules
+from app.services import runs, telemetry
 
 log = logging.getLogger(__name__)
 BATCH = 500
@@ -38,31 +37,6 @@ BATCH = 500
 
 def _skip_locked(stmt, uow: UnitOfWork):
     return stmt.with_for_update(skip_locked=True) if uow.is_postgres else stmt
-
-
-def fire_due_schedules() -> list[int]:
-    created: list[int] = []
-    now = utcnow()
-    with unit_of_work() as uow:
-        due = uow.session.scalars(
-            _skip_locked(select(Schedule).where(Schedule.enabled.is_(True), Schedule.next_run_at <= now).limit(50), uow)
-        ).all()
-        for sch in due:
-            sch.last_run_at = now
-            sch.next_run_at = schedules.advance(sch, now)
-            try:
-                with uow.session.begin_nested():
-                    run = runs.create_run(
-                        uow, scope_key=sch.scope_key, actor="scheduler", trigger="scheduled",
-                        label=f"{sch.name} · {now:%d %b %Y}", channels=sch.channels, template_id=sch.template_id,
-                        budget_cap=sch.budget_cap, schedule_id=sch.id,
-                    )
-                    created.append(run.id)
-            except ValidationFailed as e:  # e.g. empty scope: record and move on to the next cycle
-                audit.record(uow, "schedule.skip", "schedule", sch.id, {"reason": e.message}, actor="scheduler")
-        if due:
-            uow.after_commit(lambda: cache.bump("schedules"))
-    return created
 
 
 def promote_scheduled_runs() -> list[int]:
@@ -75,6 +49,7 @@ def promote_scheduled_runs() -> list[int]:
             uow.session.execute(update(Run).where(Run.id.in_(ids), Run.status == RUN_SCHEDULED).values(status=RUN_QUEUED, queued_at=now))
             for rid in ids:
                 runs._enqueue_start(uow, rid)
+                telemetry.event(uow, "run.queued", run_id=rid, actor="scheduler", message="Scheduled time reached")
             uow.after_commit(lambda: cache.bump("runs"))
     return ids
 
@@ -83,7 +58,8 @@ def recover_stuck() -> dict[str, int]:
     s_ = get_settings()
     now = utcnow()
     stale = now - timedelta(minutes=s_.stuck_after_minutes)
-    stats = {"runs": 0, "results_running": 0, "results_pending": 0, "notifications": 0, "imports": 0}
+    stats = {"runs": 0, "results_running": 0, "results_pending": 0, "notifications": 0, "imports": 0, "file_checks": 0,
+             "previews_discarded": 0}
     with unit_of_work() as uow:
         s = uow.session
         # Dataset uploads whose worker died or whose queue message was lost: resume from the cursor.
@@ -95,6 +71,15 @@ def recover_stuck() -> dict[str, int]:
 
             uow.after_commit(lambda: [process_import.apply_async((i,)) for i in stuck_imports])
             stats["imports"] = len(stuck_imports)
+        # File checks whose worker vanished restart from the top (a check writes nothing but its result).
+        stuck_checks = imports.stalled_checks(uow)
+        if stuck_checks:
+            from app.worker.tasks import analyze_import
+
+            uow.after_commit(lambda: [analyze_import.apply_async((i,)) for i in stuck_checks])
+            stats["file_checks"] = len(stuck_checks)
+        # Checked files nobody saved: drop them (and their files) after IMPORT_PREVIEW_TTL_HOURS.
+        stats["previews_discarded"] = imports.discard_stale_previews(uow)
 
         # Queued runs nobody started.
         for rid in s.scalars(select(Run.id).where(Run.status == RUN_QUEUED, Run.queued_at <= now - timedelta(minutes=2)).limit(BATCH)):
@@ -137,12 +122,16 @@ def recover_stuck() -> dict[str, int]:
             stats["notifications"] = len(due)
     if any(stats.values()):
         log.warning("sweeper re-enqueued work", extra=stats)
+        for what, n in stats.items():
+            if n:
+                metrics.SWEEPER_RECOVERED.labels(what).inc(n)
+        telemetry.event_now("sweeper.recovered", telemetry.RETRY, actor="system",
+                            message=", ".join(f"{n} {k.replace('_', ' ')}" for k, n in stats.items() if n), **stats)
     return stats
 
 
 def tick() -> dict:
     return {
-        "schedules_fired": fire_due_schedules(),
         "runs_promoted": promote_scheduled_runs(),
         "recovered": recover_stuck(),
     }

@@ -65,12 +65,16 @@ import { useDebounced } from "@/lib/use-debounced"
 import { durationMin, fmtDate, fmtDateTime, fmtUsd, pct } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Job, JobNotification, JobResult } from "@/api/types"
-import { NewRunDialog } from "./Schedules"
+import { NewRunDialog } from "@/components/runs/NewRunDialog"
+import { AuditTab, CostsTab, EventsTab, TimelineTab } from "@/components/runs/RunInsights"
 
 const n = (x: number) => x.toLocaleString("en-IN")
 const ACTIVE = new Set(["scheduled", "queued", "running"])
 const asStatus = (s: string): AnyStatus => (s === "sending" ? "running" : (s as AnyStatus))
 const TRIGGER: Record<Job["trigger"], { label: string; icon: typeof Play }> = {
+  upload: { label: "New upload", icon: FileSpreadsheet },
+  rerun: { label: "Re-run", icon: RotateCcw },
+  // Runs from before every run started from an upload:
   import: { label: "Import", icon: FileSpreadsheet },
   scheduled: { label: "Scheduled", icon: CalendarClock },
   adhoc: { label: "Ad-hoc", icon: Play },
@@ -286,7 +290,8 @@ type Group = "all" | "active" | "finished" | "attention"
 
 export function RunsList() {
   const [group, setGroup] = useState<Group>("all")
-  const [search, setSearch] = useState("")
+  const [urlParams] = useSearchParams()
+  const [search, setSearch] = useState(() => urlParams.get("q") ?? "") // e.g. from an upload's "runs" link
   const [page, setPage] = useState(0)
   const q = useDebounced(search, 250)
   const runs = useJobs({ page, pageSize: 20, status: group === "all" ? undefined : group, q: q || undefined })
@@ -304,21 +309,16 @@ export function RunsList() {
     <div>
       <PageHeader
         title="Research runs"
-        description="Every research run, from an import, a schedule or started by hand. Results arrive company by company, and each PAM's digest goes out as soon as their companies are done."
+        description="Every run researches one upload: its logos, for the PAMs it maps them to. Results arrive logo by logo, and each PAM's digest goes out as soon as their logos are done."
         actions={<NewRunDialog />}
       />
       <QueueStrip />
 
       {nothingYet ? (
         <EmptyState icon={Sparkles} title="No research runs yet">
-          <p>Upload the company → PAM Excel and choose “research now”, or start a run for companies already imported.</p>
+          <p>Each run starts from an upload: the Excel/CSV of logos and their PAMs for that run.</p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <Button variant="outline" asChild>
-              <Link to="/imports">
-                <FileSpreadsheet /> Upload Excel
-              </Link>
-            </Button>
-            <NewRunDialog />
+            <NewRunDialog label="Upload & run" />
           </div>
         </EmptyState>
       ) : (
@@ -781,7 +781,7 @@ function DigestsTab({ runId, live }: { runId: string; live: boolean }) {
   )
 }
 
-type DetailTab = "live" | "results" | "pams" | "digests"
+type DetailTab = "live" | "results" | "pams" | "digests" | "timeline" | "events" | "audit" | "costs"
 
 export function RunDetail() {
   const { id = "" } = useParams()
@@ -826,7 +826,26 @@ export function RunDetail() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={`Run #${j.id}`} description={j.label} back={{ to: "/runs", label: "All research runs" }} actions={<RunActions job={j} />} />
+      <PageHeader
+        title={`Run #${j.id}`}
+        description={
+          <>
+            {j.label}
+            {j.importId && (
+              <>
+                {" · "}
+                <Link to={`/imports?open=${j.importId}`} className="underline-offset-2 hover:underline">
+                  upload #{j.importId}
+                </Link>
+              </>
+            )}
+            {" · "}
+            {j.provider} {j.model}
+          </>
+        }
+        back={{ to: "/runs", label: "All research runs" }}
+        actions={<RunActions job={j} />}
+      />
 
       <ProgressHero j={j} rate={s?.ratePerSec} />
 
@@ -838,7 +857,7 @@ export function RunDetail() {
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setParams(v === fallback ? {} : { tab: v }, { replace: true })}>
-        <TabsList>
+        <TabsList className="h-auto flex-wrap">
           {started && (
             <TabsTrigger value="live" className="gap-1.5">
               {live ? <Radio className="text-info" /> : <Gauge />} {live ? "Live" : "Overview"}
@@ -847,6 +866,10 @@ export function RunDetail() {
           <TabsTrigger value="results">Results</TabsTrigger>
           <TabsTrigger value="pams">PAMs</TabsTrigger>
           <TabsTrigger value="digests">Digests</TabsTrigger>
+          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="events">Events</TabsTrigger>
+          <TabsTrigger value="audit">Audit trail</TabsTrigger>
+          <TabsTrigger value="costs">Costs</TabsTrigger>
         </TabsList>
         {started && (
           <TabsContent value="live" className="mt-4">
@@ -861,6 +884,18 @@ export function RunDetail() {
         </TabsContent>
         <TabsContent value="digests" className="mt-4">
           <DigestsTab runId={j.id} live={live} />
+        </TabsContent>
+        <TabsContent value="timeline" className="mt-4">
+          <TimelineTab runId={j.id} live={live} />
+        </TabsContent>
+        <TabsContent value="events" className="mt-4">
+          <EventsTab runId={j.id} live={live} />
+        </TabsContent>
+        <TabsContent value="audit" className="mt-4">
+          <AuditTab runId={j.id} live={live} />
+        </TabsContent>
+        <TabsContent value="costs" className="mt-4">
+          <CostsTab runId={j.id} live={live} />
         </TabsContent>
       </Tabs>
 

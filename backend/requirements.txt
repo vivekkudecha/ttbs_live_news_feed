@@ -1,4 +1,4 @@
-﻿fastapi>=0.115
+fastapi>=0.115
 uvicorn[standard]>=0.32
 sqlalchemy>=2.0.36
 alembic>=1.14
@@ -13,3 +13,12 @@ openpyxl>=3.1
 python-multipart>=0.0.18
 tzdata>=2024.1
 cryptography>=43
+# Telemetry: Prometheus /metrics always; OpenTelemetry traces only when OTEL_EXPORTER_OTLP_ENDPOINT is set
+prometheus-client>=0.21
+opentelemetry-sdk>=1.28
+opentelemetry-exporter-otlp-proto-http>=1.28
+opentelemetry-instrumentation-fastapi>=0.49b0
+opentelemetry-instrumentation-httpx>=0.49b0
+opentelemetry-instrumentation-sqlalchemy>=0.49b0
+opentelemetry-instrumentation-celery>=0.49b0
+opentelemetry-instrumentation-redis>=0.49b0

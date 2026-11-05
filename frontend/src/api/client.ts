@@ -12,7 +12,7 @@ import type {
   CompanyQuery,
   DashboardSummary,
   DigestData,
-  FinOpsSummary,
+  FinOpsReport,
   LiveBatch,
   LiveSnapshot,
   Page,
@@ -77,7 +77,13 @@ export const api = {
   /** User accounts arrive with real authentication; until then there is nothing to list. */
   listUsers: async (): Promise<User[]> => [],
   listAudit: async () => (await request<Page<AuditEntry>>("GET", "/audit?pageSize=200")).rows,
-  finops: () => request<FinOpsSummary>("GET", "/finops"),
+  /** Cost analysis for an IST date range (inclusive, YYYY-MM-DD); default this month. USD. */
+  finops: (range: { from?: string; to?: string } = {}) => {
+    const p = new URLSearchParams()
+    if (range.from) p.set("from", range.from)
+    if (range.to) p.set("to", range.to)
+    return request<FinOpsReport>("GET", `/finops${p.size ? `?${p}` : ""}`)
+  },
 }
 
 export type NewsFeedApi = typeof api

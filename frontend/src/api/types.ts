@@ -100,11 +100,16 @@ export interface PamJob {
   whatsapp: DeliveryStatus
 }
 
+/** How a run was started. "upload": first run of an upload; "rerun": an earlier upload run again.
+ *  "scheduled" / "adhoc" / "import" only appear on runs from before every run started from an upload. */
+export type RunTrigger = "upload" | "rerun" | "scheduled" | "adhoc" | "import"
+
 export interface Run {
   id: string
   label: string
-  trigger: "scheduled" | "adhoc"
+  trigger: RunTrigger
   scheduleId?: string
+  importId?: string | null
   templateId: string
   templateVersion: number
   provider: string
@@ -163,24 +168,6 @@ export interface Template {
   versions: TemplateVersion[]
 }
 
-export interface Schedule {
-  id: string
-  name: string
-  intervalDays: number
-  runAtTime: string
-  timezone: string
-  nextRunAt: string
-  lastRunAt: string | null
-  templateId: string
-  providerKey: string
-  scope: string
-  /** Backend only: machine key behind the `scope` label (e.g. "segment:Enterprise"). */
-  scopeKey?: string
-  enabled: boolean
-  budgetCap: number | null
-  channels: ("email" | "whatsapp")[]
-}
-
 export interface Provider {
   key: string
   name: string
@@ -214,23 +201,93 @@ export interface AuditEntry {
   entity: string
   detail: string
   ip: string
+  requestId?: string | null
 }
 
-export interface CostPoint {
-  month: string
+// ---- FinOps (USD; every figure comes from the cost ledger) ---------------------------------------
+/** One cost cut: spend split, volume and unit economics. */
+export interface CostRow {
   llm: number
   messaging: number
+  total: number
+  /** Paid LLM calls (cache misses). */
+  calls: number
+  cacheHits: number
+  /** Estimated USD avoided by cache hits. */
+  saved: number
+  tokensIn: number
+  tokensOut: number
+  signals: number
+  messages: number
+  costPerCompany: number | null
+  costPerSignal: number | null
+  cacheRate: number
 }
 
-export interface FinOpsSummary {
-  monthBudget: number
-  monthSpend: number
-  forecast: number
-  softLimitPct: number
-  costPerSignal: number
-  cacheSavings: number
-  series: CostPoint[]
-  byProvider: { name: string; cost: number }[]
+export interface FinOpsReport {
+  currency: "USD"
+  from: string
+  to: string
+  totals: CostRow & { failedCost: number; failedCalls: number }
+  budget: { monthly: number; monthSpend: number; forecast: number; softLimitPct: number; hardCap: boolean; usedPct: number }
+  prices: { emailPerMessage: number; whatsappPerMessage: number }
+  series: { date: string; llm: number; messaging: number; saved: number }[]
+  byRun: (CostRow & { id: string; label: string; status: RunStatus | null; importId: string | null; startedAt: string | null; companies: number | null })[]
+  byUpload: (CostRow & { id: string; label: string; fileName: string | null })[]
+  byPam: (CostRow & { id: string; name: string; email: string | null })[]
+  topCompanies: (CostRow & { id: string; name: string })[]
+  byModel: (CostRow & { category: "llm" | "messaging"; provider: string; model: string | null })[]
+}
+
+export interface RunCosts {
+  totals: CostRow
+  byPam: (CostRow & { id: string; name: string })[]
+}
+
+// ---- Telemetry (process events) ------------------------------------------------------------------
+export type EventStatus = "ok" | "retry" | "error" | "skipped" | "info"
+
+export interface ProcessEvent {
+  id: string
+  ts: string
+  /** "dataset.upload" | "dataset.chunk" | "run.start" | "research.attempt" | "notify.attempt" | … */
+  kind: string
+  status: EventStatus
+  message: string | null
+  runId: string | null
+  importId: string | null
+  companyId: string | null
+  pamId: string | null
+  notificationId: string | null
+  attempt: number | null
+  durationMs: number | null
+  provider: string | null
+  model: string | null
+  tokensIn: number | null
+  tokensOut: number | null
+  cost: number | null
+  actor: string | null
+  requestId: string | null
+  traceId: string | null
+  attrs: Record<string, unknown>
+}
+
+export interface RunTimeline {
+  events: ProcessEvent[]
+  throughput: { minute: string; ok: number; error: number; retry: number; cached: number }[]
+  research: { attempts: number; retries: number; errors: number; avgLatencyMs: number | null; maxLatencyMs: number | null }
+}
+
+export interface TelemetrySummary {
+  hours: number
+  total: number
+  errors: number
+  retries: number
+  errorRate: number
+  research: { p50Ms: number | null; p95Ms: number | null; p99Ms: number | null; samples: number }
+  byKind: { kind: string; total: number; ok: number; retry: number; error: number; skipped: number; avgMs: number | null }[]
+  hourly: { hour: string; ok: number; problem: number }[]
+  tracing: boolean
 }
 
 export interface ImportRowIssue {
@@ -373,7 +430,8 @@ export interface DashboardSummary {
   byCategory: { category: string; count: number }[]
   deliveryAttention: PamJobRow[]
   recentRuns: Run[]
-  nextSchedule: Schedule | null
+  /** The next upload set to run at a later time, if any. */
+  nextRun: { id: string; label: string; scheduledFor: string; companies: number; importId: string | null } | null
   monthSpend: number
   monthBudget: number
 }
@@ -424,10 +482,13 @@ export interface LiveBatch {
   status: RunStatus
 }
 
+/** A saved upload a run can use ("import:<id>"), with how often it has been run. */
 export interface ScopeOption {
   key: string
   label: string
   count: number
+  runs: number
+  lastRunAt: string | null
 }
 
 export interface PamQuery {
@@ -454,7 +515,7 @@ export type DeliveryChannel = "email" | "whatsapp"
 export interface Job {
   id: string
   label: string
-  trigger: "adhoc" | "scheduled" | "import"
+  trigger: RunTrigger
   scheduleId: string | null
   importId: string | null
   scopeKey: string
@@ -522,16 +583,6 @@ export interface JobNotification {
   subject: string | null
 }
 
-export interface ScheduleInput {
-  name: string
-  intervalDays: number
-  runAtTime: string
-  scopeKey: string
-  channels: DeliveryChannel[]
-  budgetCap?: number | null
-  enabled?: boolean
-}
-
 export interface QueueStats {
   broker: { research: number | null; notify: number | null; maintenance: number | null }
   db: { runsActive: number; researchPending: number; researchRunning: number; notificationsPending: number }
@@ -579,7 +630,8 @@ export interface JobPage extends Page<Job> {
 }
 
 // ---- Uploaded datasets (Excel → saved in the background, resumable) -------------------------------
-export type DatasetStatus = "queued" | "processing" | "completed" | "failed"
+/** analyzing → previewed (checked, not saved) → queued → processing → completed | failed; or discarded. */
+export type DatasetStatus = "analyzing" | "previewed" | "discarded" | "queued" | "processing" | "completed" | "failed"
 
 export interface Dataset {
   id: string
@@ -606,7 +658,50 @@ export interface Dataset {
   finishedAt: string | null
   error: string | null
   summary: string
+  /** The original file is kept on the server (download from the Uploads page). */
+  hasFile?: boolean
+  /** While analyzing: rows read so far; progress is the share of the file read (null if unknown). */
+  rowsRead?: number
+  sizeBytes?: number | null
+  /** Rows whose logo and PAM were already known and unchanged (de-duplicated, not re-created). */
+  unchanged: number
+  /** Research runs of this upload, the latest one, and their total cost (USD). Lists only. */
+  runs: number
+  lastRunAt: string | null
+  researchCost: number
   issues?: ImportRowIssue[]
+}
+
+/** A file checked before saving: nothing is written until the user saves it under a name. */
+export interface UploadPreview {
+  id: string
+  status: DatasetStatus
+  fileName: string
+  sizeBytes: number
+  rowsTotal: number
+  validRows: number
+  errorRows: number
+  duplicatesMerged: number
+  newCompanies: number
+  updatedCompanies: number
+  reassignments: number
+  unchanged: number
+  newPams: number
+  pams: number
+  issues: ImportRowIssue[]
+  /** First rows (up to 200), with what saving would do to each logo. */
+  rows: {
+    row: number
+    company: string
+    industry: string | null
+    segment: Segment | null
+    pamName: string
+    pamEmail: string
+    pamWhatsapp: string
+    change: "new" | "updated" | "reassigned" | "unchanged"
+    currentPam: string | null
+  }[]
+  rowsShown: number
 }
 
 export interface DatasetRow {

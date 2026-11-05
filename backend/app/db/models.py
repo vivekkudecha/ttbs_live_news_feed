@@ -26,9 +26,13 @@ from app.db.base import Base, BigId, TimestampMixin
 
 # --- Status vocabularies (kept as strings: readable in SQL, no enum migrations) ------------
 IMPORT_PREVIEWED, IMPORT_COMMITTED, IMPORT_FAILED = "previewed", "committed", "failed"  # previewed/committed: legacy
-# Dataset upload lifecycle: queued → processing (resumable, chunked) → completed | failed
+# Upload lifecycle (files up to 1 GB, streamed, never held in memory):
+#   analyzing (background check of every row) → previewed (user reviews, names it) → [discarded]
+#   → queued → processing (resumable, chunked) → completed | failed
 IMPORT_QUEUED, IMPORT_PROCESSING, IMPORT_COMPLETED = "queued", "processing", "completed"
+IMPORT_ANALYZING, IMPORT_DISCARDED = "analyzing", "discarded"
 IMPORT_ACTIVE = (IMPORT_QUEUED, IMPORT_PROCESSING)
+IMPORT_UNSAVED = (IMPORT_ANALYZING, IMPORT_PREVIEWED, IMPORT_DISCARDED)  # not a dataset yet: hidden from lists
 
 RUN_SCHEDULED = "scheduled"  # waiting for scheduled_for
 RUN_QUEUED = "queued"  # handed to the queue, start_run not yet picked up
@@ -143,6 +147,8 @@ class ImportBatch(TimestampMixin, Base):
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     worker_token: Mapped[str | None] = mapped_column(String(64))  # owner of the current processing lease
     failures: Mapped[int] = mapped_column(Integer, default=0)
+    # The original file as uploaded, kept under UPLOAD_DIR as "<UTC timestamp>_<id>_<name>.<ext>".
+    stored_file: Mapped[str | None] = mapped_column(String(300))
 
 
 class DatasetCompany(Base):
@@ -155,6 +161,9 @@ class DatasetCompany(Base):
     import_id: Mapped[int] = mapped_column(ForeignKey("import_batches.id", ondelete="CASCADE"))
     company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"), index=True)
     row_no: Mapped[int] = mapped_column(Integer, default=0)  # sheet row, for "row 12" references
+    # The PAM this upload mapped the logo to. A run of this upload (including a re-run months
+    # later) delivers to this PAM, even if a newer upload has since moved the logo elsewhere.
+    pam_id: Mapped[int | None] = mapped_column(ForeignKey("pams.id"), index=True)
 
 
 class Schedule(TimestampMixin, Base):
@@ -280,8 +289,83 @@ class AuditLog(Base):
     entity_type: Mapped[str] = mapped_column(String(40))
     entity_id: Mapped[str | None] = mapped_column(String(64))
     detail: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    # Correlation: every entry about a run or one of its notifications carries the run id, so a
+    # run's complete audit trail is one indexed query. Covered by the hash when set.
+    run_id: Mapped[int | None] = mapped_column(Integer, index=True)
     request_id: Mapped[str | None] = mapped_column(String(64))
     ip: Mapped[str | None] = mapped_column(String(64))
     user_agent: Mapped[str | None] = mapped_column(String(300))
     prev_hash: Mapped[str] = mapped_column(String(64))
     hash: Mapped[str] = mapped_column(String(64), unique=True)
+
+
+class ProcessEvent(Base):
+    """Telemetry: one row per pipeline step (upload chunk, run lifecycle, each research attempt,
+    each delivery attempt, sweeper recoveries). Operational, high-volume and not hash-chained;
+    the audit log stays the compliance record. Powers the run timeline and the Telemetry page."""
+
+    __tablename__ = "process_events"
+    __table_args__ = (
+        Index("ix_process_events_run_ts", "run_id", "ts"),
+        Index("ix_process_events_kind_ts", "kind", "ts"),
+        Index("ix_process_events_import_ts", "import_id", "ts"),
+    )
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    kind: Mapped[str] = mapped_column(String(60))  # "research.attempt", "notify.attempt", "run.start", …
+    status: Mapped[str] = mapped_column(String(20), default="ok")  # ok | retry | error | skipped | info
+    message: Mapped[str | None] = mapped_column(String(500))
+    run_id: Mapped[int | None] = mapped_column(Integer)
+    import_id: Mapped[int | None] = mapped_column(Integer)
+    company_id: Mapped[int | None] = mapped_column(Integer)
+    pam_id: Mapped[int | None] = mapped_column(Integer)
+    notification_id: Mapped[int | None] = mapped_column(Integer)
+    attempt: Mapped[int | None] = mapped_column(Integer)
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    provider: Mapped[str | None] = mapped_column(String(40))
+    model: Mapped[str | None] = mapped_column(String(200))
+    tokens_in: Mapped[int | None] = mapped_column(Integer)
+    tokens_out: Mapped[int | None] = mapped_column(Integer)
+    cost: Mapped[float | None] = mapped_column(Float)
+    actor: Mapped[str | None] = mapped_column(String(100))
+    request_id: Mapped[str | None] = mapped_column(String(64))
+    trace_id: Mapped[str | None] = mapped_column(String(32))
+    attrs: Mapped[dict[str, Any]] = mapped_column(default=dict)
+
+
+COST_LLM, COST_MESSAGING = "llm", "messaging"
+
+
+class CostEntry(Base):
+    """FinOps ledger, append-only. One row per billable unit: each LLM research call (tokens and
+    USD), each cache hit (USD 0, with the estimated saving) and each delivered message. Every row
+    carries its run, upload, PAM and company, so any cost cut is a GROUP BY over this table."""
+
+    __tablename__ = "cost_ledger"
+    __table_args__ = (
+        Index("ix_cost_ledger_ts", "ts"),
+        Index("ix_cost_ledger_run", "run_id"),
+        Index("ix_cost_ledger_import", "import_id"),
+        Index("ix_cost_ledger_pam", "pam_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    category: Mapped[str] = mapped_column(String(20))  # llm | messaging
+    provider: Mapped[str] = mapped_column(String(40))  # perplexity | gemini | fake | email | whatsapp
+    model: Mapped[str | None] = mapped_column(String(200))  # LLM model or delivery adapter
+    channel: Mapped[str | None] = mapped_column(String(20))
+    run_id: Mapped[int | None] = mapped_column(Integer)
+    import_id: Mapped[int | None] = mapped_column(Integer)
+    pam_id: Mapped[int | None] = mapped_column(Integer)
+    company_id: Mapped[int | None] = mapped_column(Integer)
+    result_id: Mapped[int | None] = mapped_column(Integer)
+    notification_id: Mapped[int | None] = mapped_column(Integer)
+    units: Mapped[int] = mapped_column(Integer, default=1)  # calls or messages
+    tokens_in: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_out: Mapped[int] = mapped_column(Integer, default=0)
+    cost: Mapped[float] = mapped_column(Float, default=0.0)  # USD actually spent
+    cached: Mapped[bool] = mapped_column(Boolean, default=False)
+    saved: Mapped[float] = mapped_column(Float, default=0.0)  # USD avoided (cache hits)
+    outcome: Mapped[str | None] = mapped_column(String(20))  # signal | no_signal | failed | sent

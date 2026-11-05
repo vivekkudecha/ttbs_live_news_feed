@@ -5,7 +5,7 @@ import logging
 import random
 import time
 
-from app.core import cache
+from app.core import cache, metrics
 from app.core.config import get_settings
 from app.core.context import job_id_var
 from app.core.errors import ProviderError, RetryableProviderError
@@ -15,7 +15,7 @@ from app.research import ratelimit
 from app.research.parser import parse_research
 from app.research.prompts import PROMPT_VERSION
 from app.research.providers import get_provider
-from app.services import maintenance, notifications, runs
+from app.services import maintenance, notifications, runs, telemetry
 from app.worker.celery_app import celery_app
 
 log = logging.getLogger(__name__)
@@ -44,13 +44,15 @@ def research_company(result_id: int) -> str:
             return "skipped"
         run = uow.session.get(Run, res.run_id)
         job_id_var.set(run.id)
+        run_id, import_id, company_id, pam_id = run.id, run.import_id, res.company_id, res.pam_id
         company_name, name_key = res.company.name, res.company.name_key
         window_start, window_end, attempt = run.window_start, run.window_end, res.attempts
         over_budget = run.budget_cap is not None and run.cost >= run.budget_cap
 
     if over_budget:
         with unit_of_work() as uow:
-            runs.complete_result(uow, result_id, {"status": RES_FAILED, "error": "budget cap reached for this run"})
+            runs.complete_result(uow, result_id, {"status": RES_FAILED, "error": "budget cap reached for this run"},
+                                 event_status=telemetry.SKIPPED)
         return "budget"
 
     try:
@@ -60,6 +62,8 @@ def research_company(result_id: int) -> str:
         with unit_of_work() as uow:
             runs.complete_result(uow, result_id, {"status": RES_FAILED, "error": str(e)[:1000]})
         return "failed"
+    ctx = {"run_id": run_id, "import_id": import_id, "company_id": company_id, "pam_id": pam_id,
+           "provider": provider.key, "model": provider.model}
 
     # Model is part of the key: switching models must not serve another model's answers.
     cache_key = f"research:{name_key}:{window_end.isoformat()}:p{PROMPT_VERSION}:{provider.key}:{provider.model}"
@@ -69,21 +73,23 @@ def research_company(result_id: int) -> str:
             runs.complete_result(uow, result_id, {**hit, "cached": True, "cost": 0.0, "latency_ms": 0, "error": None})
         return "cached"
 
+    t0 = time.perf_counter()
     try:
         ratelimit.acquire("llm")
         t0 = time.perf_counter()
         out = provider.research(company_name, window_start, window_end)
         parsed = parse_research(out.text)
     except RetryableProviderError as e:
-        return _retry_or_fail(result_id, attempt, str(e), e.retry_after, s.research_max_retries)
+        return _retry_or_fail(result_id, attempt, str(e), e.retry_after, s.research_max_retries, ctx, _ms(t0))
     except ProviderError as e:
         log.warning("research permanent failure", extra={"result_id": result_id, "err": str(e)})
         with unit_of_work() as uow:
-            runs.complete_result(uow, result_id, {"status": RES_FAILED, "error": str(e)[:1000]})
+            runs.complete_result(uow, result_id, {"status": RES_FAILED, "error": str(e)[:1000], "latency_ms": _ms(t0)})
         return "failed"
     except Exception as e:  # unexpected (bug, DB blip, timeout in limiter): retry, then give up
         log.exception("research crashed", extra={"result_id": result_id})
-        return _retry_or_fail(result_id, attempt, f"{type(e).__name__}: {e}", None, s.research_max_retries)
+        return _retry_or_fail(result_id, attempt, f"{type(e).__name__}: {e}", None, s.research_max_retries, ctx, _ms(t0))
+    metrics.RESEARCH_LATENCY.labels(provider.key).observe(time.perf_counter() - t0)
 
     values = {
         "status": RES_SIGNAL if parsed.status == "signal" else RES_NO_SIGNAL,
@@ -119,16 +125,26 @@ def _merge_sources(grounded: list[dict[str, str]], inline: list[dict[str, str]],
     return out[:limit]
 
 
-def _retry_or_fail(result_id: int, attempt: int, error: str, retry_after: float | None, max_retries: int) -> str:
+def _ms(t0: float) -> int:
+    return int((time.perf_counter() - t0) * 1000)
+
+
+def _retry_or_fail(result_id: int, attempt: int, error: str, retry_after: float | None, max_retries: int,
+                   ctx: dict | None = None, duration_ms: int | None = None) -> str:
     if attempt > max_retries:
         with unit_of_work() as uow:
-            runs.complete_result(uow, result_id, {"status": RES_FAILED, "error": f"gave up after {attempt} attempts: {error}"[:1000]})
+            runs.complete_result(uow, result_id, {"status": RES_FAILED, "error": f"gave up after {attempt} attempts: {error}"[:1000],
+                                                  "latency_ms": duration_ms or 0})
         return "failed"
     delay = backoff(attempt, retry_after)
     log.info("research retry scheduled", extra={"result_id": result_id, "attempt": attempt, "delay_s": round(delay, 1), "err": error})
     with unit_of_work() as uow:
         runs.release_for_retry(uow, result_id, f"attempt {attempt}: {error}")
+        telemetry.event(uow, "research.attempt", telemetry.RETRY, attempt=attempt, duration_ms=duration_ms,
+                        message=f"{error[:300]} (retry in {delay:.0f}s)", retry_in_s=round(delay, 1), **(ctx or {}))
         uow.after_commit(lambda: research_company.apply_async((result_id,), countdown=delay))
+    if ctx:
+        metrics.RESEARCH_ATTEMPTS.labels(ctx["provider"], ctx["model"], telemetry.RETRY).inc()
     return "retry"
 
 
@@ -143,6 +159,14 @@ def process_import(import_id: int) -> str:
     from app.services import imports
 
     return imports.process(import_id)
+
+
+@celery_app.task(name="maintenance.analyze_import")
+def analyze_import(import_id: int) -> str:
+    """Check an uploaded file row by row (streaming) and build its preview (services/imports.analyze)."""
+    from app.services import imports
+
+    return imports.analyze(import_id)
 
 
 @celery_app.task(name="maintenance.tick")

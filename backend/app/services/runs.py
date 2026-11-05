@@ -1,21 +1,29 @@
 """Run lifecycle: create (now or later) → start (materialise one result row per company) →
 research each company → finalise. Every state change is a conditional UPDATE, so duplicate or
-re-delivered queue messages are harmless (at-least-once delivery, exactly-once effect)."""
+re-delivered queue messages are harmless (at-least-once delivery, exactly-once effect).
+
+Every run researches exactly one upload: the logos in that Excel/CSV, delivered to the PAMs the
+upload mapped them to. Re-running an older upload uses that upload's own logo → PAM mapping.
+Each step writes an audit row (compliance), a process event (telemetry) and, where money is
+spent, a cost-ledger row (FinOps), all in the step's own transaction.
+"""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import aliased
 
-from app.core import cache
+from app.core import cache, metrics
 from app.core.config import get_settings
 from app.core.errors import Conflict, NotFound, ProviderError, ValidationFailed
 from app.core.timeutil import as_utc, utcnow
 from app.db.models import (
     CHANNELS,
+    IMPORT_COMPLETED,
     NOTE_PENDING,
     NOTE_SKIPPED,
     RES_FAILED,
@@ -32,7 +40,6 @@ from app.db.models import (
     RUN_QUEUED,
     RUN_RUNNING,
     RUN_SCHEDULED,
-    SEGMENTS,
     Company,
     DatasetCompany,
     ImportBatch,
@@ -42,65 +49,86 @@ from app.db.models import (
     Run,
 )
 from app.db.session import UnitOfWork
-from app.services import audit
+from app.services import audit, finops, telemetry
 
 log = logging.getLogger(__name__)
 EST_COST_PER_COMPANY = 0.0125
+SAVED_STATUSES = (IMPORT_COMPLETED, "committed")  # "committed": uploads from before datasets existed
 
 # --- Scopes ---------------------------------------------------------------------------------
+# A run's scope is always "import:<id>". Older keys ("all", "segment:…", "pam:…") only appear
+# on historical runs and are kept for their labels.
 
 
-def _scope_filter(scope_key: str):
-    base = and_(Company.active.is_(True), Company.pam_id.is_not(None))
-    if scope_key == "all":
-        return base
-    kind, _, value = scope_key.partition(":")
-    if kind == "segment" and value in SEGMENTS:
-        return and_(base, Company.segment == value)
-    if kind == "pam" and value.isdigit():
-        return and_(base, Company.pam_id == int(value))
-    if kind == "import" and value.isdigit():  # an uploaded dataset: its member companies
-        return and_(base, Company.id.in_(select(DatasetCompany.company_id).where(DatasetCompany.import_id == int(value))))
-    raise ValidationFailed(f"Unknown scope '{scope_key}'", details={"scope": scope_key})
+def import_id_of(scope_key: str | None) -> int:
+    kind, _, value = (scope_key or "").partition(":")
+    if kind != "import" or not value.isdigit():
+        raise ValidationFailed(
+            "Every research run starts from an uploaded Excel/CSV file. Upload a file, or pick an earlier upload to re-run.",
+            code="upload_required", details={"scope": scope_key},
+        )
+    return int(value)
+
+
+def _members(import_id: int):
+    """(company_id, pam_id, uploaded_pam_id) for an upload. pam_id is the upload's own PAM while
+    that PAM is active; if the PAM has left (deactivated, logos rebalanced) it is the logo's
+    current owner, so results still reach someone."""
+    up_pam = aliased(Pam)
+    pam = case((up_pam.active.is_(True), DatasetCompany.pam_id), else_=Company.pam_id)
+    return (
+        select(DatasetCompany.company_id, pam.label("pam_id"), DatasetCompany.pam_id.label("uploaded_pam_id"))
+        .join(Company, Company.id == DatasetCompany.company_id)
+        .outerjoin(up_pam, up_pam.id == DatasetCompany.pam_id)
+        .where(DatasetCompany.import_id == import_id, Company.active.is_(True))
+    )
 
 
 def dataset_label(b: ImportBatch) -> str:
     """'Nov logos · 03 Nov 2026, 14:20' (IST)."""
-    from zoneinfo import ZoneInfo
-
-    from app.core.config import get_settings
-    from app.core.timeutil import as_utc
-
     ts = as_utc(b.created_at).astimezone(ZoneInfo(get_settings().timezone))
     return f"{b.label or b.file_name} · {ts:%d %b %Y, %H:%M}"
 
 
 def scope_count(uow: UnitOfWork, scope_key: str) -> int:
-    return uow.session.scalar(select(func.count(Company.id)).where(_scope_filter(scope_key))) or 0
+    members = _members(import_id_of(scope_key)).subquery()
+    return uow.session.scalar(select(func.count()).select_from(members).where(members.c.pam_id.is_not(None))) or 0
 
 
 def scope_label(uow: UnitOfWork, scope_key: str) -> str:
+    """Display label for any scope key, including the retired ones on historical runs."""
     if scope_key == "all":
         return "All active companies"
     kind, _, value = scope_key.partition(":")
     if kind == "segment":
         return f"Segment = {value}"
     if kind == "pam":
-        p = uow.session.get(Pam, int(value))
+        p = uow.session.get(Pam, int(value)) if value.isdigit() else None
         return f"PAM = {p.name if p else value}"
     if kind == "import":
-        b = uow.session.get(ImportBatch, int(value))
-        return dataset_label(b) if b else f"Dataset {value}"
+        b = uow.session.get(ImportBatch, int(value)) if value.isdigit() else None
+        return dataset_label(b) if b else f"Upload {value}"
     return scope_key
 
 
 def scope_options(uow: UnitOfWork) -> list[dict[str, Any]]:
-    """What a run or schedule can cover: every company, or one saved dataset (newest first)."""
+    """Uploads a run can use (saved ones, newest first) with how often each has been run."""
     s = uow.session
-    opts = [{"key": "all", "label": "All active companies", "count": scope_count(uow, "all")}]
-    for b in s.scalars(select(ImportBatch).where(ImportBatch.status.in_(["completed", "committed"])).order_by(ImportBatch.id.desc()).limit(100)):
-        opts.append({"key": f"import:{b.id}", "label": dataset_label(b), "count": scope_count(uow, f"import:{b.id}")})
-    return opts
+    batches = list(s.scalars(select(ImportBatch).where(ImportBatch.status.in_(SAVED_STATUSES)).order_by(ImportBatch.id.desc()).limit(100)))
+    if not batches:
+        return []
+    stats = {
+        iid: (n, last) for iid, n, last in s.execute(
+            select(Run.import_id, func.count(Run.id), func.max(Run.created_at))
+            .where(Run.import_id.in_([b.id for b in batches])).group_by(Run.import_id)
+        )
+    }
+    out = []
+    for b in batches:
+        n, last = stats.get(b.id, (0, None))
+        out.append({"key": f"import:{b.id}", "label": dataset_label(b), "count": scope_count(uow, f"import:{b.id}"),
+                    "runs": n, "lastRunAt": as_utc(last).isoformat() if last else None})
+    return out
 
 
 # --- Create ---------------------------------------------------------------------------------
@@ -109,11 +137,11 @@ def scope_options(uow: UnitOfWork) -> list[dict[str, Any]]:
 def create_run(
     uow: UnitOfWork,
     *,
-    scope_key: str,
+    scope_key: str | None = None,
     actor: str,
     trigger: str = "adhoc",
     label: str | None = None,
-    run_at: datetime | None = None,
+    run_at=None,
     channels: list[str] | None = None,
     template_id: str = "t1",
     budget_cap: float | None = None,
@@ -126,19 +154,32 @@ def create_run(
     bad = [c for c in channels if c not in CHANNELS]
     if bad:
         raise ValidationFailed(f"Unknown channel(s): {', '.join(bad)}")
+    import_id = import_id or import_id_of(scope_key)
+    scope_key = f"import:{import_id}"
+    batch = uow.session.get(ImportBatch, import_id)
+    if batch is None:
+        raise ValidationFailed(f"Upload {import_id} not found", code="upload_required")
+    if batch.status not in SAVED_STATUSES:
+        raise Conflict(f"Upload '{batch.label}' is still being saved ({batch.status}). Start the run once it is saved.")
     count = scope_count(uow, scope_key)
     if count == 0:
-        raise ValidationFailed("No active companies with a PAM in this scope", details={"scope": scope_key})
+        raise ValidationFailed("This upload has no active logos with a PAM", details={"scope": scope_key})
     now = utcnow()
     run_at = as_utc(run_at) or now
     if run_at < now - timedelta(minutes=1):
         raise ValidationFailed("Run time is in the past")
+    estimate = round(count * EST_COST_PER_COMPANY, 2)
+    budget = finops.check_budget(uow, estimate)  # raises at the monthly hard cap
     try:
         provider = get_provider(uow)
     except ProviderError as e:  # no key/model saved: refuse up front instead of failing every company
         raise ValidationFailed(str(e), code="provider_not_configured") from e
+    previous = uow.session.scalar(select(func.count(Run.id)).where(Run.import_id == import_id)) or 0
+    if trigger == "adhoc":
+        trigger = "rerun" if previous else "upload"
+    starts_now = run_at <= now + timedelta(seconds=5)
     run = Run(
-        label=(label or f"{trigger.capitalize()}: {scope_label(uow, scope_key)}")[:300],
+        label=(label or f"{batch.label or batch.file_name} · run {previous + 1}")[:300],
         trigger=trigger,
         schedule_id=schedule_id,
         import_id=import_id,
@@ -146,9 +187,9 @@ def create_run(
         template_id=template_id,
         channels=channels,
         budget_cap=budget_cap,
-        status=RUN_QUEUED if run_at <= now + timedelta(seconds=5) else RUN_SCHEDULED,
+        status=RUN_QUEUED if starts_now else RUN_SCHEDULED,
         scheduled_for=run_at,
-        queued_at=now if run_at <= now + timedelta(seconds=5) else None,
+        queued_at=now if starts_now else None,
         provider=provider.key,
         model=provider.model,
         triggered_by=actor,
@@ -157,15 +198,22 @@ def create_run(
     uow.session.add(run)
     uow.session.flush()
     audit.record(
-        uow, "run.schedule" if run.status == RUN_SCHEDULED else "run.queue", "run", run.id,
-        {"label": run.label, "scope": scope_key, "companies": count, "scheduled_for": run_at.isoformat(), "channels": channels,
-         "provider": provider.key, "estimated_cost": round(count * EST_COST_PER_COMPANY, 2)},
+        uow, "run.queue" if starts_now else "run.schedule", "run", run.id,
+        {"label": run.label, "upload_id": import_id, "upload": batch.label, "trigger": trigger, "companies": count,
+         "scheduled_for": run_at.isoformat(), "channels": channels, "provider": provider.key, "model": provider.model,
+         "estimated_cost": estimate, "month_spend": budget["spent"], "monthly_budget": budget["budget"]},
         actor=actor,
     )
-    uow.after_commit(lambda: cache.bump("runs"))
-    if run.status == RUN_QUEUED:
+    telemetry.event(
+        uow, "run.queued" if starts_now else "run.scheduled", run_id=run.id, import_id=import_id, actor=actor,
+        provider=provider.key, model=provider.model, cost=estimate,
+        message=f"{count} logos from '{batch.label}'" + ("" if starts_now else f", starts {run_at.isoformat()}"),
+        trigger=trigger, companies=count, budget=budget,
+    )
+    uow.after_commit(lambda: cache.bump("runs", "imports"))
+    if starts_now:
         _enqueue_start(uow, run.id)
-    log.info("run created", extra={"run_id": run.id, "status": run.status, "companies": count})
+    log.info("run created", extra={"run_id": run.id, "status": run.status, "companies": count, "import_id": import_id})
     return run
 
 
@@ -200,21 +248,31 @@ def start(uow: UnitOfWork, run_id: int) -> bool:
         return False
     run = s.get(Run, run_id)
     settings = get_settings()
-    tz = ZoneInfo(settings.timezone)
-    run.window_end = now.astimezone(tz).date()
+    run.window_end = now.astimezone(ZoneInfo(settings.timezone)).date()
     run.window_start = run.window_end - timedelta(days=settings.research_window_days)
 
-    company_rows = s.execute(select(Company.id, Company.pam_id).where(_scope_filter(run.scope_key))).all()
+    import_id = run.import_id or import_id_of(run.scope_key)
+    members = [(cid, pid, up) for cid, pid, up in s.execute(_members(import_id)) if pid is not None]
     s.bulk_insert_mappings(
         ResearchResult,
         [{"run_id": run_id, "company_id": cid, "pam_id": pid, "status": RES_PENDING, "enqueued_at": now, "sources": []}
-         for cid, pid in company_rows],
+         for cid, pid, _ in members],
     )
-    run.total = len(company_rows)
+    run.total = len(members)
+    pams = len({pid for _, pid, _ in members})
+    rerouted = sum(1 for _, pid, up in members if up is not None and pid != up)
     if run.total == 0:
-        run.status, run.finished_at, run.error = RUN_COMPLETED, now, "Scope was empty when the run started"
+        run.status, run.finished_at, run.error = RUN_COMPLETED, now, "The upload had no active logos when the run started"
     s.flush()
-    audit.record(uow, "run.start", "run", run_id, {"companies": run.total, "window": f"{run.window_start}..{run.window_end}"}, actor="system")
+    audit.record(uow, "run.start", "run", run_id,
+                 {"companies": run.total, "pams": pams, "window": f"{run.window_start}..{run.window_end}",
+                  "rerouted_to_current_owner": rerouted}, actor="system")
+    telemetry.event(
+        uow, "run.start", run_id=run_id, import_id=import_id, actor="system", provider=run.provider, model=run.model,
+        message=f"{run.total} logos across {pams} PAMs, window {run.window_start} to {run.window_end}"
+        + (f"; {rerouted} logos go to their current owner (uploaded PAM is inactive)" if rerouted else ""),
+        companies=run.total, pams=pams, rerouted=rerouted,
+    )
     ids = list(s.scalars(select(ResearchResult.id).where(ResearchResult.run_id == run_id)))
     _enqueue_research(uow, ids)
     uow.after_commit(lambda: cache.bump("runs"))
@@ -244,8 +302,9 @@ def claim_result(uow: UnitOfWork, result_id: int) -> ResearchResult | None:
     return res
 
 
-def complete_result(uow: UnitOfWork, result_id: int, values: dict[str, Any]) -> None:
-    """Persist a terminal result, bump run counters atomically, then fire per-PAM / run completion."""
+def complete_result(uow: UnitOfWork, result_id: int, values: dict[str, Any], *, event_status: str | None = None) -> None:
+    """Persist a terminal result, bump run counters atomically, then fire per-PAM / run completion.
+    The cost-ledger row and the telemetry event commit in this same transaction."""
     s = uow.session
     status = values["status"]
     assert status in RES_TERMINAL
@@ -257,6 +316,19 @@ def complete_result(uow: UnitOfWork, result_id: int, values: dict[str, Any]) -> 
     if not updated:
         return
     res = s.get(ResearchResult, result_id)
+    run = s.get(Run, res.run_id)
+    finops.record_research(uow, res, run, values)
+    ev_status = event_status or (telemetry.ERROR if status == RES_FAILED else telemetry.OK)
+    cached = bool(values.get("cached"))  # a cache hit spends no tokens (values carry the original answer's usage)
+    telemetry.event(
+        uow, "research.attempt", ev_status, run_id=res.run_id, import_id=run.import_id, company_id=res.company_id,
+        pam_id=res.pam_id, attempt=res.attempts, duration_ms=values.get("latency_ms"), provider=run.provider,
+        model=run.model, tokens_in=None if cached else values.get("tokens_in"),
+        tokens_out=None if cached else values.get("tokens_out"), cost=values.get("cost"),
+        message=values.get("error") if status == RES_FAILED else None, outcome=status,
+        cached=True if values.get("cached") else None, category=values.get("category"),
+    )
+    metrics.RESEARCH_ATTEMPTS.labels(run.provider, run.model, "cached" if values.get("cached") else ev_status).inc()
     # Row lock on the run serialises concurrent completions, so the counts below are exact.
     s.execute(
         update(Run)
@@ -269,7 +341,6 @@ def complete_result(uow: UnitOfWork, result_id: int, values: dict[str, Any]) -> 
             cost=Run.cost + float(values.get("cost") or 0.0),
         )
     )
-    run = s.get(Run, res.run_id)
     s.refresh(run)
     if res.pam_id is not None:
         maybe_queue_pam_digest(uow, run, res.pam_id)
@@ -296,22 +367,36 @@ def finalize(uow: UnitOfWork, run: Run) -> None:
     won = uow.session.execute(
         update(Run).where(Run.id == run.id, Run.status == RUN_RUNNING).values(status=final, finished_at=utcnow())
     ).rowcount
-    if won:
-        uow.session.refresh(run)
-        audit.record(
-            uow, "run.finish", "run", run.id,
-            {"status": final, "companies": run.total, "signals": run.with_signal, "failed": run.failed,
-             "cache_hits": run.cache_hits, "cost": round(run.cost, 4)},
-            actor="system",
-        )
-        log.info("run finished", extra={"run_id": run.id, "status": final})
+    if not won:
+        return
+    uow.session.refresh(run)
+    audit.record(
+        uow, "run.finish", "run", run.id,
+        {"status": final, "companies": run.total, "signals": run.with_signal, "failed": run.failed,
+         "cache_hits": run.cache_hits, "cost": round(run.cost, 4)},
+        actor="system",
+    )
+    took = (as_utc(run.finished_at) - as_utc(run.started_at)).total_seconds() if run.started_at and run.finished_at else None
+    telemetry.event(
+        uow, "run.finish",
+        telemetry.OK if final == RUN_COMPLETED else telemetry.ERROR if final == RUN_FAILED else telemetry.INFO,
+        run_id=run.id, import_id=run.import_id, actor="system", provider=run.provider, model=run.model,
+        cost=round(run.cost, 4), duration_ms=int(took * 1000) if took is not None else None,
+        message=f"{final}: {run.with_signal} signals, {run.failed} failed, {run.cache_hits} from cache, ${run.cost:,.4f}",
+        final=final, signals=run.with_signal, failed=run.failed, cache_hits=run.cache_hits,
+    )
+    metrics.RUNS_FINISHED.labels(final).inc()
+    if took is not None:
+        metrics.RUN_DURATION.observe(took)
+    log.info("run finished", extra={"run_id": run.id, "status": final})
 
 
 # --- Notifications (outbox) -----------------------------------------------------------------
 
 
 def maybe_queue_pam_digest(uow: UnitOfWork, run: Run, pam_id: int) -> list[int]:
-    """When a PAM's last company in this run is done, write one outbox row per channel."""
+    """When a PAM's last company in this run is done, write one outbox row per channel.
+    Every row (queued or skipped) is audited and recorded as a telemetry event."""
     s = uow.session
     open_count = s.scalar(
         select(func.count(ResearchResult.id)).where(
@@ -348,6 +433,15 @@ def maybe_queue_pam_digest(uow: UnitOfWork, run: Run, pam_id: int) -> list[int]:
             continue
         if status == NOTE_PENDING:
             created.append(note.id)
+        else:
+            audit.record(uow, "notify.skipped", "notification", note.id,
+                         {"pam_id": pam_id, "channel": channel, "reason": reason}, actor="system", run_id=run.id)
+        telemetry.event(
+            uow, "notify.queued" if status == NOTE_PENDING else "notify.skipped",
+            telemetry.OK if status == NOTE_PENDING else telemetry.SKIPPED,
+            run_id=run.id, import_id=run.import_id, pam_id=pam_id, notification_id=note.id, actor="system",
+            message=reason, channel=channel, signals=len(signals), total=total,
+        )
     if created:
         audit.record(uow, "notify.queue", "run", run.id, {"pam_id": pam_id, "notifications": created}, actor="system")
         from app.worker.tasks import send_notification
@@ -403,6 +497,8 @@ def cancel(uow: UnitOfWork, run_id: int, actor: str) -> Run:
     uow.session.execute(update(Run).where(Run.id == run_id).values(status=RUN_CANCELLED, finished_at=utcnow()))
     uow.session.refresh(run)
     audit.record(uow, "run.cancel", "run", run_id, {"done": run.done, "total": run.total}, actor=actor)
+    telemetry.event(uow, "run.cancel", telemetry.INFO, run_id=run_id, import_id=run.import_id, actor=actor,
+                    message=f"Cancelled at {run.done}/{run.total} logos")
     uow.after_commit(lambda: cache.bump("runs", f"run:{run_id}"))
     return run
 
@@ -427,6 +523,8 @@ def retry_failed(uow: UnitOfWork, run_id: int, actor: str) -> int:
         )
     )
     audit.record(uow, "run.retry_failed", "run", run_id, {"companies": len(failed_ids)}, actor=actor)
+    telemetry.event(uow, "run.retry_failed", telemetry.INFO, run_id=run_id, import_id=run.import_id, actor=actor,
+                    message=f"Re-queued {len(failed_ids)} failed logos")
     _enqueue_research(uow, failed_ids)
     uow.after_commit(lambda: cache.bump("runs", f"run:{run_id}"))
     return len(failed_ids)
@@ -434,5 +532,5 @@ def retry_failed(uow: UnitOfWork, run_id: int, actor: str) -> int:
 
 __all__ = [
     "RES_NO_SIGNAL", "RES_FAILED", "RES_SIGNAL", "create_run", "start", "claim_result", "complete_result",
-    "release_for_retry", "cancel", "retry_failed", "scope_options", "get_run",
+    "release_for_retry", "cancel", "retry_failed", "scope_options", "scope_label", "import_id_of", "get_run",
 ]

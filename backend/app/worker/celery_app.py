@@ -10,8 +10,10 @@ Windows has no prefork pool; run workers with the thread pool (research is I/O-b
     celery -A app.worker.celery_app beat -l INFO
 """
 
+import logging
+
 from celery import Celery
-from celery.signals import setup_logging
+from celery.signals import setup_logging, worker_init
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -45,3 +47,21 @@ celery_app.conf.update(
 @setup_logging.connect
 def _logging(**_):  # use our JSON logs instead of Celery's
     configure_logging(settings.log_level)
+
+
+@worker_init.connect
+def _telemetry(**_):
+    """Worker telemetry: Prometheus counters on METRICS_WORKER_PORT, traces if OTLP is configured.
+    (Beat does not fire worker_init, so it never binds the port.)"""
+    log = logging.getLogger("ttbs.worker")
+    if settings.metrics_worker_port:
+        from prometheus_client import start_http_server
+
+        try:
+            start_http_server(settings.metrics_worker_port)
+            log.info("worker metrics listening", extra={"port": settings.metrics_worker_port})
+        except OSError as e:  # a second worker on the same host: keep running without its own endpoint
+            log.warning("worker metrics port busy; metrics endpoint not started", extra={"port": settings.metrics_worker_port, "err": str(e)})
+    from app.core.tracing import setup_tracing
+
+    setup_tracing("worker")

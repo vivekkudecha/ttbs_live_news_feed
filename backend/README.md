@@ -1,16 +1,34 @@
 # TTBS Live News Feed: backend
 
-FastAPI + SQLAlchemy + Celery/Redis. Flow:
+FastAPI + SQLAlchemy + Celery/Redis. **Every research run starts from an upload** (the Excel/CSV
+of logos and their PAMs for that run):
 
 ```
-upload Excel ─► preview (validate, diff) ─► commit (1 transaction, audited)
-                                              │  run now / at a time / recurring schedule
-                                              ▼
+upload Excel/CSV ─► validate ─► save in background (chunked, resumable; logos/PAMs de-duplicated,
+                                 owner changes kept in company_assignments history)
+                                   │  run now / once at a time / re-run an earlier upload later
+                                   ▼
 dispatcher (beat, 30 s) ─► start_run ─► research.company × N  (rate-limited, cached, retried)
-                                              │  each PAM's last company done
-                                              ▼
-                                     notifications outbox ─► notify.send (retried with backoff)
+                                   │  each PAM's last logo done
+                                   ▼
+                          notifications outbox ─► notify.send (retried with backoff)
 ```
+
+* A run covers only that upload's logos and delivers to the PAMs **that upload** mapped them to
+  (`dataset_companies.pam_id`). Re-running an older upload keeps its mapping; if that PAM has
+  since been deactivated, the logo's current owner gets it (recorded on the run's timeline).
+* The upload's PAM becomes the logo's owner (`reassigned` in the upload summary); history is kept.
+* Recurring schedules are retired (the `schedules` table is kept, disabled, for history).
+
+## Audit, telemetry, FinOps
+
+| What | Where |
+|---|---|
+| Audit trail | `audit_log`, hash-chained. Every run and notification entry carries `run_id`: `GET /runs/{id}/audit`. `GET /audit/verify` checks the chain. |
+| Process telemetry | `process_events`: every upload chunk, run step, research attempt (latency, tokens, cost, retries) and delivery attempt. `GET /runs/{id}/timeline`, `/runs/{id}/events`, `/telemetry/summary`, `/telemetry/events`. |
+| Metrics | Prometheus at `GET /metrics` (API + live queue/run gauges) and `:METRICS_WORKER_PORT/metrics` per worker. |
+| Traces | OpenTelemetry (FastAPI, httpx, SQLAlchemy, Redis, Celery) when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. |
+| Cost ledger | `cost_ledger`: one row per LLM call, cache hit (with estimated saving) and delivered message, tagged with run, upload, PAM and logo. `GET /finops?from&to`, `GET /finops/ledger.csv`, `GET /runs/{id}/costs`. Monthly budget is a hard cap on new runs (`BUDGET_HARD_CAP`). |
 
 ## One-time setup
 

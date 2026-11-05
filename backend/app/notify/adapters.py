@@ -15,6 +15,8 @@ class ChannelAdapter(Protocol):
 
 
 class ConsoleAdapter:
+    key = "console"  # recorded on telemetry events and cost-ledger rows
+
     def __init__(self, channel: str):
         self.channel = channel
 

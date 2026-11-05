@@ -20,7 +20,7 @@ const CompanyDetail = lazy(() => import("@/pages/Companies").then((m) => ({ defa
 const Pams = lazy(() => import("@/pages/Pams"))
 const Imports = lazy(() => import("@/pages/Imports"))
 const Templates = lazy(() => import("@/pages/Templates"))
-const Schedules = lazy(() => import("@/pages/Schedules"))
+const Telemetry = lazy(() => import("@/pages/Telemetry"))
 const Integrations = lazy(() => import("@/pages/Integrations"))
 const Costs = lazy(() => import("@/pages/Costs"))
 const Audit = lazy(() => import("@/pages/Audit"))
@@ -73,7 +73,9 @@ export default function App() {
                   <Route path="pams" element={<Pams />} />
                   <Route path="imports" element={<Imports />} />
                   <Route path="templates" element={<Templates />} />
-                  <Route path="schedules" element={<Schedules />} />
+                  {/* Recurring schedules are retired: every run starts from an upload. */}
+                  <Route path="schedules" element={<Navigate to="/runs" replace />} />
+                  <Route path="telemetry" element={<Telemetry />} />
                   <Route path="integrations" element={<Integrations />} />
                   <Route path="costs" element={<Costs />} />
                   <Route path="audit" element={<Audit />} />

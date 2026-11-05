@@ -34,6 +34,7 @@ HEADERS = ["Company", "Industry", "Segment", "Region", "PAM Name", "PAM Email", 
 @pytest.fixture(autouse=True)
 def env(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{(tmp_path / 'test.db').as_posix()}")
+    monkeypatch.setenv("UPLOAD_DIR", str(tmp_path / "uploads"))
     for fn in (get_settings, db_session.get_engine, db_session.get_sessionmaker):
         fn.cache_clear()
     providers.clear_cache()
@@ -74,8 +75,8 @@ GOOD_ROWS = [
 ]
 
 
-def upload(client, rows=GOOD_ROWS, name="mapping.xlsx", headers=HEADERS, label=None):
-    """Upload a dataset. Celery is eager in tests, so it is fully saved when this returns."""
+def upload(client, rows=GOOD_ROWS, name="mapping.xlsx", headers=HEADERS, label="mapping"):
+    """Upload a dataset under a name (required). Celery is eager in tests, so it is fully saved when this returns."""
     data = {"label": label} if label else None
     return client.post("/api/v1/imports", files={"file": (name, xlsx(rows, headers), "application/octet-stream")}, data=data)
 
