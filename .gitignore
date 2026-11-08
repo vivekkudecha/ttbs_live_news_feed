@@ -30,3 +30,7 @@ dist-artifact
 .gitnexus
 
 .env
+# Environment secrets (templates are *.example)
+.env
+.env.*
+!.env.*.example

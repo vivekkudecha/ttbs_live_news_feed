@@ -1,4 +1,4 @@
-﻿"""Research AI configuration (provider + API key + model), managed from the UI.
+"""Research AI configuration (provider + API key + model), managed from the UI.
 
 Rules:
 - Several providers can be saved (Perplexity, Gemini), but exactly ONE is active at a time; every

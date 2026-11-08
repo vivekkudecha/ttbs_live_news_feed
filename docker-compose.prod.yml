@@ -1,0 +1,70 @@
+# PROD - app stack only. The database is EXTERNAL: set DATABASE_URL in .env.prod.
+#   cp .env.prod.example .env.prod    (then set DATABASE_URL / SECRETS_KEY)
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Migrations run automatically against DATABASE_URL on every `up` (the migrate service).
+# UI: http://<server>/
+name: ttbs-prod
+
+x-backend: &backend
+  build: ./backend
+  image: ttbs-backend:prod
+  env_file: .env.prod
+  restart: unless-stopped
+  # Lets DATABASE_URL use host.docker.internal when MySQL runs on this same RHEL host
+  # ("localhost" inside a container is the container itself, not the server).
+  extra_hosts: ["host.docker.internal:host-gateway"]
+  logging: &logging
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+x-after-db: &after-db
+  redis: { condition: service_healthy }
+  migrate: { condition: service_completed_successfully }
+
+services:
+  redis:
+    image: docker.io/library/redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redis_data:/data]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 5 }
+    logging: *logging
+
+  migrate:   # waits for the external DB (docker-entrypoint.sh), applies migrations, exits
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    <<: *backend
+    volumes: [uploads:/app/storage/uploads]
+    depends_on: *after-db
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)"]
+      interval: 10s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "-P", "threads", "-c", "16", "-Q", "research,notify,maintenance", "-l", "INFO"]
+    volumes: [uploads:/app/storage/uploads]
+    depends_on: *after-db
+
+  beat:   # exactly one per environment
+    <<: *backend
+    command: ["celery", "-A", "app.worker.celery_app", "beat", "-l", "INFO", "-s", "/tmp/celerybeat-schedule"]
+    depends_on: *after-db
+
+  frontend:
+    build: { context: ./frontend, args: { VITE_API_URL: "/" } }
+    image: ttbs-frontend:prod
+    restart: unless-stopped
+    ports: ["80:80"]
+    depends_on: { api: { condition: service_healthy } }
+    logging: *logging
+
+volumes:
+  redis_data:
+  uploads:

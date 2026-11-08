@@ -95,8 +95,10 @@ def upgrade() -> None:
         "WHERE pam_id IS NULL"
     )
     # Runs now always belong to one upload: link older runs that were scoped to one.
+    # MySQL has no CAST(... AS INTEGER); it spells it SIGNED.
+    int_type = "SIGNED" if op.get_bind().dialect.name == "mysql" else "INTEGER"
     op.execute(
-        "UPDATE runs SET import_id = CAST(SUBSTR(scope_key, 8) AS INTEGER) "
+        f"UPDATE runs SET import_id = CAST(SUBSTR(scope_key, 8) AS {int_type}) "
         "WHERE import_id IS NULL AND scope_key LIKE 'import:%'"
     )
     # Recurring schedules are retired (every run starts from an upload). Rows are kept for history.

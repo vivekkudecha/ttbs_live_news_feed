@@ -27,7 +27,9 @@ import type {
   DeliveryChannel,
 } from "./types"
 
-const BASE = ((import.meta.env.VITE_API_URL as string | undefined) || "http://localhost:8010").replace(/\/$/, "")
+// VITE_API_URL="/" means same origin: the SPA and the API sit behind one reverse proxy (Docker/nginx).
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined) || "http://localhost:8010"
+const BASE = (API_URL === "/" ? window.location.origin : API_URL).replace(/\/$/, "")
 
 /** Error with the backend's envelope: {"error": {code, message, details, request_id}}. */
 export class ApiError extends Error {

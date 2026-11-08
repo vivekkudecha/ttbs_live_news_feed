@@ -1,4 +1,4 @@
-﻿"""Process configuration (12-factor). Business configuration moves to DB tables in later phases."""
+"""Process configuration (12-factor). Business configuration moves to DB tables in later phases."""
 
 from functools import lru_cache
 from pathlib import Path

@@ -36,7 +36,7 @@ BATCH = 500
 
 
 def _skip_locked(stmt, uow: UnitOfWork):
-    return stmt.with_for_update(skip_locked=True) if uow.is_postgres else stmt
+    return stmt.with_for_update(skip_locked=True) if uow.supports_skip_locked else stmt
 
 
 def promote_scheduled_runs() -> list[int]:

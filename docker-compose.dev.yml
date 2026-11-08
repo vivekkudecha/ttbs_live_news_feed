@@ -1,0 +1,85 @@
+# DEV - full stack including MySQL and Redis.
+#   cp .env.dev.example .env.dev    (then edit passwords / SECRETS_KEY)
+#   docker compose -f docker-compose.dev.yml up -d --build
+#
+# UI:  http://<server>:5173      API (host only): http://127.0.0.1:8000/docs
+name: ttbs-dev
+
+x-backend: &backend
+  build: ./backend
+  image: ttbs-backend:dev
+  env_file: .env.dev
+  restart: unless-stopped
+  logging: &logging
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+x-after-db: &after-db
+  mysql: { condition: service_healthy }
+  redis: { condition: service_healthy }
+  migrate: { condition: service_completed_successfully }
+
+services:
+  mysql:
+    image: docker.io/library/mysql:8.0
+    restart: unless-stopped
+    env_file: .env.dev
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-time-zone=+00:00
+    ports: ["127.0.0.1:3306:3306"]   # host-only, for DB tools
+    volumes: [mysql_data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      retries: 20
+      start_period: 30s
+    logging: *logging
+
+  redis:
+    image: docker.io/library/redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redis_data:/data]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 5 }
+    logging: *logging
+
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      mysql: { condition: service_healthy }
+
+  api:
+    <<: *backend
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: [uploads:/app/storage/uploads]
+    depends_on: *after-db
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)"]
+      interval: 10s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "-P", "threads", "-c", "16", "-Q", "research,notify,maintenance", "-l", "INFO"]
+    volumes: [uploads:/app/storage/uploads]
+    depends_on: *after-db
+
+  beat:   # exactly one per environment
+    <<: *backend
+    command: ["celery", "-A", "app.worker.celery_app", "beat", "-l", "INFO", "-s", "/tmp/celerybeat-schedule"]
+    depends_on: *after-db
+
+  frontend:
+    build: { context: ./frontend, args: { VITE_API_URL: "/" } }
+    image: ttbs-frontend:dev
+    restart: unless-stopped
+    ports: ["5173:80"]
+    depends_on: { api: { condition: service_healthy } }
+    logging: *logging
+
+volumes:
+  mysql_data:
+  redis_data:
+  uploads:
