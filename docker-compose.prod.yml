@@ -3,7 +3,7 @@
 #   docker compose -f docker-compose.prod.yml up -d --build
 #
 # Migrations run automatically against DATABASE_URL on every `up` (the migrate service).
-# UI: http://<server>/
+# UI: http://<server>/  (gateway nginx is the only published port: / -> frontend, /api/ -> api)
 name: ttbs-prod
 
 x-backend: &backend
@@ -61,8 +61,17 @@ services:
     build: { context: ./frontend, args: { VITE_API_URL: "/" } }
     image: ttbs-frontend:prod
     restart: unless-stopped
+    logging: *logging
+
+  gateway:   # the ONLY published port: nginx -> frontend | api | phpmyadmin
+    image: docker.io/library/nginx:1.27-alpine
+    restart: unless-stopped
     ports: ["80:80"]
-    depends_on: { api: { condition: service_healthy } }
+    volumes:
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro,z
+    depends_on:
+      api: { condition: service_healthy }
+      frontend: { condition: service_started }
     logging: *logging
 
 volumes:

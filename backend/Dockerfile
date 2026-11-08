@@ -65,7 +65,10 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 # Set executable permissions, create storage directory, and purge apt/tmp caches
 # (sed strips CRLF in case the repo was checked out on Windows: a "\r" shebang breaks the container.)
 # Runs as an unprivileged user; the uploads volume inherits this ownership on first mount.
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
+# COPY keeps host file modes, so on a host with umask 027 (files rw-r-----) the unprivileged
+# user could not read the code or run the entrypoint (exit 126). Normalise to world-readable.
+RUN chmod 755 /usr/local/bin/docker-entrypoint.sh && \
+    chmod -R a+rX /app && \
     sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && \
     mkdir -p /app/storage/uploads && \
     groupadd --system --gid 10001 app && \
