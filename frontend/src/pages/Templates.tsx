@@ -9,10 +9,11 @@ import { useTemplates } from "@/api/hooks"
 import { errorMessage } from "@/api/http"
 import { Page } from "@/components/common/layout"
 import { EmailTemplates } from "@/components/templates/EmailTemplates"
+import { ResearchPromptEditor } from "@/components/templates/ResearchPromptEditor"
 import { useSession } from "@/context/session"
 import { can } from "@/lib/access"
 
-/** Output templates: the email digest templates (editable) and the research prompt (read-only). */
+/** Output templates: the email digest templates and the research prompt (both editable with the integrations module). */
 export default function Templates() {
   const { user } = useSession()
   const email = can(user, "integrations")
@@ -20,7 +21,7 @@ export default function Templates() {
     <Page>
       <PageHeader
         title="Output templates"
-        description="How each PAM's digest email looks (editable, versioned, optional AI summary) and what the research looks for."
+        description="How each PAM's digest email looks and what the research AI is asked for each company. Both are versioned; changes apply to the next run."
       />
       <Tabs defaultValue={email ? "email" : "research"}>
         <TabsList>
@@ -39,14 +40,14 @@ export default function Templates() {
           </TabsContent>
         )}
         <TabsContent value="research" className="mt-4">
-          <ResearchTemplate />
+          {email ? <ResearchPromptEditor canEdit={can(user, "integrations", "manage")} /> : <ResearchTemplate />}
         </TabsContent>
       </Tabs>
     </Page>
   )
 }
 
-/** The research prompt every run uses (read-only: it lives in backend/app/research/prompts.py). */
+/** Read-only summary of the live research prompt, for users without the integrations module. */
 function ResearchTemplate() {
   const templates = useTemplates()
 

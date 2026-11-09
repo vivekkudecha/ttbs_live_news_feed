@@ -80,7 +80,7 @@ def test_transient_errors_are_retried_then_succeed(client, monkeypatch):
     calls = {"n": 0}
     real = providers.FakeProvider.research
 
-    def flaky(self, company, ws, we):
+    def flaky(self, company, ws, we, prompt=None):
         calls["n"] += 1
         if calls["n"] <= 2:
             raise RetryableProviderError("429 from provider", retry_after=0)
@@ -97,7 +97,7 @@ def test_transient_errors_are_retried_then_succeed(client, monkeypatch):
 def test_permanent_error_fails_company_and_run_is_partial(client, monkeypatch):
     real = providers.FakeProvider.research
 
-    def picky(self, company, ws, we):
+    def picky(self, company, ws, we, prompt=None):
         if company.startswith("Havells"):
             raise ProviderError("HTTP 400 bad request")
         return real(self, company, ws, we)

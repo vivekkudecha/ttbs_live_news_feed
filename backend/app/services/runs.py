@@ -49,7 +49,7 @@ from app.db.models import (
     Run,
 )
 from app.db.session import UnitOfWork
-from app.services import audit, finops, telemetry
+from app.services import audit, finops, research_prompts, telemetry
 
 log = logging.getLogger(__name__)
 EST_COST_PER_COMPANY = 0.0125
@@ -248,8 +248,11 @@ def start(uow: UnitOfWork, run_id: int) -> bool:
         return False
     run = s.get(Run, run_id)
     settings = get_settings()
+    # Pin the active research prompt: editing it mid-run never mixes two prompts in one run.
+    prompt = research_prompts.spec_for(uow, None)
+    run.prompt_version = prompt.version
     run.window_end = now.astimezone(ZoneInfo(settings.timezone)).date()
-    run.window_start = run.window_end - timedelta(days=settings.research_window_days)
+    run.window_start = run.window_end - timedelta(days=prompt.window_days)
 
     import_id = run.import_id or import_id_of(run.scope_key)
     members = [(cid, pid, up) for cid, pid, up in s.execute(_members(import_id)) if pid is not None]
@@ -265,7 +268,7 @@ def start(uow: UnitOfWork, run_id: int) -> bool:
         run.status, run.finished_at, run.error = RUN_COMPLETED, now, "The upload had no active logos when the run started"
     s.flush()
     audit.record(uow, "run.start", "run", run_id,
-                 {"companies": run.total, "pams": pams, "window": f"{run.window_start}..{run.window_end}",
+                 {"companies": run.total, "pams": pams, "window": f"{run.window_start}..{run.window_end}", "promptVersion": run.prompt_version,
                   "rerouted_to_current_owner": rerouted}, actor="system")
     telemetry.event(
         uow, "run.start", run_id=run_id, import_id=import_id, actor="system", provider=run.provider, model=run.model,

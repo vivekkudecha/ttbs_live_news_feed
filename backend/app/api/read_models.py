@@ -34,7 +34,7 @@ from app.db.models import (
     Run,
 )
 from app.db.session import UnitOfWork
-from app.research.prompts import INSTRUCTIONS, OUTPUT_RULES, PROMPT_VERSION, TTBS_CONTEXT, build_prompt
+from app.research.prompts import PROMPT_VERSION
 from app.services import accounts, runs
 from app.services import finops as finops_svc
 
@@ -202,7 +202,7 @@ def run_summaries(uow: UnitOfWork, run_list: list[Run]) -> list[dict[str, Any]]:
             "scheduleId": str(r.schedule_id) if r.schedule_id else None,
             "importId": str(r.import_id) if r.import_id else None,
             "templateId": r.template_id,
-            "templateVersion": PROMPT_VERSION,
+            "templateVersion": r.prompt_version or PROMPT_VERSION,
             "provider": PROVIDER_LABEL.get(r.provider, r.provider),
             "model": r.model,
             "windowStart": ws,
@@ -551,7 +551,8 @@ def company_detail(uow: UnitOfWork, company_id: str) -> dict[str, Any] | None:
     row = _company_rows([(c.id, c.name, c.industry, c.segment, c.pam_id, pam.name if pam else None)],
                         _latest_map(uow), _signal_stats(uow, [c.id]), _cycles(uow, [c.id]))[0]
     cycles = [
-        {"result": result_ui(r), "run": {"id": str(run.id), "windowStart": _window(run)[0], "windowEnd": _window(run)[1], "templateVersion": PROMPT_VERSION}}
+        {"result": result_ui(r), "run": {"id": str(run.id), "windowStart": _window(run)[0], "windowEnd": _window(run)[1],
+                                         "templateVersion": run.prompt_version or PROMPT_VERSION}}
         for r, run in uow.session.execute(
             select(ResearchResult, Run).join(Run, Run.id == ResearchResult.run_id)
             .where(ResearchResult.company_id == c.id, ResearchResult.status.in_(RES_TERMINAL)).order_by(Run.id.desc())
@@ -737,35 +738,42 @@ def live_changes(uow: UnitOfWork, run_id: str, since: datetime | None) -> dict[s
 
 
 def templates(uow: UnitOfWork) -> list[dict[str, Any]]:
-    from app.services import llm_config
+    """Read-only summary of the research prompt (the editor uses /research-prompt)."""
+    from app.services import llm_config, research_prompts
 
     active = llm_config.get_active_row(uow)
-    prompt = build_prompt("{company}", "{window_start}", "{window_end}")
-    return [{
-        "id": "t1",
-        "name": "TTBS account signals",
-        "description": "Built-in research prompt (backend/app/research/prompts.py). Edit the file and bump PROMPT_VERSION to change it.",
-        "activeVersion": PROMPT_VERSION,
-        "versions": [{
-            "version": PROMPT_VERSION,
-            "createdAt": "2026-11-03T00:00:00+05:30",
-            "createdBy": "system",
-            "note": "Ported from test.py; adds a Category line",
-            "windowDays": get_settings().research_window_days,
+    rows = research_prompts.list_versions(uow)
+    cur = next((v for v in rows if v.active), rows[0])
+    spec = research_prompts.to_spec(cur)
+
+    def one(v: Any) -> dict[str, Any]:
+        return {
+            "version": v.version,
+            "createdAt": sch.iso(v.created_at),
+            "createdBy": v.created_by,
+            "note": v.note or "",
+            "windowDays": v.window_days,
             "model": active.model if active else "",
             "preset": "medium",
-            "ttbsContext": TTBS_CONTEXT.strip(),
-            "researchPrompt": prompt.split("TTBS context:")[0].strip(),
-            "relevanceRules": OUTPUT_RULES.strip(),
+            "ttbsContext": v.ttbs_context,
+            "researchPrompt": v.research_prompt,
+            "relevanceRules": v.output_rules,
             "sections": [
-                {"key": "category", "label": "Category", "instruction": "One category, or None when no qualifying news"},
+                {"key": "category", "label": "Category", "instruction": "One of: " + ", ".join(v.categories or []) + "; or None"},
                 {"key": "key_signals", "label": "Key signals", "instruction": "1-2 short lines; TTBS-relevant signals only"},
                 {"key": "opportunity", "label": "Opportunity type", "instruction": "1-2 short lines; TTBS offering"},
                 {"key": "outreach", "label": "Recommended outreach approach", "instruction": "1-2 short lines; sales action"},
             ],
-            "priorityPrompt": INSTRUCTIONS,
+            "priorityPrompt": v.system_instruction,
             "excelColumns": ["Company", "Category", "Key signals", "Opportunity type", "Recommended outreach approach", "Sources"],
-        }],
+        }
+
+    return [{
+        "id": "t1",
+        "name": "TTBS account signals",
+        "description": "Research prompt sent to the active AI for every company. Editable under Output templates → Research prompt.",
+        "activeVersion": spec.version,
+        "versions": [one(v) for v in rows],
     }]
 
 

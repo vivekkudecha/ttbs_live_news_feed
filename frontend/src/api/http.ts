@@ -36,6 +36,10 @@ import type {
   EmailTemplate,
   EmailTemplateInput,
   EmailTemplateVersion,
+  ResearchPromptInput,
+  ResearchPromptPreview,
+  ResearchPromptState,
+  ResearchPromptVersion,
   NotificationDetail,
   OutboxPage,
 } from "./types"
@@ -182,6 +186,14 @@ export const backend = {
   removeEmailSettings: () => request<void>("DELETE", "/settings/email"),
   emailQuota: () => request<EmailQuota>("GET", "/settings/email/quota"),
   emailEstimate: (importId: string) => request<EmailEstimate>("GET", `/notifications/email-estimate${qs({ importId })}`),
+
+  // Research prompt (versioned, one active; runs pin the active version when they start)
+  researchPrompt: () => request<ResearchPromptState>("GET", "/research-prompt"),
+  researchPromptVersion: (version: number) => request<ResearchPromptVersion>("GET", `/research-prompt/versions/${version}`),
+  saveResearchPrompt: (v: ResearchPromptInput & { activate: boolean }) => request<ResearchPromptVersion>("POST", "/research-prompt", v),
+  activateResearchPrompt: (version: number) => request<ResearchPromptVersion>("POST", `/research-prompt/versions/${version}/activate`),
+  previewResearchPrompt: (v: { company: string; draft?: ResearchPromptInput; version?: number }) =>
+    request<ResearchPromptPreview>("POST", "/research-prompt/preview", v),
 
   // Email templates (Jinja2, versioned, one active; optional AI summary)
   emailTemplates: () => request<EmailTemplate[]>("GET", "/email-templates"),

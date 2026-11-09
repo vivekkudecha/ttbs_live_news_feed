@@ -27,7 +27,7 @@ class Parsed:
     sources: list[dict[str, str]] = field(default_factory=list)
 
 
-def parse_research(text: str) -> Parsed:
+def parse_research(text: str, categories: tuple[str, ...] | list[str] = CATEGORIES) -> Parsed:
     fields: dict[str, list[str]] = {}
     current: str | None = None
     for raw in (text or "").splitlines():
@@ -47,7 +47,7 @@ def parse_research(text: str) -> Parsed:
         return Parsed(status="no_signal")
 
     cat = (out.get("category") or "").strip(" *").lower()
-    category = next((c for c in CATEGORIES if c.lower() == cat), None)
+    category = next((c for c in categories if c.lower() == cat), None)
 
     seen: set[str] = set()
     sources = []

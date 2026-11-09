@@ -12,6 +12,7 @@ import type {
   EmailPolicy,
   EmailSettings,
   EmailTemplateInput,
+  ResearchPromptInput,
   PamQuery,
   SignalQuery,
   UserInput,
@@ -249,6 +250,22 @@ export const useRemoveEmailSettings = () => {
 }
 export const useEmailEstimate = (importId: string, enabled: boolean) =>
   useQuery({ queryKey: ["emailEstimate", importId], queryFn: () => backend.emailEstimate(importId), enabled: enabled && !!importId, staleTime: 30_000, retry: false })
+
+// ---- Research prompt --------------------------------------------------------------------
+export const useResearchPrompt = (enabled = true) => useQuery({ queryKey: ["researchPrompt"], queryFn: () => backend.researchPrompt(), enabled, retry: false })
+export const useResearchPromptVersion = (version: number | null) =>
+  useQuery({ queryKey: ["researchPromptVersion", version], queryFn: () => backend.researchPromptVersion(version!), enabled: version != null, staleTime: Infinity })
+const usePromptInvalidate = () => useInvalidate([["researchPrompt"], ["templates"]])
+export const useSaveResearchPrompt = () => {
+  const inv = usePromptInvalidate()
+  return useMutation({ mutationFn: (v: ResearchPromptInput & { activate: boolean }) => backend.saveResearchPrompt(v), onSuccess: inv })
+}
+export const useActivateResearchPrompt = () => {
+  const inv = usePromptInvalidate()
+  return useMutation({ mutationFn: (version: number) => backend.activateResearchPrompt(version), onSuccess: inv })
+}
+export const usePreviewResearchPrompt = () =>
+  useMutation({ mutationFn: (v: { company: string; draft?: ResearchPromptInput; version?: number }) => backend.previewResearchPrompt(v) })
 
 // ---- Email templates --------------------------------------------------------------------
 export const useEmailTemplates = () => useQuery({ queryKey: ["emailTemplates"], queryFn: () => backend.emailTemplates(), retry: false })

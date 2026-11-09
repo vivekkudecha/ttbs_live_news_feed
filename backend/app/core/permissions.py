@@ -31,7 +31,7 @@ MODULES: tuple[Module, ...] = (
     Module("companies", "Companies (Logos)", "Browse companies and reassign them between PAMs."),
     Module("pams", "PAMs", "Browse PAMs, rebalance and deactivate them."),
     Module("imports", "Uploads", "Upload, edit, save and download datasets."),
-    Module("integrations", "Providers & channels", "AI provider keys and models, email (Microsoft Graph) settings and email templates."),
+    Module("integrations", "Providers & channels", "AI provider keys and models, the research prompt, email (Microsoft Graph) settings and email templates."),
     Module("costs", "Costs (FinOps)", "Spend reports and the cost ledger export."),
     Module("telemetry", "Telemetry", "Pipeline events and queue health."),
     Module("audit", "Audit log", "The tamper-evident audit trail."),
@@ -79,6 +79,7 @@ PREFIXES: tuple[tuple[str, str], ...] = (
     (f"{P}/settings/llm", "integrations"),
     (f"{P}/settings/email", "integrations"),
     (f"{P}/email-templates", "integrations"),
+    (f"{P}/research-prompt", "integrations"),
     (f"{P}/finops", "costs"),
     (f"{P}/telemetry", "telemetry"),
     (f"{P}/queues", "telemetry"),
@@ -91,6 +92,7 @@ READ_POSTS = frozenset({
     f"{P}/companies/query",
     f"{P}/pams/query",
     f"{P}/settings/llm/{{provider}}/models",
+    f"{P}/research-prompt/preview",
 })
 
 

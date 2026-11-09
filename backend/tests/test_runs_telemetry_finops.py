@@ -77,7 +77,7 @@ def test_every_step_is_recorded_and_the_run_has_its_own_timeline_and_audit(clien
     calls = {"n": 0}
     real = providers.FakeProvider.research
 
-    def flaky(self, company, ws, we):
+    def flaky(self, company, ws, we, prompt=None):
         calls["n"] += 1
         if calls["n"] == 1:
             raise RetryableProviderError("429 Too Many Requests", retry_after=0)
@@ -143,7 +143,7 @@ def test_cost_ledger_and_report(client, monkeypatch):
     monkeypatch.setattr(get_settings(), "notify_price_whatsapp_usd", 0.01)
     real = providers.FakeProvider.research
 
-    def priced(self, company, ws, we):
+    def priced(self, company, ws, we, prompt=None):
         out = real(self, company, ws, we)
         out.cost = 0.02
         return out

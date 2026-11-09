@@ -13,9 +13,8 @@ from app.db.models import RES_FAILED, RES_NO_SIGNAL, RES_SIGNAL, Run
 from app.db.session import unit_of_work
 from app.research import ratelimit
 from app.research.parser import parse_research
-from app.research.prompts import PROMPT_VERSION
 from app.research.providers import get_provider
-from app.services import maintenance, notifications, runs, telemetry
+from app.services import maintenance, notifications, research_prompts, runs, telemetry
 from app.worker.celery_app import celery_app
 
 log = logging.getLogger(__name__)
@@ -47,6 +46,7 @@ def research_company(result_id: int) -> str:
         run_id, import_id, company_id, pam_id = run.id, run.import_id, res.company_id, res.pam_id
         company_name, name_key = res.company.name, res.company.name_key
         window_start, window_end, attempt = run.window_start, run.window_end, res.attempts
+        prompt = research_prompts.spec_for(uow, run.prompt_version)  # pinned at run start; immutable
         over_budget = run.budget_cap is not None and run.cost >= run.budget_cap
 
     if over_budget:
@@ -66,7 +66,7 @@ def research_company(result_id: int) -> str:
            "provider": provider.key, "model": provider.model}
 
     # Model is part of the key: switching models must not serve another model's answers.
-    cache_key = f"research:{name_key}:{window_end.isoformat()}:p{PROMPT_VERSION}:{provider.key}:{provider.model}"
+    cache_key = f"research:{name_key}:{window_end.isoformat()}:p{prompt.version}:{provider.key}:{provider.model}"
     hit = cache.get_json(cache_key)
     if hit:
         with unit_of_work() as uow:
@@ -77,8 +77,8 @@ def research_company(result_id: int) -> str:
     try:
         ratelimit.acquire("llm")
         t0 = time.perf_counter()
-        out = provider.research(company_name, window_start, window_end)
-        parsed = parse_research(out.text)
+        out = provider.research(company_name, window_start, window_end, prompt)
+        parsed = parse_research(out.text, prompt.categories)
     except RetryableProviderError as e:
         return _retry_or_fail(result_id, attempt, str(e), e.retry_after, s.research_max_retries, ctx, _ms(t0))
     except ProviderError as e:
@@ -110,7 +110,7 @@ def research_company(result_id: int) -> str:
         runs.complete_result(uow, result_id, values)
     # Cache only successful answers, for the length of the research window.
     cacheable = {k: values[k] for k in ("status", "category", "key_signals", "opportunity", "outreach", "sources", "raw_text", "tokens_in", "tokens_out")}
-    cache.set_json(cache_key, cacheable, ttl=s.research_window_days * 86400)
+    cache.set_json(cache_key, cacheable, ttl=prompt.window_days * 86400)
     return values["status"]
 
 

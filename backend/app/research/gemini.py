@@ -18,7 +18,7 @@ import httpx
 
 from app.core.config import get_settings
 from app.core.errors import ProviderError, RetryableProviderError
-from app.research.prompts import INSTRUCTIONS, build_prompt
+from app.research.prompts import PromptSpec, default_spec
 from app.research.providers import AuthError, ResearchOutput, _retry_after
 
 _MODEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,120}$")
@@ -126,9 +126,10 @@ class GeminiProvider:
         self.model = _check_model(model)
         self._client = _client(api_key, get_settings().gemini_timeout_s)
 
-    def research(self, company: str, window_start: date, window_end: date) -> ResearchOutput:
+    def research(self, company: str, window_start: date, window_end: date, prompt: PromptSpec | None = None) -> ResearchOutput:
         s = get_settings()
-        body = _body(build_prompt(company, window_start.isoformat(), window_end.isoformat()), s.gemini_max_output_tokens, system=INSTRUCTIONS)
+        spec = prompt or default_spec()
+        body = _body(spec.render(company, window_start.isoformat(), window_end.isoformat()), s.gemini_max_output_tokens, system=spec.system)
         t0 = time.perf_counter()
         data = _post(self._client, self.model, body)
         latency = int((time.perf_counter() - t0) * 1000)

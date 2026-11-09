@@ -6,9 +6,8 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
-import { CalendarClock, Clock, Info, Loader2, Mail, Play } from "lucide-react"
+import { CalendarClock, Check, Clock, Info, Loader2, Mail, MessageCircle, Play, Rocket } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useEmailEstimate, useStartRun } from "@/api/hooks"
@@ -27,15 +26,42 @@ const inAnHour = () => {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 }
 
+const CHANNELS: { key: DeliveryChannel; label: string; hint: string; icon: typeof Mail }[] = [
+  { key: "email", label: "Email", hint: "Digest to each PAM's inbox", icon: Mail },
+  { key: "whatsapp", label: "WhatsApp", hint: "Short alert to each PAM", icon: MessageCircle },
+]
+
+/** Delivery channels as toggle tiles (any combination; at least one is required to start). */
 export function ChannelPicker({ value, onChange }: { value: DeliveryChannel[]; onChange: (v: DeliveryChannel[]) => void }) {
   return (
-    <div className="flex h-9 items-center gap-4">
-      {(["email", "whatsapp"] as DeliveryChannel[]).map((c) => (
-        <label key={c} className="flex items-center gap-2 text-sm">
-          <Checkbox checked={value.includes(c)} onCheckedChange={(v) => onChange(v === true ? [...value, c] : value.filter((x) => x !== c))} />
-          {c === "email" ? "Email" : "WhatsApp"}
-        </label>
-      ))}
+    <div className="grid gap-2 sm:grid-cols-2">
+      {CHANNELS.map((c) => {
+        const on = value.includes(c.key)
+        return (
+          <button
+            key={c.key}
+            type="button"
+            role="switch"
+            aria-checked={on}
+            onClick={() => onChange(on ? value.filter((x) => x !== c.key) : [...value, c.key])}
+            className={cn(
+              "flex items-center gap-3 rounded-lg border p-2.5 text-left transition-all duration-200 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              on ? "border-primary/60 bg-primary/[0.06]" : "bg-card opacity-80 hover:opacity-100",
+            )}
+          >
+            <span className={cn("grid size-8 shrink-0 place-items-center rounded-md transition-colors", on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+              <c.icon className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">{c.label}</span>
+              <span className="block truncate text-xs text-muted-foreground">{c.hint}</span>
+            </span>
+            <span className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", on ? "bg-primary" : "bg-muted-foreground/30")}>
+              <span className={cn("absolute top-0.5 size-4 rounded-full bg-white shadow transition-all", on ? "left-[18px]" : "left-0.5")} />
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -103,29 +129,38 @@ export function ResearchPlan({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        {options.map((o) => (
-          <button
-            key={o.key}
-            type="button"
-            onClick={() => setMode(o.key)}
-            className={cn(
-              "flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors hover:bg-muted/60",
-              mode === o.key && "border-primary bg-primary/5 ring-1 ring-primary",
-            )}
-            aria-pressed={mode === o.key}
-          >
-            <o.icon className="size-4 text-muted-foreground" />
-            <span className="text-sm font-medium">{o.title}</span>
-            <span className="text-xs text-muted-foreground">{o.hint}</span>
-          </button>
-        ))}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="When to run">
+        {options.map((o) => {
+          const on = mode === o.key
+          return (
+            <button
+              key={o.key}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => setMode(o.key)}
+              className={cn(
+                "group relative flex items-center gap-3 rounded-lg border bg-card p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                on && "border-primary bg-primary/[0.06] ring-1 ring-primary",
+              )}
+            >
+              <span className={cn("grid size-9 shrink-0 place-items-center rounded-md transition-colors", on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground group-hover:text-primary")}>
+                <o.icon className="size-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{o.title}</span>
+                <span className="block text-xs text-muted-foreground">{o.hint}</span>
+              </span>
+              {on && <Check className="absolute right-2.5 top-2.5 size-3.5 text-primary" />}
+            </button>
+          )
+        })}
       </div>
 
       {mode !== "later" && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 animate-in fade-in-0 duration-200">
           {mode === "at" && (
-            <div className="grid gap-2">
+            <div className="grid max-w-xs gap-2 animate-in fade-in-0 slide-in-from-top-1 duration-200">
               <Label htmlFor="plan-at">Run at (your local time)</Label>
               <Input id="plan-at" type="datetime-local" value={runAt} onChange={(e) => setRunAt(e.target.value)} />
             </div>
@@ -133,6 +168,7 @@ export function ResearchPlan({
           <div className="grid gap-2">
             <Label>Send digests by</Label>
             <ChannelPicker value={channels} onChange={setChannels} />
+            {channels.length === 0 && <p className="text-xs text-destructive">Choose at least one channel.</p>}
           </div>
         </div>
       )}
@@ -148,14 +184,33 @@ export function ResearchPlan({
         </p>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {mode === "later"
-            ? "Run it any time from Research runs → New run, or from Imports."
-            : `${companies.toLocaleString("en-IN")} logos · est. up to ${fmtUsd(companies * PER_COMPANY_USD)}`}
-        </p>
-        <Button onClick={submit} disabled={start.isPending || companies === 0}>
-          {start.isPending && <Loader2 className="animate-spin" />}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 p-3">
+        {mode === "later" ? (
+          <p className="text-sm text-muted-foreground">Run it any time from Research runs → New run, or from Imports.</p>
+        ) : (
+          <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+            <div>
+              <dt className="text-xs text-muted-foreground">Logos</dt>
+              <dd className="tabular font-semibold">{companies.toLocaleString("en-IN")}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Est. cost</dt>
+              <dd className="tabular font-semibold">≤ {fmtUsd(companies * PER_COMPANY_USD)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Delivery</dt>
+              <dd className="font-semibold">{channels.length ? channels.map((c) => (c === "email" ? "Email" : "WhatsApp")).join(" + ") : "—"}</dd>
+            </div>
+          </dl>
+        )}
+        <Button
+          variant={mode === "later" ? "outline" : "brand"}
+          size="lg"
+          onClick={submit}
+          disabled={start.isPending || companies === 0 || (mode !== "later" && channels.length === 0)}
+          className="min-w-40"
+        >
+          {start.isPending ? <Loader2 className="animate-spin" /> : mode === "now" ? <Rocket /> : mode === "at" ? <Clock /> : null}
           {mode === "now" ? (previousRuns ? "Run again" : "Start research") : mode === "at" ? "Schedule run" : "Done"}
         </Button>
       </div>

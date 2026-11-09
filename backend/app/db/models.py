@@ -209,6 +209,7 @@ class Run(TimestampMixin, Base):
     window_end: Mapped[date | None] = mapped_column(Date)
     provider: Mapped[str] = mapped_column(String(40))
     model: Mapped[str] = mapped_column(String(100))
+    prompt_version: Mapped[int | None] = mapped_column(Integer)  # research prompt version, pinned when the run starts
     triggered_by: Mapped[str] = mapped_column(String(100))
     total: Mapped[int] = mapped_column(Integer, default=0)
     done: Mapped[int] = mapped_column(Integer, default=0)
@@ -421,6 +422,31 @@ class EmailTemplateVersion(Base):
     note: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[str] = mapped_column(String(100))
+
+
+class ResearchPromptVersion(Base):
+    """One immutable version of the research prompt (edited from the UI). Exactly one is active;
+    runs pin the active version when they start, and the version is part of the result-cache key."""
+
+    __tablename__ = "research_prompt_versions"
+    __table_args__ = (
+        Index("uq_research_prompt_versions_one_active", "active", unique=True, sqlite_where=text("active"), postgresql_where=text("active")),
+    )
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    version: Mapped[int] = mapped_column(Integer, unique=True)
+    system_instruction: Mapped[str] = mapped_column(Text)
+    research_prompt: Mapped[str] = mapped_column(Text)
+    ttbs_context: Mapped[str] = mapped_column(Text)
+    output_rules: Mapped[str] = mapped_column(Text)
+    categories: Mapped[list[Any]] = mapped_column(default=list)
+    window_days: Mapped[int] = mapped_column(Integer)
+    active: Mapped[bool] = mapped_column(Boolean, default=False)
+    note: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str] = mapped_column(String(100))
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    activated_by: Mapped[str | None] = mapped_column(String(100))
 
 
 class AuditLog(Base):

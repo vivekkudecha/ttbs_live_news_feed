@@ -993,3 +993,46 @@ export interface EmailEstimate {
   perDay: number
   drainEta: string | null
 }
+
+// ---- Research prompt (editable, versioned, one active) ----------------------------------------
+export interface ResearchPromptInput {
+  systemInstruction: string
+  researchPrompt: string
+  ttbsContext: string
+  outputRules: string
+  categories: string[]
+  windowDays: number
+  note?: string
+}
+
+export interface ResearchPromptVersionSummary {
+  version: number
+  active: boolean
+  note: string | null
+  createdAt: string
+  createdBy: string
+  activatedAt: string | null
+  activatedBy: string | null
+  windowDays: number
+  categories: string[]
+}
+
+export type ResearchPromptVersion = ResearchPromptVersionSummary & Omit<ResearchPromptInput, "note">
+
+export interface ResearchPromptState {
+  active: ResearchPromptVersion
+  versions: ResearchPromptVersionSummary[]
+  placeholders: { key: string; description: string; required: boolean }[]
+  requiredLabels: string[]
+  limits: { windowDays: [number, number]; maxCategories: number }
+  defaults: Omit<ResearchPromptInput, "note">
+}
+
+export interface ResearchPromptPreview {
+  system: string
+  prompt: string
+  windowStart: string
+  windowEnd: string
+  characters: number
+  approxTokens: number
+}

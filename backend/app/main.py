@@ -17,6 +17,7 @@ from app.api.auth_routes import router as auth_router
 from app.api.deps import authorize
 from app.api.email_routes import router as email_router
 from app.api.page_routes import router as page_router
+from app.api.prompt_routes import router as prompt_router
 from app.api.routes import router
 from app.core import metrics
 from app.core.config import get_settings
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     app.include_router(router, dependencies=guard)
     app.include_router(page_router, dependencies=guard)
     app.include_router(email_router, dependencies=guard)
+    app.include_router(prompt_router, dependencies=guard)
     setup_tracing("api", app)
     return app
 

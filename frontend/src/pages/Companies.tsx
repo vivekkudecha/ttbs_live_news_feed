@@ -10,7 +10,7 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table"
-import { Building2, Copy, Download, Gauge, Upload, MoreHorizontal, PanelRightOpen, Play, Search, Trash2, UserRound, X, Zap } from "lucide-react"
+import { AlertTriangle, Building2, CircleDashed, CircleOff, Copy, Download, Gauge, Upload, MoreHorizontal, PanelRightOpen, Play, Search, Sparkles, Trash2, UserRound, X, Zap } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { EmptyState } from "@/components/common/EmptyState"
 import { StatusBadge } from "@/components/common/StatusBadge"
@@ -24,7 +24,7 @@ import { DataTableViewOptions } from "@/components/data-table/DataTableViewOptio
 import { CompanyDrawer } from "@/components/companies/CompanyDrawer"
 import { ReassignDialog } from "@/components/companies/ReassignDialog"
 import { PamMultiFilter } from "@/components/pickers/Pickers"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -39,6 +39,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useCompanyPage } from "@/api/hooks"
+import { useCountUp } from "@/lib/use-count-up"
 import { useDebounced } from "@/lib/use-debounced"
 import { fmtDate, initials } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -70,6 +71,110 @@ function CycleDots({ cycles }: { cycles: CompanyListRow["cycles"] }) {
         <span key={c.runId} className={cn("size-2 rounded-full", c.status === "signal" ? "bg-brand" : c.status === "failed" ? "bg-destructive/60" : "bg-border")} />
       ))}
     </span>
+  )
+}
+
+/** Stable colour per name, so a company or PAM keeps the same chip everywhere. */
+const TONES = [
+  "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+  "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300",
+  "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+  "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
+  "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
+  "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
+  "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300",
+  "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
+]
+const tone = (name: string) => TONES[[...name].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7) % TONES.length]
+
+const SEGMENT_TONE: Record<string, string> = {
+  Enterprise: "border-sky-300/60 bg-sky-50 text-sky-700 dark:border-sky-400/30 dark:bg-sky-500/10 dark:text-sky-300",
+  "Mid-market": "border-violet-300/60 bg-violet-50 text-violet-700 dark:border-violet-400/30 dark:bg-violet-500/10 dark:text-violet-300",
+  Emerging: "border-emerald-300/60 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-300",
+}
+
+type CoverageKey = "signal" | "no_signal" | "none" | "failed"
+const COVERAGE: { key: CoverageKey; label: string; icon: typeof Sparkles; bar: string; chip: string; ring: string }[] = [
+  { key: "signal", label: "With a signal", icon: Sparkles, bar: "bg-brand", chip: "bg-brand/12 text-brand", ring: "ring-brand" },
+  { key: "no_signal", label: "No signal", icon: CircleOff, bar: "bg-brand-blue/60", chip: "bg-brand-blue/10 text-brand-blue", ring: "ring-brand-blue" },
+  { key: "none", label: "Not researched yet", icon: CircleDashed, bar: "bg-muted-foreground/25", chip: "bg-muted text-muted-foreground", ring: "ring-muted-foreground" },
+  { key: "failed", label: "Research failed", icon: AlertTriangle, bar: "bg-destructive/70", chip: "bg-destructive/10 text-destructive", ring: "ring-destructive" },
+]
+
+function Count({ value }: { value: number }) {
+  return <>{useCountUp(value).toLocaleString("en-IN")}</>
+}
+
+/**
+ * Coverage tiles: how many logos (under the other filters) had a signal in their latest cycle,
+ * none, failed, or were never researched. Click a tile to filter the table; click again to clear.
+ */
+function CoverageStrip({ counts, value, onChange }: { counts: Record<string, number>; value: string[]; onChange: (v: string[]) => void }) {
+  const total = COVERAGE.reduce((a, c) => a + (counts[c.key] ?? 0), 0)
+  const only = value.length === 1 ? value[0] : null
+  return (
+    <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.4fr_repeat(4,1fr)]">
+      <button
+        type="button"
+        onClick={() => onChange([])}
+        aria-pressed={value.length === 0}
+        className={cn(
+          "group relative overflow-hidden rounded-xl border bg-card p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:col-span-2 xl:col-span-1",
+          value.length === 0 && "ring-2 ring-primary",
+        )}
+      >
+        <span className="absolute inset-x-0 top-0 h-1 bg-brand-gradient" aria-hidden="true" />
+        <span className="flex items-center gap-2.5 text-sm text-muted-foreground">
+          <span className="grid size-8 place-items-center rounded-lg bg-brand-gradient text-white shadow-sm shadow-brand/25">
+            <Building2 className="size-4" />
+          </span>
+          Logos tracked
+        </span>
+        <span className="tabular mt-2 block text-3xl font-semibold tracking-tight">
+          <Count value={total} />
+        </span>
+        {/* Distribution bar: one segment per status, widths animate when filters change. */}
+        <span className="mt-3 flex h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+          {COVERAGE.map((c) => (
+            <span key={c.key} className={cn("h-full transition-all duration-500", c.bar)} style={{ width: `${total ? ((counts[c.key] ?? 0) / total) * 100 : 0}%` }} />
+          ))}
+        </span>
+        <span className="mt-1.5 block text-xs text-muted-foreground">
+          {total ? `${Math.round(((counts.signal ?? 0) / total) * 100)}% with a signal in the latest cycle` : "No logos match"}
+        </span>
+      </button>
+      {COVERAGE.map((c) => {
+        const v = counts[c.key] ?? 0
+        const on = only === c.key
+        return (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => onChange(on ? [] : [c.key])}
+            aria-pressed={on}
+            className={cn(
+              "group rounded-xl border bg-card p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+              on && cn("ring-2", c.ring),
+              v === 0 && !on && "opacity-70",
+            )}
+          >
+            <span className="flex items-center justify-between gap-2">
+              <span className={cn("grid size-8 place-items-center rounded-lg", c.chip)}>
+                <c.icon className="size-4" />
+              </span>
+              <span className="text-xs font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">{on ? "Clear" : "Filter"}</span>
+            </span>
+            <span className="tabular mt-3 block text-2xl font-semibold tracking-tight">
+              <Count value={v} />
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {c.label}
+              {total > 0 && <span className="tabular"> · {Math.round((v / total) * 100)}%</span>}
+            </span>
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
@@ -134,20 +239,28 @@ export function CompaniesList() {
         enableHiding: false,
         header: ({ column }) => <DataTableColumnHeader column={column} title="Company" />,
         cell: ({ row }) => (
-          <div className="flex items-center gap-3">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground">{initials(row.original.name)}</span>
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              className={cn(
+                "flex size-9 shrink-0 items-center justify-center rounded-lg text-xs font-semibold transition-transform duration-200 group-hover/row:scale-105",
+                tone(row.original.name),
+              )}
+            >
+              {initials(row.original.name)}
+            </span>
             <div className="min-w-0">
               <button
                 type="button"
+                title={row.original.name}
                 onClick={(e) => {
                   e.stopPropagation()
                   openDrawer(row.original.id)
                 }}
-                className="block max-w-[18rem] truncate text-left font-medium text-foreground underline-offset-2 hover:text-brand-blue hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                className="block max-w-[28rem] truncate text-left font-semibold text-foreground underline-offset-2 hover:text-brand-blue hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
               >
                 {row.original.name}
               </button>
-              <span className="block text-xs text-muted-foreground">{row.original.industry}</span>
+              <span className="block truncate text-xs text-muted-foreground">{row.original.industry || "Industry not set"}</span>
             </div>
           </div>
         ),
@@ -157,7 +270,14 @@ export function CompaniesList() {
         accessorKey: "segment",
         meta: { label: "Segment" },
         header: ({ column }) => <DataTableColumnHeader column={column} title="Segment" />,
-        cell: ({ row }) => <span className="text-muted-foreground">{row.original.segment}</span>,
+        cell: ({ row }) =>
+          row.original.segment ? (
+            <Badge variant="outline" className={cn("font-medium", SEGMENT_TONE[row.original.segment])}>
+              {row.original.segment}
+            </Badge>
+          ) : (
+            <span className="text-xs text-muted-foreground/70">—</span>
+          ),
       },
     )
       cols.push({
@@ -166,11 +286,11 @@ export function CompaniesList() {
         meta: { label: "PAM" },
         header: ({ column }) => <DataTableColumnHeader column={column} title="PAM" />,
         cell: ({ row }) => (
-          <span className="flex items-center gap-2">
-            <Avatar className="size-6">
-              <AvatarFallback className="bg-accent text-[11.5px] font-medium text-accent-foreground">{initials(row.original.pamName)}</AvatarFallback>
-            </Avatar>
-            <span className="truncate">{row.original.pamName}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ring-2 ring-card", tone(row.original.pamName))}>
+              {initials(row.original.pamName)}
+            </span>
+            <span className="truncate font-medium">{row.original.pamName}</span>
           </span>
         ),
       })
@@ -183,7 +303,9 @@ export function CompaniesList() {
         header: "Latest cycle",
         cell: ({ row }) =>
           row.original.latestStatus === "none" ? (
-            <span className="text-xs text-muted-foreground">Not researched</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed px-2 py-0.5 text-xs text-muted-foreground">
+              <CircleDashed className="size-3" /> Not researched
+            </span>
           ) : row.original.latestStatus === "signal" ? (
             <CategoryBadge category={row.original.latestCategory} />
           ) : (
@@ -199,7 +321,14 @@ export function CompaniesList() {
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="inline-flex items-center gap-2.5">
-                <span className="tabular w-3 text-right font-medium">{row.original.signals}</span>
+                <span
+                  className={cn(
+                    "tabular inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-semibold",
+                    row.original.signals > 0 ? "bg-brand/12 text-brand" : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {row.original.signals}
+                </span>
                 <CycleDots cycles={row.original.cycles} />
               </span>
             </TooltipTrigger>
@@ -310,13 +439,23 @@ export function CompaniesList() {
         description="Every logo being tracked, its PAM and its signal history. Select a company to see its full timeline."
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative w-full sm:w-64">
+      {page ? (
+        <CoverageStrip counts={page.facets.latest} value={latest} onChange={setFilter(setLatest)} />
+      ) : (
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.4fr_repeat(4,1fr)]">
+          {Array.from({ length: 5 }, (_, i) => (
+            <Skeleton key={i} className="h-[7.5rem] rounded-xl" />
+          ))}
+        </div>
+      )}
+
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2 shadow-xs">
+        <div className="relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             aria-label="Search companies"
             placeholder="Search company or PAM"
-            className="h-9 pl-9 pr-8"
+            className="h-9 border-transparent bg-muted/60 pl-9 pr-8 focus-visible:bg-card"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value)
@@ -366,21 +505,28 @@ export function CompaniesList() {
         </div>
       </div>
 
+      {/* Floating action bar while rows are selected. */}
       {selectedIds.length > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-blue/30 bg-brand-blue/[0.06] px-4 py-2.5 text-sm">
-          <span className="font-medium">{selectedIds.length} selected</span>
-          <span className="mx-1 h-4 w-px bg-border" />
-          <Button variant="ghost" size="sm" onClick={() => setReassignIds(selectedIds)}>
+        <div
+          role="toolbar"
+          aria-label="Selected companies"
+          className="fixed inset-x-4 bottom-5 z-40 mx-auto flex max-w-fit flex-wrap items-center gap-1 rounded-2xl border border-white/10 bg-foreground p-1.5 pl-4 text-sm text-background shadow-2xl animate-in fade-in-0 slide-in-from-bottom-4 duration-300"
+        >
+          <span className="mr-2 flex items-center gap-2 font-medium">
+            <span className="tabular grid h-6 min-w-6 place-items-center rounded-full bg-brand-gradient px-1.5 text-xs font-semibold text-white">{selectedIds.length}</span>
+            selected
+          </span>
+          <Button variant="ghost" size="sm" className="text-background hover:bg-background/15 hover:text-background" onClick={() => setReassignIds(selectedIds)}>
             <UserRound /> Reassign PAM
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => toast.success(`Research queued for ${selectedIds.length} companies`)}>
+          <Button variant="ghost" size="sm" className="text-background hover:bg-background/15 hover:text-background" onClick={() => toast.success(`Research queued for ${selectedIds.length} companies`)}>
             <Play /> Research now
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => toast.success(`Exported ${selectedIds.length} companies`)}>
+          <Button variant="ghost" size="sm" className="text-background hover:bg-background/15 hover:text-background" onClick={() => toast.success(`Exported ${selectedIds.length} companies`)}>
             <Download /> Export
           </Button>
-          <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground" onClick={() => setRowSelection({})}>
-            Clear selection
+          <Button variant="ghost" size="icon-sm" aria-label="Clear selection" className="text-background/70 hover:bg-background/15 hover:text-background" onClick={() => setRowSelection({})}>
+            <X />
           </Button>
         </div>
       )}
@@ -392,6 +538,7 @@ export function CompaniesList() {
           <DataTable
             table={table}
             stickyHeader
+            maxHeight="calc(100svh - 14rem)"
             onRowClick={(r) => openDrawer(r.id)}
             activeRowId={openId ?? undefined}
             empty={
@@ -401,9 +548,9 @@ export function CompaniesList() {
             }
           />
           <DataTablePagination table={table} totalRows={page.total} pageSizes={[20, 50, 100]} />
-            <p className="flex items-center gap-1 px-1 pt-1 text-xs text-muted-foreground" title="Server query time for this page">
-              <Gauge className="size-3.5" /> Loaded in {page.tookMs} ms
-            </p>
+          <p className="flex items-center gap-1 px-1 pt-1 text-xs text-muted-foreground" title="Server query time for this page">
+            <Gauge className="size-3.5" /> Loaded in {page.tookMs} ms
+          </p>
         </div>
       )}
 

@@ -14,7 +14,7 @@ import httpx
 
 from app.core.config import get_settings
 from app.core.errors import ProviderError, RetryableProviderError
-from app.research.prompts import CATEGORIES, INSTRUCTIONS, build_prompt
+from app.research.prompts import PromptSpec, default_spec
 
 if TYPE_CHECKING:
     from app.db.session import UnitOfWork
@@ -37,7 +37,8 @@ class ResearchProvider(Protocol):
     key: str
     model: str
 
-    def research(self, company: str, window_start: date, window_end: date) -> ResearchOutput: ...
+    # `prompt` is the run's pinned research prompt version; None = the built-in default.
+    def research(self, company: str, window_start: date, window_end: date, prompt: PromptSpec | None = None) -> ResearchOutput: ...
 
     # Plain text generation without web search (e.g. the AI summary in email digests).
     def generate(self, prompt: str, *, system: str | None = None, max_tokens: int = 1024) -> ResearchOutput: ...
@@ -51,14 +52,15 @@ class FakeProvider:
     def __init__(self) -> None:
         self.model = "fake-model"
 
-    def research(self, company: str, window_start: date, window_end: date) -> ResearchOutput:
+    def research(self, company: str, window_start: date, window_end: date, prompt: PromptSpec | None = None) -> ResearchOutput:
         s = get_settings()
+        categories = (prompt or default_spec()).categories
         if s.fake_latency_ms:
             time.sleep(s.fake_latency_ms / 1000)
         if random.random() < s.fake_failure_rate:
             raise RetryableProviderError("fake transient failure", retry_after=0.1)
         if random.random() < s.fake_signal_rate:
-            cat = random.choice(CATEGORIES)
+            cat = random.choice(categories)
             text = (
                 f"{company.upper()}\nCategory: {cat}\n"
                 f"Key signals: **{cat}** activity announced in {window_end:%b %Y} (https://example.com/news/{abs(hash(company)) % 9999})\n"
@@ -125,12 +127,13 @@ class PerplexityProvider:
         self.model = model
         self._client = _client(api_key, get_settings().perplexity_timeout_s)
 
-    def research(self, company: str, window_start: date, window_end: date) -> ResearchOutput:
+    def research(self, company: str, window_start: date, window_end: date, prompt: PromptSpec | None = None) -> ResearchOutput:
         s = get_settings()
+        spec = prompt or default_spec()
         payload = {
             "model": self.model,
-            "input": build_prompt(company, window_start.isoformat(), window_end.isoformat()),
-            "instructions": INSTRUCTIONS,
+            "input": spec.render(company, window_start.isoformat(), window_end.isoformat()),
+            "instructions": spec.system,
             "tools": [{"type": "web_search"}],
             "max_output_tokens": s.perplexity_max_output_tokens,
         }

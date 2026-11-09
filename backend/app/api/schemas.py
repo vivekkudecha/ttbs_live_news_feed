@@ -117,6 +117,7 @@ def run_out(r: Run, notes: dict[str, int] | None = None) -> dict[str, Any]:
         "importId": str(r.import_id) if r.import_id else None,
         "scopeKey": r.scope_key,
         "templateId": r.template_id,
+        "promptVersion": r.prompt_version,
         "channels": r.channels,
         "provider": r.provider,
         "model": r.model,
