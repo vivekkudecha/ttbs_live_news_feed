@@ -6,12 +6,15 @@
 import logging
 import time
 import uuid
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, CollectorRegistry, Gauge, generate_latest
 
 from app.api import errors
+from app.api.auth_routes import router as auth_router
+from app.api.deps import authorize
 from app.api.page_routes import router as page_router
 from app.api.routes import router
 from app.core import metrics
@@ -54,15 +57,30 @@ def _state_gauges() -> bytes:
     return generate_latest(reg)
 
 
+@asynccontextmanager
+async def _lifespan(_: FastAPI):
+    from app.services.auth import bootstrap_admin
+
+    try:
+        bootstrap_admin()  # first admin from ADMIN_* settings, only while no user exists
+    except Exception:  # noqa: BLE001 - a DB hiccup at boot must not crash-loop the API
+        log.exception("auth: bootstrap admin check failed")
+    yield
+
+
 def create_app() -> FastAPI:
     s = get_settings()
     configure_logging(s.log_level)
-    app = FastAPI(title=s.app_name, version="0.2.0")
+    # Interactive docs and the schema are development aids: off in prod (less attack surface).
+    docs = s.env != "prod"
+    app = FastAPI(title=s.app_name, version="0.2.0", lifespan=_lifespan, docs_url="/docs" if docs else None,
+                  redoc_url=None, openapi_url="/openapi.json" if docs else None)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=s.cors_origins,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=s.cors_origins,  # explicit list only (never "*"), so credentials are safe
+        allow_credentials=True,  # the session cookie, for the vite dev server on another port
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allow_headers=["Content-Type", "X-CSRF-Token", "X-Request-ID"],
         expose_headers=["X-Request-ID", "Content-Disposition"],
     )
 
@@ -76,6 +94,12 @@ def create_app() -> FastAPI:
         response = await call_next(request)
         elapsed = time.perf_counter() - t0
         response.headers["X-Request-ID"] = rid
+        # API data is per-user and changes constantly: never stored by browsers or proxies.
+        # (Static assets are cached by the frontend nginx; see docs/caching-policy.md.)
+        if request.url.path.startswith("/api/"):
+            response.headers.setdefault("Cache-Control", "no-store")
+            response.headers.setdefault("Pragma", "no-cache")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
         # Label by route template (/api/v1/runs/{run_id}), never the raw path: bounded cardinality.
         route = getattr(request.scope.get("route"), "path", None) or "unmatched"
         if route != "/metrics":
@@ -92,8 +116,11 @@ def create_app() -> FastAPI:
         return Response(generate_latest(REGISTRY) + _state_gauges(), media_type=CONTENT_TYPE_LATEST)
 
     errors.install(app)
-    app.include_router(router)
-    app.include_router(page_router)
+    # Every /api/v1 route passes the access guard (fails closed: see app/core/permissions.py).
+    guard = [Depends(authorize)]
+    app.include_router(auth_router, dependencies=guard)
+    app.include_router(router, dependencies=guard)
+    app.include_router(page_router, dependencies=guard)
     setup_tracing("api", app)
     return app
 

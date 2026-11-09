@@ -369,3 +369,65 @@ class CostEntry(Base):
     cached: Mapped[bool] = mapped_column(Boolean, default=False)
     saved: Mapped[float] = mapped_column(Float, default=0.0)  # USD avoided (cache hits)
     outcome: Mapped[str | None] = mapped_column(String(20))  # signal | no_signal | failed | sent
+
+
+# --- Identity & access ------------------------------------------------------------------------
+ROLE_ADMIN, ROLE_MEMBER = "admin", "member"
+ROLES = (ROLE_ADMIN, ROLE_MEMBER)
+
+
+class User(TimestampMixin, Base):
+    """A person who can sign in. `admin` can do everything, including managing users; a `member`
+    gets per-module access (`permissions`: {"runs": "manage", "audit": "view", ...}) chosen by an
+    admin. Passwords are Argon2id hashes (app/services/passwords.py), never stored or logged plain."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True)  # stored lower-cased
+    name: Mapped[str] = mapped_column(String(200))
+    email: Mapped[str | None] = mapped_column(String(320))
+    role: Mapped[str] = mapped_column(String(20), default=ROLE_MEMBER)
+    permissions: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    password_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Set for the bootstrap admin and after an admin (re)sets a password: the next sign-in can do
+    # nothing but choose a new password.
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str] = mapped_column(String(100))
+
+
+class UserSession(Base):
+    """Server-side session. The browser holds a random token in an HttpOnly cookie; only its
+    SHA-256 is stored, so a database leak does not hand out live sessions. Revoked on sign-out,
+    password change, deactivation, or by an admin."""
+
+    __tablename__ = "user_sessions"
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    csrf_token: Mapped[str] = mapped_column(String(64))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))  # absolute lifetime
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ip: Mapped[str | None] = mapped_column(String(64))
+    user_agent: Mapped[str | None] = mapped_column(String(300))
+
+    user: Mapped[User] = relationship(lazy="joined")
+
+
+class PasswordHistory(Base):
+    """Previous password hashes, so the last N passwords cannot be reused."""
+
+    __tablename__ = "password_history"
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

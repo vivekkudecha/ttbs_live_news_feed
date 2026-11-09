@@ -47,20 +47,27 @@ export class ApiError extends Error {
   }
 }
 
-function actor(): string | undefined {
-  try {
-    const raw = sessionStorage.getItem("ttbs-session")
-    return raw ? (JSON.parse(raw).username as string) : undefined
-  } catch {
-    return undefined
-  }
+/*
+ * Session: the server keeps it; the browser holds only an HttpOnly cookie (scoped to /api, not
+ * readable from JavaScript). Writes must echo the session's CSRF token, which lives here in memory
+ * only (never in localStorage/sessionStorage) and is refreshed from GET /auth/me on page load.
+ */
+let csrfToken: string | null = null
+export const setCsrfToken = (t: string | null) => {
+  csrfToken = t
 }
+
+/** Fired when the server ends the session (401) or demands a password change (403). */
+export const AUTH_EVENT = "ttbs:auth"
+export type AuthEventDetail = { reason: "signed_out" | "password_change_required" }
+const emitAuth = (reason: AuthEventDetail["reason"]) => window.dispatchEvent(new CustomEvent<AuthEventDetail>(AUTH_EVENT, { detail: { reason } }))
+
+const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"])
 
 export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   if (!BASE) throw new ApiError(0, "backend_disabled", "Backend is not configured (VITE_API_URL)")
   const headers: Record<string, string> = {}
-  const who = actor()
-  if (who) headers["X-Actor"] = who
+  if (csrfToken && UNSAFE.has(method)) headers["X-CSRF-Token"] = csrfToken
   let payload: BodyInit | undefined
   if (body instanceof FormData) payload = body
   else if (body !== undefined) {
@@ -69,7 +76,8 @@ export async function request<T>(method: string, path: string, body?: unknown): 
   }
   let res: Response
   try {
-    res = await fetch(`${BASE}/api/v1${path}`, { method, headers, body: payload })
+    // "include": the dev server (vite, :5173) and API (:8010) are different origins of one site.
+    res = await fetch(`${BASE}/api/v1${path}`, { method, headers, body: payload, credentials: "include", cache: "no-store" })
   } catch {
     throw new ApiError(0, "network_error", "Cannot reach the backend. Is the API server running?")
   }
@@ -80,7 +88,11 @@ export async function request<T>(method: string, path: string, body?: unknown): 
   } catch {
     /* non-JSON error body */
   }
-  throw new ApiError(res.status, err.code ?? "http_error", err.message ?? `Request failed (${res.status})`, err.details, err.request_id)
+  const code = err.code ?? "http_error"
+  // Sign-in itself answers 401 for bad credentials: that is not "the session ended".
+  if (res.status === 401 && !path.startsWith("/auth/login")) emitAuth("signed_out")
+  if (res.status === 403 && code === "password_change_required") emitAuth("password_change_required")
+  throw new ApiError(res.status, code, err.message ?? `Request failed (${res.status})`, err.details, err.request_id)
 }
 
 const qs = (params: Record<string, string | number | undefined>) => {
@@ -152,8 +164,8 @@ export function stageUpload(file: File, onProgress: (sent: number, total: number
   const xhr = new XMLHttpRequest()
   const promise = new Promise<Dataset>((resolve, reject) => {
     xhr.open("POST", `${BASE}/api/v1/imports/stage`)
-    const who = actor()
-    if (who) xhr.setRequestHeader("X-Actor", who)
+    xhr.withCredentials = true
+    if (csrfToken) xhr.setRequestHeader("X-CSRF-Token", csrfToken)
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded, e.total)
     xhr.onload = () => {
       let body: { error?: { code?: string; message?: string; details?: unknown; request_id?: string } } & Partial<Dataset> = {}
@@ -164,6 +176,7 @@ export function stageUpload(file: File, onProgress: (sent: number, total: number
       }
       if (xhr.status >= 200 && xhr.status < 300) resolve(body as Dataset)
       else {
+        if (xhr.status === 401) emitAuth("signed_out")
         const err: { code?: string; message?: string; details?: unknown; request_id?: string } = body.error ?? {}
         reject(new ApiError(xhr.status, err.code ?? "http_error", err.message ?? `Upload failed (${xhr.status})`, err.details, err.request_id))
       }

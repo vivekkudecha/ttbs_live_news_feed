@@ -1,30 +1,43 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Loader2 } from "lucide-react"
-import { toast } from "sonner"
+import { Loader2, ShieldCheck } from "lucide-react"
 import { Logo } from "@/components/common/Logo"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PasswordField } from "@/components/auth/PasswordField"
 import { api } from "@/api/client"
-import { errorMessage } from "@/api/http"
+import { ApiError, errorMessage } from "@/api/http"
 import { useSession } from "@/context/session"
 
-/** Sign-in by name (no passwords yet). The name is recorded as the actor in the audit log. */
+/** Sign-in with username + password. Failures get one generic message (the server never says
+ * whether the username exists); repeated failures lock the account for a while. */
 export default function Login() {
-  const { signIn } = useSession()
+  const { establish } = useSession()
   const navigate = useNavigate()
   const [username, setUsername] = useState("")
+  const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError(null)
     try {
-      signIn(await api.login(username.trim()))
-      navigate("/")
+      const s = await api.login(username.trim(), password)
+      establish(s)
+      navigate(s.user.mustChangePassword ? "/change-password" : "/", { replace: true })
     } catch (err) {
-      toast.error("Could not sign in", { description: errorMessage(err) })
+      setPassword("")
+      setError(
+        err instanceof ApiError && err.status === 401
+          ? "Invalid username or password. After several failed attempts the account is locked for a few minutes."
+          : err instanceof ApiError && err.status === 429
+            ? "Too many sign-in attempts. Wait a minute and try again."
+            : errorMessage(err),
+      )
     } finally {
       setLoading(false)
     }
@@ -44,27 +57,38 @@ export default function Login() {
             </p>
           </div>
 
-          <form onSubmit={submit} className="space-y-6">
+          <form onSubmit={submit} className="space-y-6" noValidate>
+            {error && (
+              <Alert variant="destructive" role="alert">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
-              <Label htmlFor="username">Your name</Label>
+              <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
                 className="h-11"
                 autoComplete="username"
-                placeholder="e.g. vivek"
+                autoCapitalize="none"
+                spellCheck={false}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                maxLength={64}
                 required
                 autoFocus
               />
             </div>
-            <Button type="submit" className="h-11 w-full" disabled={loading || !username.trim()}>
+            <PasswordField id="password" label="Password" value={password} onChange={setPassword} autoComplete="current-password" />
+            <Button type="submit" className="h-11 w-full" disabled={loading || !username.trim() || !password}>
               {loading && <Loader2 className="animate-spin" />}
               Sign in
             </Button>
           </form>
 
-          <p className="text-sm leading-relaxed text-muted-foreground">Every sign-in and change is recorded in the audit log under this name.</p>
+          <p className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
+            <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
+            Accounts are created by an administrator. Every sign-in and change is recorded in the audit log.
+          </p>
         </div>
       </div>
       <p className="px-4 pb-6 text-center text-sm text-muted-foreground">Tata Tele Business Services · Internal sales tool</p>

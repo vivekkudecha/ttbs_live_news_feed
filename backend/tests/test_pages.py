@@ -135,10 +135,10 @@ def test_finops_templates_channels_session(client):
     assert t[0]["id"] == "t1" and "{company}" in t[0]["versions"][0]["researchPrompt"]
     assert [c["key"] for c in client.get("/api/v1/channels").json()] == ["email", "whatsapp"]
 
-    me = client.post("/api/v1/session", json={"username": " vivek "}).json()
-    assert me == {"id": "vivek", "username": "vivek", "name": "vivek", "lastLoginAt": me["lastLoginAt"]}
-    assert client.post("/api/v1/session", json={"username": "   "}).status_code == 422
-    assert client.post("/api/v1/session", json={"username": "x", "role": "admin"}).status_code == 422  # roles no longer exist
+    # The name-only sign-in is gone: identity comes from a password session (tests/test_auth.py).
+    assert client.post("/api/v1/session", json={"username": "vivek"}).status_code in (403, 404, 405)
+    me = client.get("/api/v1/auth/me").json()["user"]
+    assert me["username"] == "tester" and me["role"] == "admin" and me["lastLoginAt"]
     assert "role" not in client.get("/api/v1/audit?pageSize=5").json()["rows"][0]
 
 

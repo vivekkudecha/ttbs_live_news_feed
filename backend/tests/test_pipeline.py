@@ -195,7 +195,13 @@ def test_runs_require_an_upload_and_bad_body(client):
 def test_cors_preflight_allows_frontend(client):
     r = client.options("/api/v1/imports", headers={
         "Origin": "http://localhost:5173", "Access-Control-Request-Method": "POST",
-        "Access-Control-Request-Headers": "x-actor",
+        "Access-Control-Request-Headers": "content-type,x-csrf-token",
     })
     assert r.status_code == 200
     assert r.headers["access-control-allow-origin"] == "http://localhost:5173"
+    # Only the headers the SPA sends are allowed; the retired X-Actor identity header is not.
+    r = client.options("/api/v1/imports", headers={
+        "Origin": "http://localhost:5173", "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "x-actor",
+    })
+    assert r.status_code == 400

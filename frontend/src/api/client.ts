@@ -27,7 +27,13 @@ import type {
   SignalPage,
   SignalQuery,
   Template,
-  User,
+  IssuedPassword,
+  ManagedUser,
+  ModuleInfo,
+  PasswordPolicy,
+  SessionInfo,
+  UserInput,
+  UserPatch,
 } from "./types"
 
 const qs = (params: Record<string, string | number | boolean | undefined>) => {
@@ -40,8 +46,22 @@ const qs = (params: Record<string, string | number | boolean | undefined>) => {
 type LiveSnapshotWire = Omit<LiveSnapshot, "statuses"> & { statuses: number[]; serverTime: string }
 
 export const api = {
-  /** Sign-in by name (no passwords yet); the name becomes the audit actor. */
-  login: (username: string) => request<User>("POST", "/session", { username }),
+  // ---- Session (HttpOnly cookie + CSRF token; see http.ts) ----------------------------------
+  login: (username: string, password: string) => request<SessionInfo>("POST", "/auth/login", { username, password }),
+  logout: () => request<void>("POST", "/auth/logout"),
+  me: () => request<SessionInfo>("GET", "/auth/me"),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<SessionInfo>("POST", "/auth/change-password", { currentPassword, newPassword }),
+  passwordPolicy: () => request<PasswordPolicy>("GET", "/auth/password-policy"),
+  modules: () => request<ModuleInfo[]>("GET", "/auth/modules"),
+
+  // ---- Users & access (admins only) -------------------------------------------------------
+  listUsers: () => request<ManagedUser[]>("GET", "/users"),
+  createUser: (v: UserInput) => request<IssuedPassword>("POST", "/users", v),
+  updateUser: (id: string, v: UserPatch) => request<ManagedUser>("PATCH", `/users/${id}`, v),
+  resetUserPassword: (id: string) => request<IssuedPassword>("POST", `/users/${id}/reset-password`),
+  unlockUser: (id: string) => request<ManagedUser>("POST", `/users/${id}/unlock`),
+  revokeUserSessions: (id: string) => request<{ revoked: number }>("POST", `/users/${id}/revoke-sessions`),
 
   // ---- Companies -------------------------------------------------------------------------
   queryCompanies: (q: CompanyQuery) => request<CompanyPage>("POST", "/companies/query", q),
@@ -74,8 +94,6 @@ export const api = {
   // ---- Small resources --------------------------------------------------------------------
   listTemplates: () => request<Template[]>("GET", "/templates"),
   listChannels: () => request<Channel[]>("GET", "/channels"),
-  /** User accounts arrive with real authentication; until then there is nothing to list. */
-  listUsers: async (): Promise<User[]> => [],
   listAudit: async () => (await request<Page<AuditEntry>>("GET", "/audit?pageSize=200")).rows,
   /** Cost analysis for an IST date range (inclusive, YYYY-MM-DD); default this month. USD. */
   finops: (range: { from?: string; to?: string } = {}) => {

@@ -48,12 +48,47 @@ def env(tmp_path, monkeypatch):
     db_session.get_engine().dispose()
 
 
-@pytest.fixture
-def client():
+TEST_PASSWORD = "Correct-Horse-9-Battery!"
+
+
+def make_user(username="tester", *, role="admin", permissions=None, password=TEST_PASSWORD, must_change=False, name=None):
+    """Create a user directly in the database (bypassing the admin API)."""
+    from app.core.timeutil import utcnow
+    from app.db.models import User
+    from app.db.session import unit_of_work
+    from app.services import passwords
+
+    with unit_of_work() as uow:
+        u = User(username=username, name=name or username.title(), role=role, permissions=permissions or {},
+                 password_hash=passwords.hash_password(password), password_changed_at=utcnow(),
+                 must_change_password=must_change, active=True, failed_login_count=0, created_by="test")
+        uow.session.add(u)
+        uow.session.flush()
+        return u.id
+
+
+def sign_in(c, username="tester", password=TEST_PASSWORD):
+    """Sign in on a TestClient: the session cookie is kept by the client, the CSRF token is set as
+    a default header (as the SPA does). Returns the response."""
+    r = c.post("/api/v1/auth/login", json={"username": username, "password": password})
+    if r.status_code == 200:
+        c.headers["X-CSRF-Token"] = r.json()["csrfToken"]
+    return r
+
+
+def anon_client():
+    """A client with no session. HTTPS base URL, so the Secure session cookie is sent back."""
     from app.main import create_app
 
-    with TestClient(create_app(), raise_server_exceptions=False) as c:
-        c.headers["X-Actor"] = "tester"
+    return TestClient(create_app(), base_url="https://testserver", raise_server_exceptions=False)
+
+
+@pytest.fixture
+def client():
+    """Signed in as admin "tester"."""
+    make_user("tester")
+    with anon_client() as c:
+        assert sign_in(c).status_code == 200
         yield c
 
 

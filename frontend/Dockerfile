@@ -1,7 +1,7 @@
 # Fully qualified image names: Podman on RHEL refuses ambiguous short names in non-interactive builds.
 
 # Stage 1: Build the Vite React application
-FROM docker.io/library/node:20-alpine AS builder
+FROM docker.io/library/node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -20,18 +20,17 @@ ENV VITE_API_URL=${VITE_API_URL}
 # Build static assets
 RUN npm run build
 
-# Stage 2: Serve application with Nginx
-FROM docker.io/library/nginx:1.27-alpine
+# Stage 2: Serve the static build with nginx, as an unprivileged user (uid 101) on port 8080.
+FROM docker.io/nginxinc/nginx-unprivileged:1.30.6-alpine
 
-# Remove default nginx static html files
+USER root
 RUN rm -rf /usr/share/nginx/html/*
-
-# Copy built distribution from builder
 COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Copy custom Nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+# COPY keeps host modes (e.g. umask 027 -> rw-r-----): make it all readable by the nginx user.
+RUN chmod -R a+rX /usr/share/nginx/html /etc/nginx/conf.d
+USER 101
 
-EXPOSE 80
+EXPOSE 8080
 
 CMD ["nginx", "-g", "daemon off;"]

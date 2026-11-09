@@ -27,8 +27,31 @@ class Settings(BaseSettings):
     cache_prefix: str = "ttbs:"
 
     # --- HTTP --------------------------------------------------------------------------
+    # Behind the gateway the SPA and the API share one origin, so no CORS is needed there:
+    # set CORS_ORIGINS='[]' in deployed environments. The default serves `vite` dev servers.
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
-    default_actor: str = "admin"  # until auth (Phase 1) lands; see app/api/deps.py
+
+    # --- Authentication (see app/services/auth.py) ---------------------------------------
+    # Opaque server-side sessions in an HttpOnly, SameSite=Strict cookie scoped to /api.
+    session_cookie_name: str = "ttbs_session"
+    # Secure flag: the cookie only travels over HTTPS (browsers also allow it on http://localhost).
+    session_cookie_secure: bool = True
+    session_idle_minutes: int = 30  # signed out after this long without a request
+    session_max_hours: int = 12  # absolute lifetime, however active the session is
+    session_touch_seconds: int = 60  # last-seen is written at most this often per session
+    # Brute force: the account locks after N consecutive failures (nginx also rate-limits by IP).
+    auth_max_failed_attempts: int = 5
+    auth_lockout_minutes: int = 15
+    # Password policy (see app/services/passwords.py).
+    password_min_length: int = 12
+    password_history_count: int = 5  # the last N passwords cannot be reused
+    password_max_age_days: int = 90  # 0 = passwords never expire
+    # First admin, created at startup only while the users table is empty. The password must meet
+    # the policy and is single-use: it has to be changed at first sign-in. Remove it after that.
+    admin_username: str = "admin"
+    admin_name: str = "Administrator"
+    admin_email: str | None = None
+    admin_initial_password: SecretStr | None = None
 
     # --- Imports -----------------------------------------------------------------------
     # Uploads are streamed to disk and read row by row, so size is bounded by disk, not memory.

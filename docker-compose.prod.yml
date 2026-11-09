@@ -1,22 +1,35 @@
 # PROD - app stack only. The database is EXTERNAL: set DATABASE_URL in .env.prod.
-#   cp .env.prod.example .env.prod    (then set DATABASE_URL / SECRETS_KEY)
-#   docker compose -f docker-compose.prod.yml up -d --build
+# Layout and security controls: docs/security.md.
+#   cp .env.prod.example .env.prod     then set DATABASE_URL, SECRETS_KEY, REDIS_PASSWORD, ADMIN_*
+#   touch .env.prod.gateway            (no phpMyAdmin in prod: the gateway needs no settings)
+#   podman-compose -f docker-compose.prod.yml up -d --build
 #
 # Migrations run automatically against DATABASE_URL on every `up` (the migrate service).
-# UI: http://<server>/  (gateway nginx is the only published port: / -> frontend, /api/ -> api)
+# Only the gateway publishes a port: GATEWAY_BIND:GATEWAY_PORT (default 0.0.0.0:80) -> 8080.
+#   /       -> frontend (static SPA)
+#   /api/   -> api (every route behind sign-in); no /docs, no /phpmyadmin in prod images
+# HTTPS: terminate TLS in front of the gateway (load balancer / reverse proxy), then enable HSTS
+# in deploy/nginx/snippets/security-headers.conf and real_ip in deploy/nginx/conf.d/default.conf.
 name: ttbs-prod
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "5" }
 
 x-backend: &backend
   build: ./backend
   image: ttbs-backend:prod
   env_file: .env.prod
   restart: unless-stopped
-  # Lets DATABASE_URL use host.docker.internal when MySQL runs on this same RHEL host
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs: ["/tmp:size=256m,mode=1777"]
+  pids_limit: 512
+  # Lets DATABASE_URL use host.docker.internal when MySQL runs on this same host
   # ("localhost" inside a container is the container itself, not the server).
   extra_hosts: ["host.docker.internal:host-gateway"]
-  logging: &logging
-    driver: json-file
-    options: { max-size: "20m", max-file: "5" }
+  logging: *logging
 
 x-after-db: &after-db
   redis: { condition: service_healthy }
@@ -24,21 +37,35 @@ x-after-db: &after-db
 
 services:
   redis:
-    image: docker.io/library/redis:7-alpine
+    image: docker.io/library/redis:7.4.12-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    env_file: .env.prod
+    security_opt: ["no-new-privileges:true"]
+    command:
+      - sh
+      - -c
+      - >-
+        exec redis-server --appendonly yes --protected-mode yes --requirepass "$$REDIS_PASSWORD"
+        --rename-command FLUSHALL "" --rename-command FLUSHDB "" --rename-command CONFIG ""
+        --rename-command DEBUG "" --rename-command SHUTDOWN ""
     volumes: [redis_data:/data]
-    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 5 }
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      retries: 10
     logging: *logging
 
   migrate:   # waits for the external DB (docker-entrypoint.sh), applies migrations, exits
     <<: *backend
     command: ["alembic", "upgrade", "head"]
     restart: "no"
+    networks: [egress]
 
   api:
     <<: *backend
     volumes: [uploads:/app/storage/uploads]
+    networks: [edge, data, egress]
     depends_on: *after-db
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)"]
@@ -50,29 +77,54 @@ services:
     <<: *backend
     command: ["celery", "-A", "app.worker.celery_app", "worker", "-P", "threads", "-c", "16", "-Q", "research,notify,maintenance", "-l", "INFO"]
     volumes: [uploads:/app/storage/uploads]
+    networks: [data, egress]
     depends_on: *after-db
 
   beat:   # exactly one per environment
     <<: *backend
     command: ["celery", "-A", "app.worker.celery_app", "beat", "-l", "INFO", "-s", "/tmp/celerybeat-schedule"]
+    networks: [data, egress]
     depends_on: *after-db
 
   frontend:
     build: { context: ./frontend, args: { VITE_API_URL: "/" } }
     image: ttbs-frontend:prod
     restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: ["/tmp:size=32m,mode=1777"]
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "wget", "-Y", "off", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/index.html"]
+      interval: 10s
+      retries: 5
     logging: *logging
 
-  gateway:   # the ONLY published port: nginx -> frontend | api | phpmyadmin
-    image: docker.io/library/nginx:1.27-alpine
+  gateway:   # the ONLY published port: nginx -> frontend | api
+    build: { context: ./deploy/nginx, args: { WITH_TOOLS: "false" } }
+    image: ttbs-gateway:prod
     restart: unless-stopped
-    ports: ["80:80"]
-    volumes:
-      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro,z
+    env_file: .env.prod.gateway
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    ports: ["${GATEWAY_BIND:-0.0.0.0}:${GATEWAY_PORT:-80}:8080"]
+    networks: [edge]
     depends_on:
       api: { condition: service_healthy }
-      frontend: { condition: service_started }
+      frontend: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-Y", "off", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 10s
+      retries: 5
     logging: *logging
+
+networks:
+  edge: {}
+  data: { internal: true }
+  egress: {}
 
 volumes:
   redis_data:

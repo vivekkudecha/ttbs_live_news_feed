@@ -1,7 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "./client"
 import { backend } from "./http"
-import type { AiProvider, CompanyQuery, DatasetRowPatch, DeliveryChannel, DatasetRowQuery, PamQuery, SignalQuery } from "./types"
+import type { AiProvider, CompanyQuery, DatasetRowPatch, DeliveryChannel, DatasetRowQuery, PamQuery, SignalQuery, UserInput, UserPatch } from "./types"
 
 /*
  * Data hooks. Rules that keep the UI smooth at 10k+ rows:
@@ -59,6 +59,26 @@ export const useFinops = (range: { from?: string; to?: string } = {}) =>
 function useInvalidate(keys: string[][]) {
   const qc = useQueryClient()
   return () => Promise.all(keys.map((k) => qc.invalidateQueries({ queryKey: k })))
+}
+
+// ---- Users & access (admins) ------------------------------------------------------------
+export const useModules = () => useQuery({ queryKey: ["modules"], queryFn: () => api.modules(), staleTime: Infinity })
+export const usePasswordPolicy = () => useQuery({ queryKey: ["passwordPolicy"], queryFn: () => api.passwordPolicy(), staleTime: Infinity })
+export const useCreateUser = () => {
+  const inv = useInvalidate([["users"], ["audit"]])
+  return useMutation({ mutationFn: (v: UserInput) => api.createUser(v), onSuccess: inv })
+}
+export const useUpdateUser = () => {
+  const inv = useInvalidate([["users"], ["audit"]])
+  return useMutation({ mutationFn: (v: { id: string; patch: UserPatch }) => api.updateUser(v.id, v.patch), onSuccess: inv })
+}
+export const useUserAction = () => {
+  const inv = useInvalidate([["users"], ["audit"]])
+  return useMutation({
+    mutationFn: (v: { id: string; action: "reset" | "unlock" | "revoke" }): Promise<unknown> =>
+      v.action === "reset" ? api.resetUserPassword(v.id) : v.action === "unlock" ? api.unlockUser(v.id) : api.revokeUserSessions(v.id),
+    onSuccess: inv,
+  })
 }
 
 export const useDeactivatePam = () => {

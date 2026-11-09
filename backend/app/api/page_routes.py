@@ -1,5 +1,5 @@
 """Routes backing the UI pages (dashboard, signals, companies, PAMs, digest, live grid, FinOps,
-templates, channels, session). Reads use read_models; writes go through services + audit."""
+templates, channels). Reads use read_models; writes go through services + audit."""
 
 from datetime import datetime
 from typing import Any, Literal
@@ -10,10 +10,9 @@ from pydantic import Field
 from app.api import read_models as rm
 from app.api import schemas as sch
 from app.api.deps import current_actor
-from app.core.errors import ValidationFailed
-from app.core.timeutil import as_utc, utcnow
+from app.core.timeutil import as_utc
 from app.db.session import unit_of_work
-from app.services import accounts, audit, finops, notifications
+from app.services import accounts, finops, notifications
 
 router = APIRouter(prefix="/api/v1")
 
@@ -61,26 +60,8 @@ class ReassignIn(sch.In):
     to_pam_id: str
 
 
-class SessionIn(sch.In):
-    username: str = Field(min_length=1, max_length=100)
-
-
 def _dump(m: sch.In) -> dict[str, Any]:
     return m.model_dump(by_alias=True, exclude_none=True)
-
-
-# --- Session (demo login until real auth lands) ---------------------------------------------------
-
-
-@router.post("/session")
-def create_session(body: SessionIn) -> dict[str, Any]:
-    """Sign-in by name (no roles, no passwords yet). The name becomes the audit actor."""
-    username = body.username.strip()
-    if not username:
-        raise ValidationFailed("Enter your name", details={"field": "username"})
-    with unit_of_work() as uow:
-        audit.record(uow, "auth.login", "user", username[:64], {}, actor=username)
-    return {"id": username, "username": username, "name": username, "lastLoginAt": sch.iso(utcnow())}
 
 
 # --- Dashboard, runs, signals, digest --------------------------------------------------------------

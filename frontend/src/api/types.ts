@@ -2,11 +2,93 @@
 
 export type Segment = "Enterprise" | "Mid-market" | "Emerging"
 
+// ---- Identity & access (backend/app/services/auth.py) -------------------------------------
+export type Role = "admin" | "member"
+export type PermLevel = "view" | "manage"
+/** Module keys (backend/app/core/permissions.py MODULES). */
+export type ModuleKey =
+  | "dashboard"
+  | "signals"
+  | "runs"
+  | "companies"
+  | "pams"
+  | "imports"
+  | "integrations"
+  | "costs"
+  | "telemetry"
+  | "audit"
+
 export interface User {
   id: string
   username: string
   name: string
+  email: string | null
+  role: Role
+  /** Effective access: admins get "manage" on every module. */
+  permissions: Partial<Record<ModuleKey, PermLevel>>
+  /** First sign-in, admin reset or expired: nothing works until the password is changed. */
+  mustChangePassword: boolean
+  passwordExpiresAt: string | null
   lastLoginAt: string | null
+}
+
+export interface SessionInfo {
+  user: User
+  csrfToken: string
+  expiresAt: string
+  idleMinutes: number
+}
+
+export interface PasswordPolicy {
+  minLength: number
+  maxLength: number
+  requireUpper: boolean
+  requireLower: boolean
+  requireDigit: boolean
+  requireSymbol: boolean
+  historyCount: number
+  maxAgeDays: number
+}
+
+export interface ModuleInfo {
+  key: ModuleKey
+  label: string
+  description: string
+}
+
+/** A user as an admin sees them (Users & access). */
+export interface ManagedUser extends User {
+  active: boolean
+  locked: boolean
+  lockedUntil: string | null
+  failedLoginCount: number
+  /** What an admin granted (members); `permissions` is the effective set. */
+  grantedPermissions: Partial<Record<ModuleKey, PermLevel>>
+  passwordChangedAt: string | null
+  createdAt: string | null
+  createdBy: string
+}
+
+export interface UserInput {
+  username: string
+  name: string
+  email?: string | null
+  role: Role
+  permissions: Partial<Record<ModuleKey, PermLevel>>
+}
+
+export interface UserPatch {
+  name?: string
+  email?: string | null
+  role?: Role
+  permissions?: Partial<Record<ModuleKey, PermLevel>>
+  active?: boolean
+}
+
+/** Returned once when an admin creates a user or resets a password. */
+export interface IssuedPassword {
+  user: ManagedUser
+  temporaryPassword: string
 }
 
 export interface Pam {

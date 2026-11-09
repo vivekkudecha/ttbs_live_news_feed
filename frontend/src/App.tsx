@@ -1,13 +1,20 @@
 import { lazy, type ReactNode } from "react"
-import { HashRouter, MemoryRouter, Navigate, Route, Routes } from "react-router-dom"
+import { HashRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ThemeProvider } from "next-themes"
+import { Lock } from "lucide-react"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppShell } from "@/components/layout/AppShell"
+import { firstAllowed } from "@/components/layout/nav"
+import { EmptyState } from "@/components/common/EmptyState"
+import { Skeleton } from "@/components/ui/skeleton"
 import { SessionProvider, useSession } from "@/context/session"
+import { can, isAdmin } from "@/lib/access"
+import type { ModuleKey } from "@/api/types"
 import Login from "@/pages/Login"
 import Dashboard from "@/pages/Dashboard"
+import ChangePassword from "@/pages/ChangePassword"
 
 // Secondary pages load on demand to keep the first paint small.
 const Signals = lazy(() => import("@/pages/Signals"))
@@ -24,6 +31,7 @@ const Telemetry = lazy(() => import("@/pages/Telemetry"))
 const Integrations = lazy(() => import("@/pages/Integrations"))
 const Costs = lazy(() => import("@/pages/Costs"))
 const Audit = lazy(() => import("@/pages/Audit"))
+const Users = lazy(() => import("@/pages/Users"))
 
 // The shareable demo build (VITE_ROUTER=memory) runs inside a hosted viewer where URL hashes
 // are not reliable, so it routes in memory. Local dev and the real deployment use URLs.
@@ -33,16 +41,52 @@ const hostTheme = document.documentElement.getAttribute("data-theme") ?? "system
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } } })
 
-/** Route guard: signed in. */
+function Booting() {
+  return (
+    <div className="flex min-h-svh items-center justify-center p-8" aria-busy="true" aria-label="Loading">
+      <Skeleton className="h-40 w-full max-w-md" />
+    </div>
+  )
+}
+
+/** Route guard: a live session with a usable password (the server enforces the same). */
 function Guard({ children }: { children: ReactNode }) {
   const { user } = useSession()
-  if (!user) return <Navigate to="/login" replace />
+  const loc = useLocation()
+  if (user === undefined) return <Booting />
+  if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname }} />
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace />
   return <>{children}</>
+}
+
+/** Page guard: the module (or admin role) this page belongs to. */
+function Allow({ module, admin, children }: { module?: ModuleKey; admin?: boolean; children: ReactNode }) {
+  const { user } = useSession()
+  const ok = admin ? isAdmin(user) : !module || can(user, module)
+  if (ok) return <>{children}</>
+  return (
+    <EmptyState icon={Lock} title="No access">
+      Your account does not have access to this page. Ask an administrator if you need it.
+    </EmptyState>
+  )
+}
+
+function Home() {
+  const { user } = useSession()
+  return can(user, "dashboard") ? <Dashboard /> : <Navigate to={firstAllowed(user)} replace />
 }
 
 function LoginRoute() {
   const { user } = useSession()
-  return user ? <Navigate to="/" replace /> : <Login />
+  if (user === undefined) return <Booting />
+  if (user) return <Navigate to={user.mustChangePassword ? "/change-password" : "/"} replace />
+  return <Login />
+}
+
+function ChangePasswordRoute() {
+  const { user } = useSession()
+  if (user === undefined) return <Booting />
+  return user ? <ChangePassword /> : <Navigate to="/login" replace />
 }
 
 export default function App() {
@@ -54,6 +98,7 @@ export default function App() {
             <Router>
               <Routes>
                 <Route path="/login" element={<LoginRoute />} />
+                <Route path="/change-password" element={<ChangePasswordRoute />} />
                 <Route
                   element={
                     <Guard>
@@ -61,24 +106,25 @@ export default function App() {
                     </Guard>
                   }
                 >
-                  <Route index element={<Dashboard />} />
-                  <Route path="signals" element={<Signals />} />
-                  <Route path="digest" element={<Digest />} />
-                  <Route path="runs" element={<RunsList />} />
-                  <Route path="runs/:id" element={<RunDetail />} />
+                  <Route index element={<Home />} />
+                  <Route path="signals" element={<Allow module="signals"><Signals /></Allow>} />
+                  <Route path="digest" element={<Allow module="signals"><Digest /></Allow>} />
+                  <Route path="runs" element={<Allow module="runs"><RunsList /></Allow>} />
+                  <Route path="runs/:id" element={<Allow module="runs"><RunDetail /></Allow>} />
                   <Route path="jobs" element={<JobsRedirect />} />
                   <Route path="jobs/:id" element={<JobsRedirect />} />
-                  <Route path="companies" element={<CompaniesList />} />
-                  <Route path="companies/:id" element={<CompanyDetail />} />
-                  <Route path="pams" element={<Pams />} />
-                  <Route path="imports" element={<Imports />} />
+                  <Route path="companies" element={<Allow module="companies"><CompaniesList /></Allow>} />
+                  <Route path="companies/:id" element={<Allow module="companies"><CompanyDetail /></Allow>} />
+                  <Route path="pams" element={<Allow module="pams"><Pams /></Allow>} />
+                  <Route path="imports" element={<Allow module="imports"><Imports /></Allow>} />
                   <Route path="templates" element={<Templates />} />
                   {/* Recurring schedules are retired: every run starts from an upload. */}
                   <Route path="schedules" element={<Navigate to="/runs" replace />} />
-                  <Route path="telemetry" element={<Telemetry />} />
-                  <Route path="integrations" element={<Integrations />} />
-                  <Route path="costs" element={<Costs />} />
-                  <Route path="audit" element={<Audit />} />
+                  <Route path="telemetry" element={<Allow module="telemetry"><Telemetry /></Allow>} />
+                  <Route path="integrations" element={<Allow module="integrations"><Integrations /></Allow>} />
+                  <Route path="costs" element={<Allow module="costs"><Costs /></Allow>} />
+                  <Route path="audit" element={<Allow module="audit"><Audit /></Allow>} />
+                  <Route path="users" element={<Allow admin><Users /></Allow>} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

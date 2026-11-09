@@ -1,7 +1,7 @@
 import { Suspense, useState } from "react"
-import { NavLink, Outlet } from "react-router-dom"
+import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { useTheme } from "next-themes"
-import { LogOut, Menu, Monitor, Moon, Sun } from "lucide-react"
+import { KeyRound, LogOut, Menu, Monitor, Moon, Sun } from "lucide-react"
 import { Logo } from "@/components/common/Logo"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -18,20 +18,23 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useSession } from "@/context/session"
-import { navGroups } from "./nav"
+import { navGroups, visible } from "./nav"
 import { TopbarProvider, useTopbarSlots } from "./topbar"
 import { cn } from "@/lib/utils"
 import { initials } from "@/lib/format"
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+  const { user } = useSession()
   return (
     <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
       {navGroups.map((g) => {
+        const items = g.items.filter((i) => visible(user, i))
+        if (items.length === 0) return null
         return (
           <div key={g.label}>
             <p className="eyebrow px-3 pb-2">{g.label}</p>
             <ul className="space-y-0.5">
-              {g.items.map((i) => (
+              {items.map((i) => (
                 <li key={i.to}>
                   <NavLink
                     to={i.to}
@@ -101,6 +104,7 @@ export function AppShell() {
 function Shell() {
   const slots = useTopbarSlots()
   const { user, signOut } = useSession()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
 
   return (
@@ -141,7 +145,10 @@ function Shell() {
                   <p className="text-xs font-normal text-muted-foreground">@{user!.username}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={signOut}>
+                <DropdownMenuItem onClick={() => navigate("/change-password")}>
+                  <KeyRound /> Change password
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void signOut()}>
                   <LogOut /> Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>

@@ -20,6 +20,18 @@ class AppError(Exception):
             self.code = code
 
 
+class Unauthorized(AppError):
+    """No valid session (or wrong credentials). Messages stay generic: no account enumeration."""
+
+    status_code = 401
+    code = "unauthorized"
+
+
+class Forbidden(AppError):
+    status_code = 403
+    code = "forbidden"
+
+
 class NotFound(AppError):
     status_code = 404
     code = "not_found"
