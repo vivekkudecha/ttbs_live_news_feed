@@ -95,7 +95,7 @@ def create_app() -> FastAPI:
         elapsed = time.perf_counter() - t0
         response.headers["X-Request-ID"] = rid
         # API data is per-user and changes constantly: never stored by browsers or proxies.
-        # (Static assets are cached by the frontend nginx; see docs/caching-policy.md.)
+        # (Static assets are served and cached by the gateway; see docs/caching-policy.md.)
         if request.url.path.startswith("/api/"):
             response.headers.setdefault("Cache-Control", "no-store")
             response.headers.setdefault("Pragma", "no-cache")

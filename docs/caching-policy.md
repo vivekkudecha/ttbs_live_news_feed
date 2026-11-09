@@ -8,16 +8,16 @@ the server.**
 
 | What | Example | `Cache-Control` | Set by | Why |
 |---|---|---|---|---|
-| Built JS/CSS/fonts/images | `/assets/index-Cdv42ky3.js` | `public, max-age=31536000, immutable` | frontend nginx | File names contain a content hash: a new build produces new names, so a cached copy can never be stale. One year = the maximum that matters. |
-| SPA shell | `/`, `/index.html`, any client route | `no-cache` (+ `ETag`) | frontend nginx | Always revalidated (a cheap 304 when unchanged), so a deploy is visible on the next load and the shell always points at the current asset names. |
-| Other public files | `/favicon.svg` | `public, max-age=86400` | frontend nginx | Rarely changes; one day bounds the staleness. |
+| Built JS/CSS/fonts/images | `/assets/index-Cdv42ky3.js` | `public, max-age=31536000, immutable` | gateway | File names contain a content hash: a new build produces new names, so a cached copy can never be stale. One year = the maximum that matters. |
+| SPA shell | `/`, `/index.html`, any client route | `no-cache` (+ `ETag`) | gateway | Always revalidated (a cheap 304 when unchanged), so a deploy is visible on the next load and the shell always points at the current asset names. |
+| Other public files | `/favicon.svg` | `public, max-age=86400` | gateway | Rarely changes; one day bounds the staleness. |
 | **Every API response** | `/api/v1/...` (data, errors, downloads, health) | `no-store` + `Pragma: no-cache` | backend middleware (`app/main.py`) | Per-user, permission-checked, frequently changing and partly sensitive (audit, costs, uploads). `no-store` forbids browsers, proxies and CDNs from keeping any copy, including the back/forward cache after sign-out. |
 | Rate-limit answers (429) | | `no-store` | gateway | Never reuse a refusal. |
 | phpMyAdmin (dev/uat) | `/phpmyadmin/...` | phpMyAdmin's own headers | phpMyAdmin | Tool-managed. |
 
 The gateway does **not** run a proxy cache (`proxy_cache`): everything dynamic is per-user,
-and static files are already served from memory/disk by the frontend nginx and cached by
-browsers.
+and the static files are served by the gateway itself, from its image, and cached by browsers.
+Error responses (404, 401...) carry no caching header from the gateway.
 
 The SPA also calls `fetch(..., { cache: "no-store" })` for API requests, so the browser HTTP
 cache is bypassed even if a header were ever missing.
@@ -66,6 +66,6 @@ request, with no cache to wait out.
 
 ## Changing the policy
 
-- Asset lifetimes: `frontend/nginx.conf`. Keep `/assets/` immutable only while file names stay hashed (Vite default).
+- Asset lifetimes: the `map $uri $cache_control` block in `deploy/nginx/nginx.conf`. Keep `/assets/` immutable only while file names stay hashed (Vite default).
 - API headers: `create_app()` in `backend/app/main.py`. Do not relax `no-store` for authenticated data.
 - Redis TTLs: the env vars above.

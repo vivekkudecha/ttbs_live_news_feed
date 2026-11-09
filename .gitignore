@@ -33,4 +33,4 @@ dist-artifact
 # Environment secrets (templates are *.example)
 .env
 .env.*
-!.env.*.example
+!.env.example

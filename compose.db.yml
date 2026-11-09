@@ -1,0 +1,50 @@
+# dev/uat add-on to compose.yml: a MySQL container and the phpMyAdmin panel (/phpmyadmin/).
+# deploy.sh adds this file for dev and uat only. Prod points DATABASE_URL at an external DB.
+
+services:
+  mysql:
+    image: docker.io/library/mysql:8.4.13
+    restart: unless-stopped
+    env_file: .env.${STAGE}
+    security_opt: ["no-new-privileges:true"]
+    command: >-
+      --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+00:00 --local-infile=0 --skip-name-resolve
+    volumes: [mysql_data:/var/lib/mysql]
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      retries: 20
+      start_period: 30s
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  phpmyadmin:
+    image: docker.io/library/phpmyadmin:5.2.3
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: "3306"
+      UPLOAD_LIMIT: 512M
+      HIDE_PHP_VERSION: "true"
+      PMA_USER_CONFIG_BASE64: ${PMA_USER_CONFIG_BASE64}   # deploy/phpmyadmin.php, set by deploy.sh
+    networks: [default, data]
+    depends_on: { mysql: { condition: service_healthy } }
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  # Migrations start once MySQL is healthy (they would also wait on their own).
+  migrate:
+    depends_on: { mysql: { condition: service_healthy } }
+
+  gateway:
+    depends_on:
+      api: { condition: service_healthy }
+      phpmyadmin: { condition: service_started }
+
+volumes:
+  mysql_data:

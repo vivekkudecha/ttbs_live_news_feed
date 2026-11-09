@@ -13,3 +13,10 @@ frontend/node_modules/
 frontend/dist/
 frontend/dist-artifact/
 
+# Secrets never enter a build context
+.env.*
+!.env.example
+# Not needed by any image built from the repo root (the gateway)
+backend/
+docs/
+.gitnexus/

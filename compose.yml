@@ -1,0 +1,109 @@
+# TTBS app stack, the same for dev, uat and prod. Run it with ./deploy.sh (see deploy/README.md).
+#
+#   browser ──> gateway (nginx: SPA + routing, the ONLY published port)
+#                 └── /api/ ──> api ──┐
+#                       worker, beat ─┴──> redis, MySQL      (network "data": no internet)
+#
+# dev/uat add MySQL + phpMyAdmin with compose.db.yml; prod uses an external DATABASE_URL.
+# Variables in ${...} come from .env.<stage> and deploy.sh.
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "5" }
+
+# Every backend container: same image, unprivileged, read-only, no capabilities.
+x-backend: &backend
+  build: ./backend
+  image: ttbs-backend:${STAGE}
+  env_file: .env.${STAGE}
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs: ["/tmp:size=256m,mode=1777"]
+  pids_limit: 512
+  # Lets DATABASE_URL use host.docker.internal when MySQL runs on the host itself (prod).
+  extra_hosts: ["host.docker.internal:host-gateway"]
+  networks: [default, data]
+  logging: *logging
+  depends_on:
+    redis: { condition: service_healthy }
+    migrate: { condition: service_completed_successfully }
+
+services:
+  redis:
+    image: docker.io/library/redis:7.4.12-alpine
+    restart: unless-stopped
+    env_file: .env.${STAGE}
+    security_opt: ["no-new-privileges:true"]
+    # Password required; admin commands the app never uses are disabled.
+    command:
+      - sh
+      - -c
+      - >-
+        exec redis-server --appendonly yes --protected-mode yes --requirepass "$$REDIS_PASSWORD"
+        --rename-command FLUSHALL "" --rename-command FLUSHDB "" --rename-command CONFIG ""
+        --rename-command DEBUG "" --rename-command SHUTDOWN ""
+    volumes: [redis_data:/data]
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      retries: 10
+    logging: *logging
+
+  migrate:   # waits for the database, applies migrations, exits
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on: {}
+
+  api:
+    <<: *backend
+    volumes: [uploads:/app/storage/uploads]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)"]
+      interval: 10s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "-P", "threads", "-c", "16", "-Q", "research,notify,maintenance", "-l", "INFO"]
+    volumes: [uploads:/app/storage/uploads]
+
+  beat:   # exactly one per environment
+    <<: *backend
+    command: ["celery", "-A", "app.worker.celery_app", "beat", "-l", "INFO", "-s", "/tmp/celerybeat-schedule"]
+
+  gateway:
+    build:
+      context: .
+      dockerfile: deploy/nginx/Dockerfile
+      args: { WITH_TOOLS: "${WITH_TOOLS:-false}" }
+    image: ttbs-gateway:${STAGE}
+    restart: unless-stopped
+    # The only variable the internet-facing container gets: no application secrets.
+    environment:
+      GATEWAY_PMA_HTPASSWD: ${GATEWAY_PMA_HTPASSWD:-}
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    ports: ["${GATEWAY_BIND:-0.0.0.0}:${GATEWAY_PORT:-80}:8080"]   # dev/uat: deploy.sh forces 127.0.0.1
+    networks: [default]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-Y", "off", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 10s
+      retries: 5
+    logging: *logging
+
+networks:
+  default: {}                   # gateway <-> api, and outbound internet (LLM providers, prod DB)
+  data: { internal: true }      # MySQL, Redis and their clients; no route in or out
+
+volumes:
+  redis_data:
+  uploads:

@@ -10,21 +10,23 @@ HTTP and missing HSTS are expected; see [Before go-live](#before-go-live).
 ## Architecture
 
 ```
- client ──> gateway (nginx, the only published port)
-              ├── /               ──> frontend  (nginx, static SPA)
+ client ──> gateway (nginx, the only published port; serves the built SPA itself)
+              ├── /               static SPA files (in the gateway image)
               ├── /api/           ──> api       (FastAPI)
               └── /phpmyadmin/    ──> phpmyadmin   dev/uat only, extra password gate
                                        api, worker, beat ──> MySQL, Redis (internal network)
 ```
 
+Files: `compose.yml` (the stack), `compose.db.yml` (dev/uat MySQL + phpMyAdmin), `deploy.sh`,
+`deploy/nginx/` (gateway). How to run it: [deploy/README.md](../deploy/README.md).
+
 | Network | Members | Internet |
 |---|---|---|
-| `edge` | gateway, frontend, api, phpmyadmin | yes |
+| `default` | gateway, api, worker, beat, migrate, phpmyadmin | yes (LLM providers, prod DB) |
 | `data` | MySQL, Redis, api, worker, beat, migrate, phpmyadmin | **no** (`internal: true`) |
-| `egress` | api, worker (+ beat, migrate in prod for the external DB) | yes (LLM providers) |
 
-The gateway and frontend cannot reach MySQL or Redis at all. In dev/uat the gateway is bound to
-`127.0.0.1` only. MySQL, Redis, the API and phpMyAdmin publish no host ports.
+The gateway is only on `default`: it cannot reach MySQL or Redis at all. In dev/uat it is bound
+to `127.0.0.1` only. MySQL, Redis, the API and phpMyAdmin publish no host ports.
 
 ## Authentication (OWASP ASVS V2/V3)
 
@@ -62,7 +64,7 @@ Code: `backend/app/core/permissions.py`, `authorize()` in `backend/app/api/deps.
 - Errors use one JSON envelope with a request id. No stack traces leave the server.
 - Request size: 2 MB by default, 4 KB for sign-in, 1 GB only for dataset uploads (streamed).
 
-## HTTP hardening (gateway: `deploy/nginx/`)
+## HTTP hardening (gateway: `deploy/nginx/nginx.conf`)
 
 | Control | Value |
 |---|---|
@@ -79,13 +81,13 @@ Code: `backend/app/core/permissions.py`, `authorize()` in `backend/app/api/deps.
 
 | Control | Where |
 |---|---|
-| Non-root | api/worker/beat (uid 10001), gateway and frontend (nginx-unprivileged, uid 101, port 8080). |
-| Read-only root FS + tmpfs `/tmp` | api, worker, beat, migrate, frontend, gateway |
-| `cap_drop: ALL` | api, worker, beat, migrate, frontend, gateway |
+| Non-root | api/worker/beat (uid 10001), gateway (nginx-unprivileged, uid 101, port 8080). |
+| Read-only root FS + tmpfs `/tmp` | api, worker, beat, migrate, gateway |
+| `cap_drop: ALL` | api, worker, beat, migrate, gateway |
 | `no-new-privileges` | every service |
 | `pids_limit` | backend services |
 | Pinned, supported images | nginx 1.30.6 (stable), MySQL 8.4.13 (LTS), Redis 7.4.12, phpMyAdmin 5.2.3, Python 3.12, Node 24 (build stage only) |
-| Secrets | Only in `.env.<env>` files (mode 600, git-ignored). The gateway receives only `.env.<env>.gateway`, with no application secrets. LLM API keys are AES-GCM encrypted in the DB with `SECRETS_KEY`. |
+| Secrets | Only in `.env.<stage>` files (mode 600, git-ignored, never in a build context). The gateway receives only `GATEWAY_PMA_HTPASSWD`, no application secrets. LLM API keys are AES-GCM encrypted in the DB with `SECRETS_KEY`. |
 | Code protection | Backend code is obfuscated with PyArmor in the image. |
 
 Data stores: MySQL with `local_infile=0` and `skip-name-resolve`, the app uses a non-root DB user.
@@ -96,7 +98,7 @@ the `data` network.
 
 phpMyAdmin is not part of prod images. In dev/uat it sits behind **two** logins: a gateway
 password gate (bcrypt, `GATEWAY_PMA_HTPASSWD`), then MySQL credentials. MySQL `root` and
-empty passwords are refused, and server/PHP info and version checks are off. Exclude
+empty passwords are refused (`deploy/phpmyadmin.php`), and server/PHP info and version checks are off. Exclude
 `/phpmyadmin/` from VAPT scope, or test it as an admin tool.
 
 ## Audit trail
@@ -123,9 +125,9 @@ for i in $(seq 8); do curl -s -o /dev/null -w '%{http_code} ' -X POST \
 ## Before go-live
 
 1. **HTTPS**: terminate TLS in front of the gateway (TLS 1.2+ only). Then enable HSTS in
-   `deploy/nginx/snippets/security-headers.conf` and, if a load balancer is in front, `real_ip` in
-   `deploy/nginx/conf.d/default.conf` (otherwise rate limits see the LB's IP).
-2. Fill `.env.prod` from `.env.prod.example`: unique `SECRETS_KEY`, `REDIS_PASSWORD`,
+   `deploy/nginx/headers.conf` and, if a load balancer is in front, `real_ip` in
+   `deploy/nginx/nginx.conf` (otherwise rate limits see the LB's IP).
+2. Fill `.env.prod` from `.env.example` (the `[prod]` notes), then `./deploy.sh prod up`: unique `SECRETS_KEY`, `REDIS_PASSWORD`,
    `ADMIN_INITIAL_PASSWORD`; then sign in once, change the password, and delete
    `ADMIN_INITIAL_PASSWORD` from the file.
 3. External database: a dedicated least-privilege user, TLS to the DB if it is on another host,
