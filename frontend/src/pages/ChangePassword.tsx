@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { KeyRound, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { Logo } from "@/components/common/Logo"
+import { AuthLayout } from "@/components/auth/AuthLayout"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { PasswordChecklist, PasswordField } from "@/components/auth/PasswordField"
@@ -52,51 +52,44 @@ export default function ChangePassword() {
   }
 
   return (
-    <div className="flex min-h-svh flex-col bg-background">
-      <div className="h-1 bg-brand-gradient" aria-hidden="true" />
-      <div className="flex flex-1 items-center justify-center px-4 py-12">
-        <div className="w-full max-w-[26rem] space-y-8">
-          <Logo size="lg" />
-          <div className="space-y-2">
-            <h1 className="flex items-center gap-2 text-2xl font-medium tracking-tight">
-              <KeyRound className="size-5" aria-hidden /> {forced ? "Set a new password" : "Change password"}
-            </h1>
-            <p className="leading-relaxed text-muted-foreground">
-              {forced
-                ? `Hi ${user?.name.split(" ")[0] ?? ""}, before you continue choose your own password. The one you signed in with was temporary or has expired.`
-                : "Enter your current password, then choose a new one."}
-            </p>
-          </div>
-
-          <form onSubmit={submit} className="space-y-5" noValidate>
-            {error && (
-              <Alert variant="destructive" role="alert">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            <PasswordField id="current" label={forced ? "Temporary or current password" : "Current password"} value={current} onChange={setCurrent} autoComplete="current-password" autoFocus />
-            <PasswordField id="new" label="New password" value={next} onChange={setNext} autoComplete="new-password" />
-            <PasswordField id="confirm" label="Confirm new password" value={confirm} onChange={setConfirm} autoComplete="new-password" invalid={confirm.length > 0 && !matches} />
-            {confirm.length > 0 && !matches && <p className="-mt-3 text-sm text-destructive">The passwords do not match.</p>}
-            <PasswordChecklist policy={policy} password={next} problems={problems} />
-            <div className="flex gap-3">
-              <Button type="submit" className="h-11 flex-1" disabled={loading || !ready}>
-                {loading && <Loader2 className="animate-spin" />}
-                Save new password
-              </Button>
-              {forced ? (
-                <Button type="button" variant="outline" className="h-11" onClick={() => void signOut()}>
-                  Sign out
-                </Button>
-              ) : (
-                <Button type="button" variant="outline" className="h-11" onClick={() => navigate(-1)}>
-                  Cancel
-                </Button>
-              )}
-            </div>
-          </form>
-        </div>
+    <AuthLayout className="space-y-8">      <div className="space-y-2">
+        <h1 className="flex items-center gap-2 text-2xl font-medium tracking-tight">
+          <KeyRound className="size-5" aria-hidden /> {forced ? "Set a new password" : "Change password"}
+        </h1>
+        <p className="leading-relaxed text-muted-foreground">
+          {forced
+            ? `Hi ${user?.name.split(" ")[0] ?? ""}, before you continue choose your own password. The one you signed in with was temporary or has expired.`
+            : "Enter your current password, then choose a new one."}
+        </p>
       </div>
-    </div>
+
+      <form onSubmit={submit} className="space-y-5" noValidate>
+        {error && (
+          <Alert variant="destructive" role="alert">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        <PasswordField id="current" label={forced ? "Temporary or current password" : "Current password"} value={current} onChange={setCurrent} autoComplete="current-password" autoFocus />
+        <PasswordField id="new" label="New password" value={next} onChange={setNext} autoComplete="new-password" />
+        <PasswordField id="confirm" label="Confirm new password" value={confirm} onChange={setConfirm} autoComplete="new-password" invalid={confirm.length > 0 && !matches} />
+        {confirm.length > 0 && !matches && <p className="-mt-3 text-sm text-destructive">The passwords do not match.</p>}
+        <PasswordChecklist policy={policy} password={next} problems={problems} />
+        <div className="flex gap-3">
+          <Button type="submit" variant="brand" className="h-11 flex-1" disabled={loading || !ready}>
+            {loading && <Loader2 className="animate-spin" />}
+            Save new password
+          </Button>
+          {forced ? (
+            <Button type="button" variant="outline" className="h-11" onClick={() => void signOut()}>
+              Sign out
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" className="h-11" onClick={() => navigate(-1)}>
+              Cancel
+            </Button>
+          )}
+        </div>
+      </form>
+    </AuthLayout>
   )
 }

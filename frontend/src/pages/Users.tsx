@@ -17,6 +17,7 @@ import { errorMessage } from "@/api/http"
 import type { IssuedPassword, ManagedUser, ModuleKey, PermLevel, Role } from "@/api/types"
 import { useSession } from "@/context/session"
 import { fmtDateTime } from "@/lib/format"
+import { Page } from "@/components/common/layout"
 
 type Perms = Partial<Record<ModuleKey, PermLevel>>
 type Draft = { username: string; name: string; email: string; role: Role; permissions: Perms }
@@ -261,7 +262,7 @@ export default function Users() {
   }
 
   return (
-    <>
+    <Page>
       <PageHeader
         title="Users & access"
         description="Who can sign in, and which modules each person can view or manage."
@@ -377,6 +378,6 @@ export default function Users() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </Page>
   )
 }

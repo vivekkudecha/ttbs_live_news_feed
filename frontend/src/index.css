@@ -56,6 +56,10 @@
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
+    --breakpoint-3xl: 120rem; /* 1920px */
+    --breakpoint-4xl: 160rem; /* 2560px */
+    --shadow-soft: var(--shadow-card);
+    --shadow-glow: var(--shadow-card-hover);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
@@ -66,96 +70,105 @@
 }
 
 /*
- * TTBS design tokens (minimal). Source: tatatelebusiness.com brand.
- *   navy #002F51 (primary/ink) · logo blue #0080C6 (links, focus) · orange→red #EF7F22→#DD3526 (accent, used sparingly)
- * Layout concept: neutral (no blue cast) canvas, white surfaces, hairline borders; colour only where it carries meaning.
+ * TTBS design tokens — "light & airy brand". Source: tatatelebusiness.com brand.
+ *   logo blue #0080C6 (primary, deepened to #0072B1 for AA on white) · navy #002F51 (ink)
+ *   orange→red #EF7F22→#DD3526 (brand gradient: primary CTAs, active nav, live states)
+ * Canvas carries a faint blue tint; white surfaces float on soft blue-tinted shadows.
  */
 :root {
-    --background: #f5f5f4;
-    --foreground: #1c2632;
+    --background: #f5f8fb;
+    --foreground: #132235;
     --card: #ffffff;
-    --card-foreground: #1c2632;
+    --card-foreground: #132235;
     --popover: #ffffff;
-    --popover-foreground: #1c2632;
-    --primary: #002f51;
+    --popover-foreground: #132235;
+    --primary: #0072b1;
     --primary-foreground: #ffffff;
-    --secondary: #f0f0ef;
-    --secondary-foreground: #1c2632;
-    --muted: #f0f0ef;
-    --muted-foreground: #5f6368;
-    --accent: #f2f2f1;
-    --accent-foreground: #002f51;
+    --secondary: #edf3f8;
+    --secondary-foreground: #132235;
+    --muted: #eef3f7;
+    --muted-foreground: #586777;
+    --accent: #e9f3fa;
+    --accent-foreground: #00436e;
     --destructive: #c8322b;
-    --success: #1e8a5a;
-    --warning: #c77a12;
-    --info: #0080c6;
+    --success: #18865a;
+    --warning: #b86e0c;
+    --info: #0072b1;
     --brand: #e8742a;
     --brand-blue: #0080c6;
-    --brand-gradient: linear-gradient(90deg, #ef7f22, #dd3526);
-    --border: #e5e5e4;
+    --brand-gradient: linear-gradient(100deg, #ef7f22, #dd3526);
+    --border: #e1e8ef;
     /* Control boundaries: ≥3:1 vs cards and the page (WCAG 1.4.11). Dividers keep --border. */
-    --input: #8a8a88;
+    --input: #8592a0;
     --control: #ffffff;
-    --control-hover: #f5f5f4;
-    --tab-track: #e9e9e8;
+    --control-hover: #f2f7fb;
+    --tab-track: #e6edf3;
     --ring: #0080c6;
     --chart-1: #0080c6;
-    --chart-2: #d4621f;
-    --chart-3: #c77a12;
-    --chart-4: #1e8a5a;
-    --chart-5: #6b5bb5;
-    --radius: 0.5rem;
+    --chart-2: #e8742a;
+    --chart-3: #16a3a0;
+    --chart-4: #d9a21b;
+    --chart-5: #7a66d1;
+    --radius: 0.625rem;
     --sidebar: #ffffff;
-    --sidebar-foreground: #3d4146;
+    --sidebar-foreground: #3c4a5a;
     --sidebar-primary: #e8742a;
     --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #f2f2f1;
-    --sidebar-accent-foreground: #002f51;
-    --sidebar-border: #e5e5e4;
+    --sidebar-accent: #e9f3fa;
+    --sidebar-accent-foreground: #005b8f;
+    --sidebar-border: #e1e8ef;
     --sidebar-ring: #0080c6;
+    --shadow-card: 0 1px 2px rgb(16 50 80 / 0.04), 0 2px 8px -2px rgb(16 50 80 / 0.06);
+    --shadow-card-hover: 0 2px 4px rgb(16 50 80 / 0.05), 0 12px 28px -8px rgb(0 114 177 / 0.18);
+    --surface-wash: radial-gradient(60rem 22rem at 0% 0%, rgb(0 128 198 / 0.07), transparent 70%),
+        radial-gradient(40rem 18rem at 100% 0%, rgb(239 127 34 / 0.05), transparent 70%);
 }
 
 .dark {
-    --background: #0b1016;
-    --foreground: #e6eaef;
-    --card: #141b23;
-    --card-foreground: #e6eaef;
-    --popover: #18202a;
-    --popover-foreground: #e6eaef;
-    --primary: #4fa7dc;
-    --primary-foreground: #0b1824;
-    --secondary: #1d2631;
-    --secondary-foreground: #e6eaef;
-    --muted: #1a222c;
-    --muted-foreground: #9aa5b1;
-    --accent: #172636;
-    --accent-foreground: #e6eaef;
+    --background: #0a1622;
+    --foreground: #e5ecf3;
+    --card: #10202f;
+    --card-foreground: #e5ecf3;
+    --popover: #132637;
+    --popover-foreground: #e5ecf3;
+    --primary: #4fb0e6;
+    --primary-foreground: #06192a;
+    --secondary: #172b3d;
+    --secondary-foreground: #e5ecf3;
+    --muted: #142737;
+    --muted-foreground: #95a6b7;
+    --accent: #153049;
+    --accent-foreground: #e5ecf3;
     --destructive: #f0706a;
     --success: #4cc08a;
     --warning: #e9a64a;
-    --info: #4fa7dc;
+    --info: #4fb0e6;
     --brand: #f08a45;
-    --brand-blue: #4fa7dc;
-    --brand-gradient: linear-gradient(90deg, #ef7f22, #dd3526);
-    --border: #26303b;
-    --input: #64707f;
-    --control: #1a2330;
-    --control-hover: #222d3b;
-    --tab-track: #0f151c;
-    --ring: #4fa7dc;
-    --chart-1: #3a9bd9;
-    --chart-2: #d06c2c;
-    --chart-3: #e9a64a;
-    --chart-4: #4cc08a;
+    --brand-blue: #4fb0e6;
+    --brand-gradient: linear-gradient(100deg, #ef7f22, #dd3526);
+    --border: #1f3446;
+    --input: #61758a;
+    --control: #132637;
+    --control-hover: #1a3247;
+    --tab-track: #0d1b28;
+    --ring: #4fb0e6;
+    --chart-1: #4fb0e6;
+    --chart-2: #f08a45;
+    --chart-3: #3cc6c2;
+    --chart-4: #e9b84a;
     --chart-5: #a596e6;
-    --sidebar: #0f151c;
-    --sidebar-foreground: #b6c0cb;
+    --sidebar: #0c1a28;
+    --sidebar-foreground: #b3c2d1;
     --sidebar-primary: #f08a45;
-    --sidebar-primary-foreground: #0f151c;
-    --sidebar-accent: #1b242f;
+    --sidebar-primary-foreground: #0c1a28;
+    --sidebar-accent: #153049;
     --sidebar-accent-foreground: #ffffff;
-    --sidebar-border: #222c37;
-    --sidebar-ring: #4fa7dc;
+    --sidebar-border: #1c3043;
+    --sidebar-ring: #4fb0e6;
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-card-hover: 0 2px 4px rgb(0 0 0 / 0.3), 0 12px 28px -8px rgb(79 176 230 / 0.18);
+    --surface-wash: radial-gradient(60rem 22rem at 0% 0%, rgb(79 176 230 / 0.08), transparent 70%),
+        radial-gradient(40rem 18rem at 100% 0%, rgb(240 138 69 / 0.06), transparent 70%);
 }
 
 @layer base {
@@ -170,7 +183,10 @@
     }
 }
 @layer base {
-  body { -webkit-font-smoothing: antialiased; font-size: 0.9375rem; line-height: 1.55; }
+  /* rem-based UI grows on 2K/4K panels; 720p–1080p are unchanged. */
+  @media (min-width: 160rem) { html { font-size: 112.5%; } }
+  @media (min-width: 200rem) { html { font-size: 125%; } }
+  body { background-image: var(--surface-wash); background-attachment: fixed; -webkit-font-smoothing: antialiased; font-size: 0.9375rem; line-height: 1.55; }
   h1, h2, h3 { text-wrap: balance; letter-spacing: -0.01em; }
   ::selection { background: color-mix(in oklab, var(--brand-blue) 22%, transparent); }
   @media (prefers-reduced-motion: reduce) {
@@ -181,6 +197,14 @@
 @layer utilities {
   .tabular { font-variant-numeric: tabular-nums; }
   .bg-brand-gradient { background-image: var(--brand-gradient); }
+  .text-brand-gradient { background-image: var(--brand-gradient); background-clip: text; color: transparent; }
+  /* Interactive surface: lifts and glows on hover. */
+  .lift { transition: transform 180ms ease-out, box-shadow 180ms ease-out, border-color 180ms ease-out; }
+  .lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); border-color: color-mix(in oklab, var(--primary) 25%, var(--border)); }
+  /* Entrance: children of <Page> fade up in sequence (index set via --i). */
+  .enter > * { animation: enter 420ms cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+  .enter > :nth-child(2) { --i: 1; } .enter > :nth-child(3) { --i: 2; } .enter > :nth-child(4) { --i: 3; } .enter > :nth-child(n+5) { --i: 4; }
+  .shimmer { background: linear-gradient(90deg, var(--muted) 25%, color-mix(in oklab, var(--muted), var(--card) 60%) 50%, var(--muted) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
   /* Section label: small caps-style eyebrow used for grouping, never decoration */
   .eyebrow { font-size: 0.75rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-foreground); }
 }
@@ -192,3 +216,8 @@
 @keyframes tl-draw {
   from { transform: scaleY(0); }
 }
+
+@keyframes enter { from { opacity: 0; transform: translateY(6px); } }
+@keyframes shimmer { to { background-position: -200% 0; } }
+/* Indeterminate progress sweep for the top bar while data loads. */
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }

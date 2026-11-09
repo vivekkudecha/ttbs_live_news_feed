@@ -23,6 +23,7 @@ import { datasetFileUrl, errorMessage } from "@/api/http"
 import { fmtDateTime, fmtUsd } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Dataset } from "@/api/types"
+import { Page } from "@/components/common/layout"
 
 const n = (x: number) => x.toLocaleString("en-IN")
 
@@ -50,7 +51,7 @@ export default function Imports() {
   const rows = (datasets.data ?? []).filter((d) => !search.trim() || `${d.label} ${d.fileName} ${d.uploadedBy}`.toLowerCase().includes(search.trim().toLowerCase()))
 
   return (
-    <div>
+    <Page>
       <PageHeader
         title="Uploads"
         description="Every research run starts from an upload. Logos and PAMs already in the system are matched, not duplicated; owner changes are kept in the history."
@@ -179,6 +180,6 @@ export default function Imports() {
       )}
 
       <UploadDialog open={open !== null} onOpenChange={(o) => !o && setOpen(null)} datasetId={open ?? undefined} />
-    </div>
+    </Page>
   )
 }

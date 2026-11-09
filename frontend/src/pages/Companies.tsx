@@ -43,6 +43,7 @@ import { useDebounced } from "@/lib/use-debounced"
 import { fmtDate, initials } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { CompanyListRow, LatestStatus } from "@/api/types"
+import { Page } from "@/components/common/layout"
 
 const latestStatusOptions = [
   { value: "signal", label: "Signal" },
@@ -303,7 +304,7 @@ export function CompaniesList() {
   }
 
   return (
-    <div>
+    <Page>
       <PageHeader
         title="Companies"
         description="Every logo being tracked, its PAM and its signal history. Select a company to see its full timeline."
@@ -408,7 +409,7 @@ export function CompaniesList() {
 
       <CompanyDrawer companyId={openId} onOpenChange={(o) => !o && closeDrawer()} onReassign={(id) => setReassignIds([id])} />
       <ReassignDialog companyIds={reassignIds} open={reassignIds.length > 0} onOpenChange={(o) => !o && setReassignIds([])} onDone={() => setRowSelection({})} />
-    </div>
+    </Page>
   )
 }
 

@@ -8,6 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { LiveGrid, LiveLegend } from "./LiveGrid"
 import { useLiveRun } from "./useLiveRun"
 import { cn } from "@/lib/utils"
+import { Page, Split } from "@/components/common/layout"
+import { LiveDot } from "@/components/common/LiveDot"
 
 const n = (x: number) => Math.round(x).toLocaleString("en-IN")
 
@@ -45,15 +47,12 @@ export function LiveRunPanel({ runId, finishedAt, onOpenCompany }: { runId: stri
   const percent = live.total ? (live.done / live.total) * 100 : 0
 
   return (
-    <div className="space-y-6">
+    <Page>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             {running ? (
-              <span className="relative flex size-2.5">
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand-blue opacity-60" />
-                <span className="relative inline-flex size-2.5 rounded-full bg-brand-blue" />
-              </span>
+              <LiveDot />
             ) : (
               <CheckCircle2 className="size-4 text-success" />
             )}
@@ -107,7 +106,7 @@ export function LiveRunPanel({ runId, finishedAt, onOpenCompany }: { runId: stri
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
+      <Split>
         <Card>
           <CardHeader>
             <CardTitle>Logo map</CardTitle>
@@ -176,7 +175,7 @@ export function LiveRunPanel({ runId, finishedAt, onOpenCompany }: { runId: stri
             </CardContent>
           </Card>
         </div>
-      </div>
-    </div>
+      </Split>
+    </Page>
   )
 }

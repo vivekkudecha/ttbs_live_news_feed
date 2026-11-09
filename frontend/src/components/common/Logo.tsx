@@ -4,8 +4,10 @@ import { cn } from "@/lib/utils"
 /**
  * Tata Tele Business Services logo with the product name.
  * Shown as-is in both themes; the artwork stays legible on the dark sidebar.
+ * `compact` swaps in the square app mark for the collapsed sidebar rail.
  */
-export function Logo({ className, subtitle = true, size = "md" }: { className?: string; subtitle?: boolean; size?: "md" | "lg" }) {
+export function Logo({ className, subtitle = true, size = "md", compact = false }: { className?: string; subtitle?: boolean; size?: "md" | "lg"; compact?: boolean }) {
+  if (compact) return <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="TTBS Signals" className={cn("size-9 rounded-lg shadow-sm", className)} />
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       <span className="inline-flex w-fit">

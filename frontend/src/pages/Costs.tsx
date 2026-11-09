@@ -4,7 +4,7 @@
  */
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { Bar, BarChart, CartesianGrid, Legend, Tooltip, XAxis, YAxis } from "recharts"
 import { AlertTriangle, Ban, Download, Gauge, Info, PiggyBank, Target, TrendingUp, Wallet } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { StatCard } from "@/components/common/StatCard"
@@ -21,6 +21,9 @@ import { useFinops } from "@/api/hooks"
 import { errorMessage, ledgerCsvUrl } from "@/api/http"
 import { fmtDate, fmtUsd } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { Page, StatGrid, Split } from "@/components/common/layout"
+import { ChartCard } from "@/components/common/ChartCard"
+import { chartTheme } from "@/components/common/chart-theme"
 
 const n = (x: number) => x.toLocaleString("en-IN")
 type Preset = "month" | "30" | "90" | "custom"
@@ -41,7 +44,6 @@ function rangeFor(p: Preset, custom: { from: string; to: string }) {
   return custom
 }
 
-const tooltipStyle = { background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, color: "var(--popover-foreground)" }
 const usd = (v: number) => (v >= 1 ? fmtUsd(v, 2) : fmtUsd(v, 4))
 
 export default function Costs() {
@@ -103,36 +105,31 @@ function Report({ d, stale }: { d: NonNullable<ReturnType<typeof useFinops>["dat
   const unpriced = d.prices.whatsappPerMessage === 0 || d.prices.emailPerMessage === 0
 
   return (
-    <div className={cn("space-y-8 transition-opacity", stale && "opacity-60")}>
-      <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
+    <Page className={cn("transition-opacity", stale && "opacity-60")}>
+      <StatGrid>
         <StatCard icon={Wallet} label="Spend in range" value={usd(t.total)} hint={`research ${usd(t.llm)} · messaging ${usd(t.messaging)}`} />
         <StatCard icon={Target} label="Cost per actionable signal" value={t.costPerSignal != null ? usd(t.costPerSignal) : "—"} hint={`${n(t.signals)} signals · ${t.costPerCompany != null ? `${usd(t.costPerCompany)} per logo` : "no logos researched"}`} />
         <StatCard icon={PiggyBank} label="Saved by cache" value={usd(t.saved)} hint={`${n(t.cacheHits)} of ${n(t.calls + t.cacheHits)} logos reused a fresh answer (${t.cacheRate}%)`} />
         <StatCard icon={Ban} label="Spent on failed research" value={usd(t.failedCost)} hint={`${n(t.failedCalls)} billed calls ended in failure`} />
-      </div>
+      </StatGrid>
 
-      <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Daily spend</CardTitle>
-            <CardDescription>USD per day (IST): research (LLM) and digest messaging</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-72" role="img" aria-label="Daily spend chart; totals by run, upload and PAM are in the tables below">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={series} margin={{ left: -4, right: 8, top: 8 }} barCategoryGap="24%">
-                  <CartesianGrid vertical={false} stroke="var(--border)" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} minTickGap={16} />
-                  <YAxis tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickFormatter={(v: number) => `$${v}`} />
-                  <Tooltip cursor={{ fill: "var(--muted)", opacity: 0.6 }} contentStyle={tooltipStyle} formatter={(v: number, name: string) => [usd(v), name]} />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 13 }} formatter={(value: string) => <span style={{ color: "var(--foreground)" }}>{value}</span>} />
-                  <Bar dataKey="llm" name="Research (LLM)" stackId="a" fill="var(--chart-1)" stroke="var(--card)" strokeWidth={2} />
-                  <Bar dataKey="messaging" name="Messaging" stackId="a" fill="var(--chart-2)" stroke="var(--card)" strokeWidth={2} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+      <Split ratio="1.5fr 1fr">
+        <ChartCard
+          title="Daily spend"
+          description="USD per day (IST): research (LLM) and digest messaging"
+          label="Daily spend chart; totals by run, upload and PAM are in the tables below"
+          height="h-72 3xl:h-96"
+        >
+          <BarChart data={series} margin={{ left: -4, right: 8, top: 8 }} barCategoryGap="24%">
+            <CartesianGrid vertical={false} {...chartTheme.grid} />
+            <XAxis dataKey="label" {...chartTheme.axis} minTickGap={16} />
+            <YAxis {...chartTheme.axis} tickFormatter={(v: number) => `$${v}`} />
+            <Tooltip {...chartTheme.tooltip} formatter={(v: number, name: string) => [usd(v), name]} />
+            <Legend {...chartTheme.legend} />
+            <Bar dataKey="llm" name="Research (LLM)" stackId="a" fill="var(--chart-1)" {...chartTheme.bar} />
+            <Bar dataKey="messaging" name="Messaging" stackId="a" fill="var(--chart-2)" {...chartTheme.bar} radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ChartCard>
 
         <Card>
           <CardHeader>
@@ -185,7 +182,7 @@ function Report({ d, stale }: { d: NonNullable<ReturnType<typeof useFinops>["dat
             )}
           </CardContent>
         </Card>
-      </div>
+      </Split>
 
       <Tabs defaultValue="runs">
         <TabsList className="h-auto flex-wrap">
@@ -250,6 +247,6 @@ function Report({ d, stale }: { d: NonNullable<ReturnType<typeof useFinops>["dat
           <CostTable title="Most expensive logos" description="Top 25 logos by research spend in the range" rows={d.topCompanies.map((c) => ({ ...c, key: c.id, name: c.name }))} />
         </TabsContent>
       </Tabs>
-    </div>
+    </Page>
   )
 }

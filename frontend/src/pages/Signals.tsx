@@ -21,6 +21,7 @@ import { useDebounced } from "@/lib/use-debounced"
 import { fmtDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { ResearchStatus, SignalRow } from "@/api/types"
+import { Page } from "@/components/common/layout"
 
 const categories = ["Expansion", "Funding", "Leadership", "Cybersecurity", "Digital", "Contract"]
 const PAGE = 30
@@ -122,7 +123,7 @@ export default function Signals() {
   }, [lastIndex, rows.length, feed])
 
   return (
-    <div>
+    <Page>
       <PageHeader
         title="Signals feed"
         description={run ? `${run.label} · window ${fmtDate(run.windowStart)} – ${fmtDate(run.windowEnd)} · template v${run.templateVersion}` : "Research results by logo"}
@@ -215,6 +216,6 @@ export default function Signals() {
           )}
         </>
       )}
-    </div>
+    </Page>
   )
 }

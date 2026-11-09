@@ -5,7 +5,7 @@
  * traces expose the same picture to external monitoring.
  */
 import { useState } from "react"
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { Bar, BarChart, CartesianGrid, Legend, Tooltip, XAxis, YAxis } from "recharts"
 import { Activity, AlertTriangle, RotateCcw, Timer } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { StatCard } from "@/components/common/StatCard"
@@ -18,9 +18,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useTelemetryEvents, useTelemetrySummary } from "@/api/hooks"
 import { errorMessage } from "@/api/http"
 import { cn } from "@/lib/utils"
+import { Page, StatGrid, Split } from "@/components/common/layout"
+import { ChartCard } from "@/components/common/ChartCard"
+import { chartTheme } from "@/components/common/chart-theme"
 
 const n = (x: number) => x.toLocaleString("en-IN")
-const tooltipStyle = { background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, color: "var(--popover-foreground)" }
 
 const WINDOWS: [string, string][] = [
   ["1", "Last hour"],
@@ -99,36 +101,26 @@ export default function Telemetry() {
       ) : !s ? (
         <Skeleton className="h-72" />
       ) : (
-        <div className={cn("space-y-8 transition-opacity", sum.isPlaceholderData && "opacity-60")}>
-          <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
+        <Page className={cn("transition-opacity", sum.isPlaceholderData && "opacity-60")}>
+          <StatGrid>
             <StatCard icon={Activity} label="Events" value={n(s.total)} hint={`${WINDOWS.find(([v]) => v === hours)?.[1].toLowerCase()}`} />
             <StatCard icon={AlertTriangle} label="Problem rate" value={`${s.errorRate}%`} hint={`${n(s.errors)} errors · ${n(s.retries)} retries`} />
             <StatCard icon={Timer} label="Research latency p50 / p95" value={`${fmtMs(s.research.p50Ms)} / ${fmtMs(s.research.p95Ms)}`} hint={`p99 ${fmtMs(s.research.p99Ms)} · ${n(s.research.samples)} calls`} />
             <StatCard icon={RotateCcw} label="Retries" value={n(s.retries)} hint="Rate limits, timeouts and 5xx, retried with backoff" />
-          </div>
+          </StatGrid>
 
-          <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
-            <Card>
-              <CardHeader>
-                <CardTitle>Events per hour</CardTitle>
-                <CardDescription>Problems are retries and errors (IST)</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-64" role="img" aria-label="Events per hour; the per-step table lists the totals">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={s.hourly.map((h) => ({ ...h, label: timeOf(h.hour).slice(0, 5) }))} margin={{ left: -12, right: 8, top: 8 }} barCategoryGap="20%">
-                      <CartesianGrid vertical={false} stroke="var(--border)" />
-                      <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} minTickGap={20} />
-                      <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
-                      <Tooltip cursor={{ fill: "var(--muted)", opacity: 0.6 }} contentStyle={tooltipStyle} />
-                      <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 13 }} formatter={(value: string) => <span style={{ color: "var(--foreground)" }}>{value}</span>} />
-                      <Bar dataKey="ok" name="OK" stackId="a" fill="var(--chart-1)" stroke="var(--card)" strokeWidth={2} />
-                      <Bar dataKey="problem" name="Problems" stackId="a" fill="var(--destructive)" stroke="var(--card)" strokeWidth={2} radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
+          <Split ratio="1.2fr 1fr">
+            <ChartCard title="Events per hour" description="Problems are retries and errors (IST)" label="Events per hour; the per-step table lists the totals">
+              <BarChart data={s.hourly.map((h) => ({ ...h, label: timeOf(h.hour).slice(0, 5) }))} margin={{ left: -12, right: 8, top: 8 }} barCategoryGap="20%">
+                <CartesianGrid vertical={false} {...chartTheme.grid} />
+                <XAxis dataKey="label" {...chartTheme.axis} minTickGap={20} />
+                <YAxis allowDecimals={false} {...chartTheme.axis} />
+                <Tooltip {...chartTheme.tooltip} />
+                <Legend {...chartTheme.legend} />
+                <Bar dataKey="ok" name="OK" stackId="a" fill="var(--chart-1)" {...chartTheme.bar} />
+                <Bar dataKey="problem" name="Problems" stackId="a" fill="var(--destructive)" {...chartTheme.bar} radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ChartCard>
 
             <Card className="py-0">
               <CardHeader className="pt-5">
@@ -167,8 +159,8 @@ export default function Telemetry() {
                 </Table>
               </CardContent>
             </Card>
-          </div>
-        </div>
+          </Split>
+        </Page>
       )}
 
       <div className="mt-8 space-y-3">

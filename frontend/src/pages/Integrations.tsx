@@ -5,12 +5,13 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Switch } from "@/components/ui/switch"
 import { useChannels } from "@/api/hooks"
 import { AiProviderSettings } from "@/components/integrations/AiProviderSettings"
+import { Page, CardGrid } from "@/components/common/layout"
 
 export default function Integrations() {
   const channels = useChannels()
 
   return (
-    <div className="space-y-8">
+    <Page>
       <PageHeader
         title="Providers & channels"
         description="Pluggable adapters. Credentials are encrypted at rest (AES-GCM), never shown again after saving, and every change is audited."
@@ -27,9 +28,9 @@ export default function Integrations() {
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <Send className="size-4 text-muted-foreground" /> Notification channels
         </h2>
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <CardGrid>
           {channels.data?.map((c) => (
-            <Card key={c.key}>
+            <Card key={c.key} className="lift">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   {c.type === "email" ? <Mail className="size-4 text-muted-foreground" /> : <MessageCircle className="size-4 text-muted-foreground" />}
@@ -53,11 +54,11 @@ export default function Integrations() {
               </CardContent>
             </Card>
           ))}
-        </div>
+        </CardGrid>
         <p className="mt-3 text-xs text-muted-foreground">
           Email and WhatsApp delivery run on the console adapter for now: digests are queued, retried and logged by the worker, not sent.
         </p>
       </section>
-    </div>
+    </Page>
   )
 }

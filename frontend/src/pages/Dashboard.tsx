@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom"
-import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { Bar, BarChart, CartesianGrid, LabelList, Tooltip, XAxis, YAxis } from "recharts"
 import { ArrowRight, Building2, CalendarClock, CheckCircle2, Mail, MessageCircle, Radio, Wallet, Zap } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { StatCard } from "@/components/common/StatCard"
@@ -14,6 +14,10 @@ import { useDashboard } from "@/api/hooks"
 import { useSession } from "@/context/session"
 import { fmtDate, fmtDateTime, fmtUsd, pct } from "@/lib/format"
 import { NewRunDialog } from "@/components/runs/NewRunDialog"
+import { Page, StatGrid, Split } from "@/components/common/layout"
+import { LiveDot } from "@/components/common/LiveDot"
+import { ChartCard } from "@/components/common/ChartCard"
+import { chartTheme } from "@/components/common/chart-theme"
 
 const n = (x: number) => x.toLocaleString("en-IN")
 
@@ -25,7 +29,7 @@ function GettingStarted({ greeting, logos }: { greeting: string; logos: number }
     { done: false, title: "Run research", hint: "Research the upload now or at a set time; each PAM gets their own results", to: "/runs" },
   ]
   return (
-    <div className="space-y-8">
+    <Page>
       <PageHeader title={greeting} description="No research has run yet. Results, signals and digests appear here after the first run." actions={<NewRunDialog />} />
       <Card>
           <CardHeader>
@@ -47,7 +51,7 @@ function GettingStarted({ greeting, logos }: { greeting: string; logos: number }
             ))}
           </CardContent>
         </Card>
-    </div>
+    </Page>
   )
 }
 
@@ -61,11 +65,11 @@ export default function Dashboard() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-72" />
-        <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
+        <StatGrid>
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-28" />
           ))}
-        </div>
+        </StatGrid>
         <Skeleton className="h-80" />
       </div>
     )
@@ -79,7 +83,7 @@ export default function Dashboard() {
   if (!latest) return <GettingStarted greeting={`${greeting}, ${user!.name.split(" ")[0]}`} logos={d.logos} />
 
   return (
-    <div className="space-y-8">
+    <Page>
       <PageHeader
         title={`${greeting}, ${user!.name.split(" ")[0]}`}
         description={
@@ -101,10 +105,7 @@ export default function Dashboard() {
 
       {live && (
         <Link to={`/runs/${live.id}`} className="flex flex-wrap items-center gap-3 rounded-lg border border-brand-blue/25 bg-brand-blue/[0.06] px-4 py-3 text-sm transition-colors hover:bg-brand-blue/10">
-          <span className="relative flex size-2.5">
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand-blue opacity-60" />
-            <span className="relative inline-flex size-2.5 rounded-full bg-brand-blue" />
-          </span>
+          <LiveDot />
           <span className="font-medium">Research in progress: {live.label}</span>
           <span className="tabular text-muted-foreground">
             {n(live.done)} / {n(live.companies)} logos · {n(live.withSignal)} signals so far
@@ -115,7 +116,7 @@ export default function Dashboard() {
         </Link>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
+      <StatGrid>
         <StatCard icon={Building2} label="Logos tracked" value={n(d.logos)} hint={`${n(d.activePams)} active PAMs`} />
         <StatCard icon={Zap} tone="info" label="Actionable signals" value={n(d.signals)} hint={`${pct(d.signals, d.scoped)}% of logos had a TTBS-relevant trigger`} />
         <StatCard
@@ -130,9 +131,9 @@ export default function Dashboard() {
           }
         />
         <StatCard icon={Wallet} tone="warning" label="Spend this month" value={fmtUsd(d.monthSpend)} hint={`${pct(d.monthSpend, d.monthBudget)}% of ${fmtUsd(d.monthBudget, 0)} budget`} />
-      </div>
+      </StatGrid>
 
-      <div className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
+      <Split ratio="1.35fr 1fr">
         <Card>
           <CardHeader>
             <CardTitle>Top priority actions</CardTitle>
@@ -168,38 +169,25 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Signals by trigger type</CardTitle>
-            <CardDescription>
-              {n(d.signals)} signals across {n(d.scoped)} logos
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64" role="img" aria-label={`Signals by trigger type: ${d.byCategory.map((x) => `${x.category} ${x.count}`).join(", ")}`}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={d.byCategory} layout="vertical" margin={{ left: 8, right: 40, top: 4, bottom: 4 }} barCategoryGap={6}>
-                  <CartesianGrid horizontal={false} stroke="var(--border)" />
-                  <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 13 }} tickFormatter={(v) => n(v)} />
-                  <YAxis type="category" dataKey="category" width={96} tickLine={false} axisLine={false} tick={{ fill: "var(--foreground)", fontSize: 13 }} />
-                  <Tooltip
-                    cursor={{ fill: "var(--muted)", opacity: 0.6 }}
-                    contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, color: "var(--popover-foreground)" }}
-                    formatter={(v: number) => [`${n(v)} signals`, ""]}
-                    separator=""
-                  />
-                  <Bar dataKey="count" fill="var(--chart-1)" radius={[0, 4, 4, 0]} maxBarSize={22}>
-                    <LabelList dataKey="count" position="right" formatter={(v: number) => n(v)} style={{ fill: "var(--muted-foreground)", fontSize: 13 }} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        <ChartCard
+          title="Signals by trigger type"
+          description={`${n(d.signals)} signals across ${n(d.scoped)} logos`}
+          label={`Signals by trigger type: ${d.byCategory.map((x) => `${x.category} ${x.count}`).join(", ")}`}
+        >
+          <BarChart data={d.byCategory} layout="vertical" margin={{ left: 8, right: 40, top: 4, bottom: 4 }} barCategoryGap={6}>
+            <CartesianGrid horizontal={false} {...chartTheme.grid} />
+            <XAxis type="number" allowDecimals={false} {...chartTheme.axis} tickFormatter={(v) => n(v)} />
+            <YAxis type="category" dataKey="category" width={96} {...chartTheme.axis} tick={{ fill: "var(--foreground)", fontSize: 13 }} />
+            <Tooltip {...chartTheme.tooltip} formatter={(v: number) => [`${n(v)} signals`, ""]} separator="" />
+            <Bar dataKey="count" fill="var(--chart-1)" radius={[0, 6, 6, 0]} maxBarSize={22}>
+              <LabelList dataKey="count" position="right" formatter={(v: number) => n(v)} style={{ fill: "var(--muted-foreground)", fontSize: 13 }} />
+            </Bar>
+          </BarChart>
+        </ChartCard>
+      </Split>
 
       {(
-        <div className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
+        <Split ratio="1.35fr 1fr">
           <Card>
             <CardHeader>
               <CardTitle>Delivery needing attention</CardTitle>
@@ -283,8 +271,8 @@ export default function Dashboard() {
               ))}
             </CardContent>
           </Card>
-        </div>
+        </Split>
       )}
-    </div>
+    </Page>
   )
 }

@@ -32,6 +32,7 @@ import { useDebounced } from "@/lib/use-debounced"
 import { initials, pct } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { PamCard } from "@/api/types"
+import { Page } from "@/components/common/layout"
 
 async function copy(text: string) {
   try {
@@ -261,7 +262,7 @@ export default function Pams() {
   const selectedIds = Object.keys(rowSelection)
 
   return (
-    <div className="space-y-6">
+    <Page>
       <PageHeader
         title="PAMs"
         description="Sales owners for logos. Each PAM gets one digest per cycle covering all their companies. Select a PAM to see their logos."
@@ -417,6 +418,6 @@ export default function Pams() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </Page>
   )
 }

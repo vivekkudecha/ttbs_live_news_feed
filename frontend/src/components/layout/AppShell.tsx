@@ -1,11 +1,14 @@
 import { Suspense, useState } from "react"
 import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { useTheme } from "next-themes"
-import { KeyRound, LogOut, Menu, Monitor, Moon, Sun } from "lucide-react"
+import { KeyRound, LogOut, Menu, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Sun } from "lucide-react"
+import { useIsFetching } from "@tanstack/react-query"
 import { Logo } from "@/components/common/Logo"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
+import { Separator } from "@/components/ui/separator"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,56 +21,107 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useSession } from "@/context/session"
-import { navGroups, visible } from "./nav"
+import { navGroups, visible, type NavItem as NavItemDef } from "./nav"
 import { TopbarProvider, useTopbarSlots } from "./topbar"
 import { cn } from "@/lib/utils"
 import { initials } from "@/lib/format"
 
-function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
-  const { user } = useSession()
-  return (
-    <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
-      {navGroups.map((g) => {
-        const items = g.items.filter((i) => visible(user, i))
-        if (items.length === 0) return null
-        return (
-          <div key={g.label}>
-            <p className="eyebrow px-3 pb-2">{g.label}</p>
-            <ul className="space-y-0.5">
-              {items.map((i) => (
-                <li key={i.to}>
-                  <NavLink
-                    to={i.to}
-                    end={i.to === "/"}
-                    onClick={onNavigate}
-                    className={({ isActive }) =>
-                      cn(
-                        "relative flex items-center gap-3 rounded-md px-3 py-2 text-[0.9375rem] text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        isActive &&
-                          "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-brand-gradient",
-                      )
-                    }
-                  >
-                    <i.icon className="size-4 shrink-0 opacity-80" strokeWidth={1.75} />
-                    {i.label}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
-          </div>
+const RAIL_KEY = "ttbs.sidebar.rail"
+
+/** Sidebar collapse preference; defaults to the icon rail on narrow laptops (< 1280px). */
+function useRail() {
+  const [rail, setRail] = useState(() => {
+    try {
+      const saved = localStorage.getItem(RAIL_KEY)
+      if (saved !== null) return saved === "1"
+    } catch {
+      /* storage blocked: fall back to the width default */
+    }
+    return window.innerWidth < 1280
+  })
+  const toggle = () =>
+    setRail((r) => {
+      try {
+        localStorage.setItem(RAIL_KEY, r ? "0" : "1")
+      } catch {
+        /* preference just won't persist */
+      }
+      return !r
+    })
+  return [rail, toggle] as const
+}
+
+function NavItem({ item, rail, onNavigate }: { item: NavItemDef; rail: boolean; onNavigate?: () => void }) {
+  const link = (
+    <NavLink
+      to={item.to}
+      end={item.to === "/"}
+      onClick={onNavigate}
+      aria-label={rail ? item.label : undefined}
+      className={({ isActive }) =>
+        cn(
+          "group/nav relative flex items-center gap-3 rounded-lg px-3 py-2 text-[0.9375rem] text-sidebar-foreground transition-colors duration-200 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+          rail && "justify-center px-0",
+          isActive &&
+            "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:inset-y-2 before:left-0 before:w-1 before:rounded-full before:bg-brand-gradient",
         )
-      })}
-    </nav>
+      }
+    >
+      <item.icon className="size-[1.125rem] shrink-0 opacity-80 transition-transform group-hover/nav:scale-110" strokeWidth={1.75} />
+      {!rail && item.label}
+    </NavLink>
+  )
+  if (!rail) return link
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{link}</TooltipTrigger>
+      <TooltipContent side="right">{item.label}</TooltipContent>
+    </Tooltip>
   )
 }
 
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+function Sidebar({ rail = false, onToggle, onNavigate }: { rail?: boolean; onToggle?: () => void; onNavigate?: () => void }) {
+  const { user } = useSession()
   return (
-    <div className="flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <div className="px-6 pb-4 pt-7">
-        <Logo />
+    <div className="flex h-full flex-col border-r border-sidebar-border bg-sidebar/95 text-sidebar-foreground backdrop-blur">
+      <div className={cn("pb-4 pt-6", rail ? "flex justify-center px-2" : "px-6")}>
+        <Logo compact={rail} />
       </div>
-      <SidebarNav onNavigate={onNavigate} />
+      <nav className={cn("flex-1 space-y-5 overflow-y-auto py-4", rail ? "px-2.5" : "px-3")}>
+        {navGroups.map((g) => {
+          const items = g.items.filter((i) => visible(user, i))
+          if (items.length === 0) return null
+          return (
+            <div key={g.label}>
+              {rail ? <Separator className="mx-auto mb-2 w-6" /> : <p className="eyebrow px-3 pb-2">{g.label}</p>}
+              <ul className="space-y-0.5">
+                {items.map((i) => (
+                  <li key={i.to}>
+                    <NavItem item={i} rail={rail} onNavigate={onNavigate} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        })}
+      </nav>
+      {onToggle && (
+        <div className={cn("border-t border-sidebar-border p-2.5", rail && "flex justify-center")}>
+          <Button variant="ghost" size={rail ? "icon" : "sm"} onClick={onToggle} className="text-muted-foreground" aria-label={rail ? "Expand sidebar" : "Collapse sidebar"}>
+            {rail ? <PanelLeftOpen /> : <><PanelLeftClose /> Collapse</>}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Thin brand-gradient sweep across the top bar whenever any query is fetching. */
+function FetchIndicator() {
+  const busy = useIsFetching() > 0
+  return (
+    <div className={cn("pointer-events-none absolute inset-x-0 top-0 h-0.5 overflow-hidden transition-opacity duration-300", busy ? "opacity-100" : "opacity-0")} aria-hidden="true">
+      <div className="h-full w-2/5 bg-brand-gradient motion-safe:animate-[sweep_1.1s_ease-in-out_infinite]" />
     </div>
   )
 }
@@ -106,11 +160,12 @@ function Shell() {
   const { user, signOut } = useSession()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [rail, toggleRail] = useRail()
 
   return (
     <div className="flex min-h-svh bg-background">
-      <aside className="sticky top-0 hidden h-svh w-64 shrink-0 lg:block">
-        <Sidebar />
+      <aside className={cn("sticky top-0 hidden h-svh shrink-0 transition-[width] duration-300 lg:block", rail ? "w-[4.5rem]" : "w-64 3xl:w-72")}>
+        <Sidebar rail={rail} onToggle={toggleRail} />
       </aside>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="left" className="w-72 border-0 p-0" showCloseButton={false}>
@@ -120,7 +175,8 @@ function Shell() {
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-card/90 px-4 backdrop-blur sm:px-8 lg:px-10">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/75 px-4 backdrop-blur-md sm:px-6 lg:px-8 3xl:px-12">
+          <FetchIndicator />
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setOpen(true)} aria-label="Open navigation">
             <Menu />
           </Button>
@@ -134,7 +190,7 @@ function Shell() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="h-9 gap-2 px-1.5">
                   <Avatar className="size-7">
-                    <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">{initials(user!.name)}</AvatarFallback>
+                    <AvatarFallback className="bg-brand-gradient text-xs font-semibold text-white">{initials(user!.name)}</AvatarFallback>
                   </Avatar>
                   <span className="hidden text-sm font-medium md:block">{user!.name}</span>
                 </Button>
@@ -155,7 +211,7 @@ function Shell() {
             </DropdownMenu>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-8 lg:px-10 lg:py-8">
+        <main className="mx-auto w-full max-w-[120rem] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8 3xl:px-12">
           <Suspense fallback={<Skeleton className="h-96" />}>
             <Outlet />
           </Suspense>

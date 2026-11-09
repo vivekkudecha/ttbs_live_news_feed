@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Loader2, ShieldCheck } from "lucide-react"
-import { Logo } from "@/components/common/Logo"
+import { AuthLayout } from "@/components/auth/AuthLayout"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,54 +44,46 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-svh flex-col bg-background">
-      <div className="h-1 bg-brand-gradient" aria-hidden="true" />
-      <div className="flex flex-1 items-center justify-center px-4 py-12">
-        <div className="w-full max-w-[24rem] space-y-10">
-          <Logo size="lg" />
-
-          <div className="space-y-2">
-            <h1 className="text-2xl font-medium tracking-tight">Sign in</h1>
-            <p className="leading-relaxed text-muted-foreground">
-              Sales signals for every logo, researched every 10 days and sent to each PAM by email and WhatsApp.
-            </p>
-          </div>
-
-          <form onSubmit={submit} className="space-y-6" noValidate>
-            {error && (
-              <Alert variant="destructive" role="alert">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                className="h-11"
-                autoComplete="username"
-                autoCapitalize="none"
-                spellCheck={false}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                maxLength={64}
-                required
-                autoFocus
-              />
-            </div>
-            <PasswordField id="password" label="Password" value={password} onChange={setPassword} autoComplete="current-password" />
-            <Button type="submit" className="h-11 w-full" disabled={loading || !username.trim() || !password}>
-              {loading && <Loader2 className="animate-spin" />}
-              Sign in
-            </Button>
-          </form>
-
-          <p className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
-            <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
-            Accounts are created by an administrator. Every sign-in and change is recorded in the audit log.
-          </p>
-        </div>
+    <AuthLayout className="space-y-10">
+      <div className="space-y-2">
+        <h1 className="text-2xl font-medium tracking-tight">Sign in</h1>
+        <p className="leading-relaxed text-muted-foreground">
+          Sales signals for every logo, researched every 10 days and sent to each PAM by email and WhatsApp.
+        </p>
       </div>
-      <p className="px-4 pb-6 text-center text-sm text-muted-foreground">Tata Tele Business Services · Internal sales tool</p>
-    </div>
+
+      <form onSubmit={submit} className="space-y-6" noValidate>
+        {error && (
+          <Alert variant="destructive" role="alert">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        <div className="space-y-2">
+          <Label htmlFor="username">Username</Label>
+          <Input
+            id="username"
+            className="h-11"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            maxLength={64}
+            required
+            autoFocus
+          />
+        </div>
+        <PasswordField id="password" label="Password" value={password} onChange={setPassword} autoComplete="current-password" />
+        <Button type="submit" variant="brand" className="h-11 w-full" disabled={loading || !username.trim() || !password}>
+          {loading && <Loader2 className="animate-spin" />}
+          Sign in
+        </Button>
+      </form>
+
+      <p className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
+        <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
+        Accounts are created by an administrator. Every sign-in and change is recorded in the audit log.
+      </p>
+    </AuthLayout>
   )
 }

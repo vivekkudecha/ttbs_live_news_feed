@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useTemplates } from "@/api/hooks"
 import { errorMessage } from "@/api/http"
+import { Page } from "@/components/common/layout"
 
 /** The research prompt every run uses (read-only: it lives in backend/app/research/prompts.py). */
 export default function Templates() {
@@ -23,7 +24,7 @@ export default function Templates() {
     )
 
   return (
-    <div className="space-y-6">
+    <Page>
       <PageHeader title="Output templates" description="What the research looks for and the exact format each company's result comes back in." />
 
       <Card>
@@ -90,6 +91,6 @@ export default function Templates() {
           </TabsContent>
         ))}
       </Tabs>
-    </div>
+    </Page>
   )
 }

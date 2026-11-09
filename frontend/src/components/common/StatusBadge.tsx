@@ -37,7 +37,7 @@ const map: Record<AnyStatus, { label: string; tone: Tone; spin?: boolean }> = {
 }
 
 const dot: Record<Tone, string> = {
-  neutral: "bg-muted-foreground/40",
+  neutral: "bg-muted-foreground/50",
   success: "bg-success",
   info: "bg-info",
   warning: "bg-warning",
@@ -45,11 +45,20 @@ const dot: Record<Tone, string> = {
   brand: "bg-brand",
 }
 
-/** Status = coloured dot + text label (never colour alone). */
+const pill: Record<Tone, string> = {
+  neutral: "bg-muted",
+  success: "bg-success/10",
+  info: "bg-info/10",
+  warning: "bg-warning/12",
+  danger: "bg-destructive/10",
+  brand: "bg-brand/12",
+}
+
+/** Status = tinted pill with coloured dot + text label (never colour alone). */
 export function StatusBadge({ status, label, className }: { status: AnyStatus; label?: string; className?: string }) {
   const s = map[status]
   return (
-    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-foreground/80", className)}>
+    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium text-foreground/85", pill[s.tone], className)}>
       {s.spin ? <Loader2 className="size-3 animate-spin text-info" /> : <span className={cn("size-1.5 rounded-full", dot[s.tone])} aria-hidden="true" />}
       {label ?? s.label}
     </span>

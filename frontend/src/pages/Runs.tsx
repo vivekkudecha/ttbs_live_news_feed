@@ -67,6 +67,8 @@ import { cn } from "@/lib/utils"
 import type { Job, JobNotification, JobResult } from "@/api/types"
 import { NewRunDialog } from "@/components/runs/NewRunDialog"
 import { AuditTab, CostsTab, EventsTab, TimelineTab } from "@/components/runs/RunInsights"
+import { Page, StatGrid } from "@/components/common/layout"
+import { LiveDot } from "@/components/common/LiveDot"
 
 const n = (x: number) => x.toLocaleString("en-IN")
 const ACTIVE = new Set(["scheduled", "queued", "running"])
@@ -196,10 +198,7 @@ function QueueStrip() {
     <Card className="mb-6 py-0">
       <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-3 py-3.5">
         <div className="flex items-center gap-2.5">
-          <span className="relative flex size-2.5">
-            {busy && !down && <span className="absolute inline-flex size-full animate-ping rounded-full bg-info opacity-60" />}
-            <span className={cn("relative inline-flex size-2.5 rounded-full", down ? "bg-destructive" : busy ? "bg-info" : "bg-success")} />
-          </span>
+          <LiveDot tone={down ? "danger" : busy ? "info" : "success"} pulse={busy && !down} />
           <span className="font-medium">{down ? "Queue offline" : busy ? "Workers busy" : "Queue idle"}</span>
         </div>
         {items.map(([label, v]) => (
@@ -825,7 +824,7 @@ export function RunDetail() {
   const digestsTotal = j.notifications.sent + j.notifications.pending + j.notifications.failed + j.notifications.skipped
 
   return (
-    <div className="space-y-6">
+    <Page>
       <PageHeader
         title={`Run #${j.id}`}
         description={
@@ -849,12 +848,12 @@ export function RunDetail() {
 
       <ProgressHero j={j} rate={s?.ratePerSec} />
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
+      <StatGrid>
         <StatCard icon={Zap} tone="info" label="Signals" value={n(j.withSignal)} hint={`${pct(j.withSignal, Math.max(j.done, 1))}% of ${n(j.done)} researched`} />
         <StatCard icon={Ban} tone={j.failed ? "warning" : undefined} label="Failed" value={n(j.failed)} hint={j.failed ? "after automatic retries" : "none so far"} />
         <StatCard icon={BellRing} tone="success" label="Digests sent" value={`${n(j.notifications.sent)}/${n(digestsTotal)}`} hint={`${n(j.notifications.pending)} pending · ${n(j.notifications.failed)} failed${s ? ` · ${n(s.pamJobsTotal)} PAMs` : ""}`} />
         <StatCard icon={CircleDollarSign} tone="warning" label="Cost" value={fmtUsd(j.cost, 2)} hint={`est. ${fmtUsd(j.estimatedCost)} · ${n(j.cacheHits)} cache hits`} />
-      </div>
+      </StatGrid>
 
       <Tabs value={tab} onValueChange={(v) => setParams(v === fallback ? {} : { tab: v }, { replace: true })}>
         <TabsList className="h-auto flex-wrap">
@@ -901,7 +900,7 @@ export function RunDetail() {
 
       <CompanyDrawer companyId={openCompany} onOpenChange={(o) => !o && setOpenCompany(null)} onReassign={(cid) => setReassign([cid])} />
       <ReassignDialog companyIds={reassign} open={reassign.length > 0} onOpenChange={(o) => !o && setReassign([])} />
-    </div>
+    </Page>
   )
 }
 

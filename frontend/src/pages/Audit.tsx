@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAudit } from "@/api/hooks"
 import { fmtDateTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { Page } from "@/components/common/layout"
 
 const area = (action: string) => action.split(".")[0]
 // One quiet dot per event area; the action text carries the meaning.
@@ -40,7 +41,7 @@ export default function Audit() {
   const kinds = [...new Set((audit.data ?? []).map((e) => area(e.action)))]
 
   return (
-    <div>
+    <Page>
       <PageHeader
         title="Audit log"
         description="Append-only and hash-chained: entries cannot be edited or deleted, and tampering is detectable."
@@ -106,6 +107,6 @@ export default function Audit() {
       <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
         <Link2 className="size-3.5" /> Chain verified · {audit.data?.length ?? 0} entries · last hash 9f3c…a21e
       </p>
-    </div>
+    </Page>
   )
 }

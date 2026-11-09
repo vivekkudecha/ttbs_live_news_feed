@@ -7,7 +7,7 @@
  */
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -38,6 +38,9 @@ import { fmtDateTime, fmtUsd } from "@/lib/format"
 import { fmtMs, kindLabel, timeOf } from "@/lib/telemetry"
 import { cn } from "@/lib/utils"
 import type { EventStatus, ProcessEvent } from "@/api/types"
+import { StatGrid, Split } from "@/components/common/layout"
+import { ChartCard } from "@/components/common/ChartCard"
+import { chartTheme } from "@/components/common/chart-theme"
 
 const n = (x: number) => x.toLocaleString("en-IN")
 
@@ -88,7 +91,6 @@ export function MiniPager({ page, pageSize, total, onPage }: { page: number; pag
   )
 }
 
-const tooltipStyle = { background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, color: "var(--popover-foreground)" }
 
 // ---- Timeline -----------------------------------------------------------------------------------
 
@@ -100,7 +102,7 @@ export function TimelineTab({ runId, live }: { runId: string; live: boolean }) {
   const series = d.throughput.map((b) => ({ ...b, label: timeOf(b.minute) }))
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
+    <Split>
       <Card>
         <CardHeader>
           <CardTitle>Timeline</CardTitle>
@@ -174,32 +176,24 @@ export function TimelineTab({ runId, live }: { runId: string; live: boolean }) {
             </dl>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Logos finished per minute</CardTitle>
-            <CardDescription>Including cache hits; retries shown separately</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {series.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nothing researched yet.</p>
-            ) : (
-              <div className="h-48" role="img" aria-label={`Throughput by minute: ${series.map((s) => `${s.label} ${s.ok} done`).join(", ")}`}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={series} margin={{ left: -20, right: 4, top: 4 }} barCategoryGap="20%">
-                    <CartesianGrid vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} minTickGap={24} />
-                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
-                    <Tooltip cursor={{ fill: "var(--muted)", opacity: 0.6 }} contentStyle={tooltipStyle} />
-                    <Bar dataKey="ok" name="Finished" stackId="a" fill="var(--chart-1)" stroke="var(--card)" strokeWidth={2} />
-                    <Bar dataKey="error" name="Failed" stackId="a" fill="var(--destructive)" stroke="var(--card)" strokeWidth={2} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <ChartCard
+          title="Logos finished per minute"
+          description="Including cache hits; retries shown separately"
+          label={`Throughput by minute: ${series.map((s) => `${s.label} ${s.ok} done`).join(", ")}`}
+          height="h-48 3xl:h-64"
+          empty={series.length === 0 && "Nothing researched yet."}
+        >
+          <BarChart data={series} margin={{ left: -20, right: 4, top: 4 }} barCategoryGap="20%">
+            <CartesianGrid vertical={false} {...chartTheme.grid} />
+            <XAxis dataKey="label" {...chartTheme.axis} minTickGap={24} />
+            <YAxis allowDecimals={false} {...chartTheme.axis} />
+            <Tooltip {...chartTheme.tooltip} />
+            <Bar dataKey="ok" name="Finished" stackId="a" fill="var(--chart-1)" {...chartTheme.bar} />
+            <Bar dataKey="error" name="Failed" stackId="a" fill="var(--destructive)" {...chartTheme.bar} radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ChartCard>
       </div>
-    </div>
+    </Split>
   )
 }
 
@@ -382,7 +376,7 @@ export function CostsTab({ runId, live }: { runId: string; live: boolean }) {
   ]
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
+      <StatGrid>
         {tiles.map(([label, value, hint]) => (
           <Card key={label} className="gap-0">
             <CardContent className="space-y-2">
@@ -392,7 +386,7 @@ export function CostsTab({ runId, live }: { runId: string; live: boolean }) {
             </CardContent>
           </Card>
         ))}
-      </div>
+      </StatGrid>
       <CostTable
         title="By PAM"
         description="What each PAM's logos and digests cost in this run"

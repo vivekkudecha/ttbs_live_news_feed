@@ -29,7 +29,7 @@ export function NewRunDialog({ label = "New run" }: { label?: string }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button>
+        <Button variant="brand">
           <Play /> {label}
         </Button>
       </DialogTrigger>

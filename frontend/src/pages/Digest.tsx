@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/common/EmptyState"
 import { PamPicker } from "@/components/pickers/Pickers"
 import { fmtDate } from "@/lib/format"
 import type { PamOption, PriorityAction, ResearchResult, Run } from "@/api/types"
+import { Page } from "@/components/common/layout"
 
 const plain = (s?: string) => (s ?? "").replace(/\*\*/g, "")
 
@@ -255,7 +256,7 @@ export default function Digest() {
   }
 
   return (
-    <div>
+    <Page>
       <PageHeader
         title="PAM digest preview"
         description="Exactly what the PAM receives: one email with all their logos plus an Excel attachment, and a WhatsApp summary with the same file."
@@ -307,6 +308,6 @@ export default function Digest() {
           <ExcelPreview d={d} />
         </TabsContent>
       </Tabs>
-    </div>
+    </Page>
   )
 }
