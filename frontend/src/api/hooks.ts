@@ -1,7 +1,22 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "./client"
 import { backend } from "./http"
-import type { AiProvider, CompanyQuery, DatasetRowPatch, DeliveryChannel, DatasetRowQuery, PamQuery, SignalQuery, UserInput, UserPatch } from "./types"
+import type {
+  AiProvider,
+  CompanyQuery,
+  DatasetRowPatch,
+  DeadLetterStatus,
+  DeliveryChannel,
+  DatasetRowQuery,
+  EmailConnectionInput,
+  EmailPolicy,
+  EmailSettings,
+  EmailTemplateInput,
+  PamQuery,
+  SignalQuery,
+  UserInput,
+  UserPatch,
+} from "./types"
 
 /*
  * Data hooks. Rules that keep the UI smooth at 10k+ rows:
@@ -202,3 +217,80 @@ export const useUpdateDatasetRow = () =>
   useMutation({ mutationFn: (v: { id: string; companyId: string; patch: DatasetRowPatch }) => backend.updateDatasetRow(v.id, v.companyId, v.patch), onSuccess: useDatasetInvalidate() })
 export const useDeleteDatasetRows = () =>
   useMutation({ mutationFn: (v: { id: string; companyIds: string[] }) => backend.deleteDatasetRows(v.id, v.companyIds), onSuccess: useDatasetInvalidate() })
+
+// ---- Email (Microsoft Graph) ------------------------------------------------------------
+/** Settings + live quota; polls while the page is open so the bucket meters move. */
+export const useEmailSettings = () => useQuery({ queryKey: ["emailSettings"], queryFn: () => backend.emailSettings(), refetchInterval: 15_000 })
+function useEmailSettingsMutation<V, R extends EmailSettings = EmailSettings>(fn: (v: V) => Promise<R>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (s) => {
+      qc.setQueryData(["emailSettings"], s)
+      qc.invalidateQueries({ queryKey: ["channels"] })
+    },
+  })
+}
+export const useSaveEmailSettings = () => useEmailSettingsMutation((v: EmailConnectionInput) => backend.saveEmailSettings(v))
+export const useTestEmailSettings = () => useEmailSettingsMutation(() => backend.testEmailSettings())
+export const useSaveEmailLimits = () =>
+  useEmailSettingsMutation((v: { perMinute: number; perHour: number; perDay: number; safetyMarginPct: number }) => backend.saveEmailLimits(v))
+export const useSaveEmailPolicy = () => useEmailSettingsMutation((v: EmailPolicy) => backend.saveEmailPolicy(v))
+export const useEnableEmail = () => useEmailSettingsMutation((enabled: boolean) => backend.enableEmail(enabled))
+export const usePauseEmail = () => useEmailSettingsMutation((v: { minutes: number; reason?: string }) => backend.pauseEmail(v.minutes, v.reason))
+export const useResumeEmail = () => useEmailSettingsMutation(() => backend.resumeEmail())
+export const useSendTestEmail = () => {
+  const inv = useInvalidate([["emailSettings"], ["audit"]])
+  return useMutation({ mutationFn: (to: string) => backend.sendTestEmail(to), onSuccess: inv })
+}
+export const useRemoveEmailSettings = () => {
+  const inv = useInvalidate([["emailSettings"], ["channels"]])
+  return useMutation({ mutationFn: () => backend.removeEmailSettings(), onSuccess: inv })
+}
+export const useEmailEstimate = (importId: string, enabled: boolean) =>
+  useQuery({ queryKey: ["emailEstimate", importId], queryFn: () => backend.emailEstimate(importId), enabled: enabled && !!importId, staleTime: 30_000, retry: false })
+
+// ---- Email templates --------------------------------------------------------------------
+export const useEmailTemplates = () => useQuery({ queryKey: ["emailTemplates"], queryFn: () => backend.emailTemplates(), retry: false })
+export const useEmailTemplateVersions = (id: string | null) =>
+  useQuery({ queryKey: ["emailTemplateVersions", id], queryFn: () => backend.emailTemplateVersions(id!), enabled: !!id })
+const useTemplatesInvalidate = () => useInvalidate([["emailTemplates"], ["emailTemplateVersions"]])
+export const useSaveEmailTemplate = () => {
+  const inv = useTemplatesInvalidate()
+  return useMutation({
+    mutationFn: (v: { id?: string; data: EmailTemplateInput }) => (v.id ? backend.updateEmailTemplate(v.id, v.data) : backend.createEmailTemplate(v.data)),
+    onSuccess: inv,
+  })
+}
+export const useActivateEmailTemplate = () => {
+  const inv = useTemplatesInvalidate()
+  return useMutation({ mutationFn: (id: string) => backend.activateEmailTemplate(id), onSuccess: inv })
+}
+export const useDeleteEmailTemplate = () => {
+  const inv = useTemplatesInvalidate()
+  return useMutation({ mutationFn: (id: string) => backend.deleteEmailTemplate(id), onSuccess: inv })
+}
+export const useRestoreEmailTemplate = () => {
+  const inv = useTemplatesInvalidate()
+  return useMutation({ mutationFn: (v: { id: string; version: number }) => backend.restoreEmailTemplate(v.id, v.version), onSuccess: inv })
+}
+/** Mutation, not a query: a preview with AI is a real (billable) call and must only run on demand. */
+export const usePreviewEmailTemplate = () =>
+  useMutation({ mutationFn: (v: EmailTemplateInput & { runId?: number; pamId?: number; withAi?: boolean }) => backend.previewEmailTemplate(v) })
+
+// ---- Outbox & dead-letter queue ---------------------------------------------------------
+export const useOutbox = (q: { page: number; pageSize: number; status?: string; channel?: string; q?: string }) =>
+  useQuery({ queryKey: ["outbox", q], queryFn: () => backend.outbox(q), ...paged, refetchInterval: 10_000 })
+export const useNotificationDetail = (id: string | null) =>
+  useQuery({ queryKey: ["notificationDetail", id], queryFn: () => backend.notificationDetail(id!), enabled: !!id })
+export const useDeadLetters = (q: { page: number; pageSize: number; status?: DeadLetterStatus | ""; channel?: string }) =>
+  useQuery({ queryKey: ["deadLetters", q], queryFn: () => backend.deadLetters(q), ...paged, refetchInterval: 15_000 })
+const useOutboxInvalidate = () => useInvalidate([["outbox"], ["deadLetters"], ["emailSettings"], ["notificationDetail"]])
+export const useRequeueDeadLetters = () => {
+  const inv = useOutboxInvalidate()
+  return useMutation({ mutationFn: (ids: string[]) => backend.requeueDeadLetters(ids), onSuccess: inv })
+}
+export const useDiscardDeadLetter = () => {
+  const inv = useOutboxInvalidate()
+  return useMutation({ mutationFn: (v: { id: string; note: string }) => backend.discardDeadLetter(v.id, v.note), onSuccess: inv })
+}

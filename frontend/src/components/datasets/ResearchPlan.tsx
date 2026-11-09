@@ -6,12 +6,12 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
-import { CalendarClock, Clock, Info, Loader2, Play } from "lucide-react"
+import { CalendarClock, Clock, Info, Loader2, Mail, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useStartRun } from "@/api/hooks"
+import { useEmailEstimate, useStartRun } from "@/api/hooks"
 import { ApiError, errorMessage } from "@/api/http"
 import { fmtDateTime, fmtUsd } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -37,6 +37,26 @@ export function ChannelPicker({ value, onChange }: { value: DeliveryChannel[]; o
         </label>
       ))}
     </div>
+  )
+}
+
+/** Email digests this run will send (one per PAM) against the mailbox's sending limits. */
+function EmailCapacityNote({ importId }: { importId: string }) {
+  const est = useEmailEstimate(importId, true)
+  const e = est.data
+  if (!e || e.emails === 0) return null
+  const n = (x: number) => x.toLocaleString("en-IN")
+  const tight = e.queuedAhead + e.emails > e.remainingToday
+  return (
+    <p className={cn("flex items-start gap-2 rounded-lg p-3 text-xs", tight ? "bg-warning/12 text-foreground" : "bg-muted/50 text-muted-foreground")}>
+      <Mail className="mt-0.5 size-3.5 shrink-0" />
+      <span>
+        Up to {n(e.emails)} email digest{e.emails === 1 ? "" : "s"} (one per PAM)
+        {e.queuedAhead ? `, behind ${n(e.queuedAhead)} already queued` : ""}. The mailbox can send {n(e.remainingToday)} more in the current 24 h window
+        ({n(e.perDay)}/day).
+        {tight && e.drainEta && ` Sending continues automatically in the next windows, oldest first; all sent by about ${fmtDateTime(e.drainEta)}.`}
+      </span>
+    </p>
   )
 }
 
@@ -116,6 +136,8 @@ export function ResearchPlan({
           </div>
         </div>
       )}
+
+      {mode !== "later" && channels.includes("email") && <EmailCapacityNote importId={importId} />}
 
       {previousRuns > 0 && mode !== "later" && (
         <p className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">

@@ -5,6 +5,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Switch } from "@/components/ui/switch"
 import { useChannels } from "@/api/hooks"
 import { AiProviderSettings } from "@/components/integrations/AiProviderSettings"
+import { EmailProviderSettings } from "@/components/integrations/EmailProviderSettings"
 import { Page, CardGrid } from "@/components/common/layout"
 
 export default function Integrations() {
@@ -26,10 +27,17 @@ export default function Integrations() {
 
       <section>
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-          <Send className="size-4 text-muted-foreground" /> Notification channels
+          <Mail className="size-4 text-muted-foreground" /> Email delivery (Microsoft 365)
+        </h2>
+        <EmailProviderSettings />
+      </section>
+
+      <section>
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+          <Send className="size-4 text-muted-foreground" /> Other channels
         </h2>
         <CardGrid>
-          {channels.data?.map((c) => (
+          {channels.data?.filter((c) => c.type !== "email").map((c) => (
             <Card key={c.key} className="lift">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -56,7 +64,7 @@ export default function Integrations() {
           ))}
         </CardGrid>
         <p className="mt-3 text-xs text-muted-foreground">
-          Email and WhatsApp delivery run on the console adapter for now: digests are queued, retried and logged by the worker, not sent.
+          WhatsApp delivery runs on the console adapter for now: digests are queued, retried and logged by the worker, not sent.
         </p>
       </section>
     </Page>

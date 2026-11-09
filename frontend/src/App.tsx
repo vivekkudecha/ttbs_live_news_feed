@@ -31,6 +31,7 @@ const Telemetry = lazy(() => import("@/pages/Telemetry"))
 const Integrations = lazy(() => import("@/pages/Integrations"))
 const Costs = lazy(() => import("@/pages/Costs"))
 const Audit = lazy(() => import("@/pages/Audit"))
+const EmailOutbox = lazy(() => import("@/pages/EmailOutbox"))
 const Users = lazy(() => import("@/pages/Users"))
 
 // The shareable demo build (VITE_ROUTER=memory) runs inside a hosted viewer where URL hashes
@@ -111,6 +112,7 @@ export default function App() {
                   <Route path="digest" element={<Allow module="signals"><Digest /></Allow>} />
                   <Route path="runs" element={<Allow module="runs"><RunsList /></Allow>} />
                   <Route path="runs/:id" element={<Allow module="runs"><RunDetail /></Allow>} />
+                  <Route path="outbox" element={<Allow module="runs"><EmailOutbox /></Allow>} />
                   <Route path="jobs" element={<JobsRedirect />} />
                   <Route path="jobs/:id" element={<JobsRedirect />} />
                   <Route path="companies" element={<Allow module="companies"><CompaniesList /></Allow>} />

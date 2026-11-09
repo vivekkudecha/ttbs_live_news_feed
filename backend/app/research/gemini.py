@@ -139,6 +139,19 @@ class GeminiProvider:
         cost = tin / 1000 * s.gemini_price_in_per_1k + tout / 1000 * s.gemini_price_out_per_1k + searches * s.gemini_price_per_search
         return ResearchOutput(text=text, tokens_in=tin, tokens_out=tout, cost=round(cost, 6), latency_ms=latency, sources=sources)
 
+    def generate(self, prompt: str, *, system: str | None = None, max_tokens: int = 1024) -> ResearchOutput:
+        """Plain completion with the configured model, no Google Search grounding (nothing to bill per query)."""
+        s = get_settings()
+        t0 = time.perf_counter()
+        data = _post(self._client, self.model, _body(prompt, max_tokens, system=system, search=False))
+        latency = int((time.perf_counter() - t0) * 1000)
+        text, _, _ = _text_and_sources(data)
+        u = data.get("usageMetadata") or {}
+        tin = int(u.get("promptTokenCount") or 0)
+        tout = int(u.get("candidatesTokenCount") or 0) + int(u.get("thoughtsTokenCount") or 0)
+        cost = tin / 1000 * s.gemini_price_in_per_1k + tout / 1000 * s.gemini_price_out_per_1k
+        return ResearchOutput(text=text, tokens_in=tin, tokens_out=tout, cost=round(cost, 6), latency_ms=latency)
+
 
 def fetch_models(api_key: str) -> list[dict[str, str]]:
     """Gemini text models available to this key: [{"id": "gemini-3.6-flash", "provider": "google", "name": "Gemini 3.6 Flash"}]."""

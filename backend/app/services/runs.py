@@ -413,13 +413,17 @@ def maybe_queue_pam_digest(uow: UnitOfWork, run: Run, pam_id: int) -> list[int]:
     ).all()
     total = s.scalar(select(func.count(ResearchResult.id)).where(ResearchResult.run_id == run.id, ResearchResult.pam_id == pam_id))
     payload = build_digest(run, pam, signals, total or 0)
+    from app.services import email_config  # delivery policy is set in the UI
+
+    email_policy = email_config.policy(email_config.get_row(uow))
     created: list[int] = []
+    email_ids: list[int] = []
     for channel in run.channels or []:
         recipient, reason = _recipient(pam, channel)
         status = NOTE_PENDING
         if reason:
             status = NOTE_SKIPPED
-        elif not signals:
+        elif not signals and not (channel == "email" and email_policy.send_when_no_signals):
             status, reason = NOTE_SKIPPED, "no signals for this PAM in this run"
         note = Notification(
             run_id=run.id, pam_id=pam_id, channel=channel, recipient=recipient, status=status,
@@ -433,6 +437,8 @@ def maybe_queue_pam_digest(uow: UnitOfWork, run: Run, pam_id: int) -> list[int]:
             continue
         if status == NOTE_PENDING:
             created.append(note.id)
+            if channel == "email":
+                email_ids.append(note.id)
         else:
             audit.record(uow, "notify.skipped", "notification", note.id,
                          {"pam_id": pam_id, "channel": channel, "reason": reason}, actor="system", run_id=run.id)
@@ -444,10 +450,13 @@ def maybe_queue_pam_digest(uow: UnitOfWork, run: Run, pam_id: int) -> list[int]:
         )
     if created:
         audit.record(uow, "notify.queue", "run", run.id, {"pam_id": pam_id, "notifications": created}, actor="system")
-        from app.worker.tasks import send_notification
+        from app.worker.tasks import dispatch_email, send_notification
 
-        ids = list(created)
-        uow.after_commit(lambda: [send_notification.apply_async((nid,)) for nid in ids])
+        # Email waits for the quota dispatcher (sending limits); other channels go straight out.
+        direct = [nid for nid in created if nid not in email_ids]
+        uow.after_commit(lambda: [send_notification.apply_async((nid,)) for nid in direct])
+        if email_ids:
+            uow.after_commit(lambda: dispatch_email.apply_async())
     return created
 
 
@@ -477,6 +486,14 @@ def build_digest(run: Run, pam: Pam | None, signals: list[ResearchResult], total
         "body": "\n".join(lines),
         "signals": len(signals),
         "total": total,
+        # Structured snapshot for email templates (rendered at send time from this, not from live rows).
+        "pam": {"id": pam.id if pam else None, "name": name, "email": pam.email if pam else None},
+        "run": {"id": run.id, "label": run.label, "window_start": str(run.window_start), "window_end": str(run.window_end)},
+        "items": [
+            {"company": r.company.name, "category": r.category, "key_signals": r.key_signals, "opportunity": r.opportunity,
+             "outreach": r.outreach, "sources": [s for s in (r.sources or []) if isinstance(s, dict)][:5]}
+            for r in signals
+        ],
     }
 
 

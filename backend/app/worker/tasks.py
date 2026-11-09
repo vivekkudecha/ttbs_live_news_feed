@@ -153,6 +153,14 @@ def send_notification(notification_id: int) -> str:
     return notifications.deliver(notification_id)
 
 
+@celery_app.task(name="notify.dispatch_email")
+def dispatch_email() -> dict:
+    """Fill the free email quota (minute/hour/day buckets) from the pending outbox, oldest first."""
+    from app.services import email_quota
+
+    return email_quota.dispatch()
+
+
 @celery_app.task(name="maintenance.process_import")
 def process_import(import_id: int) -> str:
     """Save an uploaded dataset in resumable chunks (see services/imports.process)."""

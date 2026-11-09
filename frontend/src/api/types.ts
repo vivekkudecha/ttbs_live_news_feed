@@ -815,3 +815,181 @@ export interface DatasetRowQuery {
 
 /** Only the fields sent change; edits update the real company / PAM records. */
 export type DatasetRowPatch = Partial<Pick<DatasetRow, "company" | "industry" | "pamName" | "pamEmail" | "pamWhatsapp">> & { segment?: string | null }
+
+// ---- Email delivery (Microsoft Graph, app-to-app) ---------------------------------------------------
+export interface EmailLimits {
+  perMinute: number
+  perHour: number
+  perDay: number
+  safetyMarginPct: number
+  /** Limits actually enforced (configured minus the safety margin). */
+  effective: { perMinute: number; perHour: number; perDay: number }
+}
+
+export interface EmailPolicy {
+  maxAttempts: number
+  backoffBaseS: number
+  backoffCapS: number
+  sendWhenNoSignals: boolean
+}
+
+export interface EmailConnection {
+  tenantId: string
+  clientId: string
+  secretHint: string
+  senderAddress: string
+  senderName: string | null
+  replyTo: string | null
+  saveToSent: boolean
+}
+
+/** console = nothing saved (dev: logged, not sent); disabled = saved but switched off (emails wait). */
+export type EmailMode = "console" | "disabled" | "paused" | "active"
+
+export interface EmailQuota {
+  mode: EmailMode
+  pausedUntil: string | null
+  pauseReason: string | null
+  limits: { configured: { minute: number; hour: number; day: number }; effective: { minute: number; hour: number; day: number }; safetyMarginPct: number }
+  /** Rolling windows: this minute, the last 60 minutes, the last 24 hours. */
+  used: { minute: number; hour: number; day: number }
+  capacityNow: number
+  backlog: { pending: number; due: number; reserved: number; sending: number; oldestQueuedAt: string | null }
+  nextFreeAt: string | null
+  drainEta: string | null
+  beyondHorizon: number
+  hourly: { hour: string; sent: number }[]
+  now: string
+}
+
+export interface EmailSettings {
+  configured: boolean
+  enabled: boolean
+  pausedUntil?: string | null
+  pauseReason?: string | null
+  connection: EmailConnection | null
+  check?: { verifiedAt: string | null; ok: boolean; error: string | null; latencyMs: number | null }
+  limits: EmailLimits
+  policy: EmailPolicy
+  updatedAt?: string | null
+  updatedBy?: string | null
+  quota: EmailQuota
+}
+
+export interface EmailConnectionInput {
+  tenantId: string
+  clientId: string
+  clientSecret?: string
+  senderAddress: string
+  senderName?: string
+  replyTo?: string
+  saveToSent: boolean
+  enabled?: boolean
+}
+
+export type AiOnFailure = "send_without" | "hold"
+
+export interface EmailTemplateInput {
+  name: string
+  description?: string | null
+  subjectTpl: string
+  htmlTpl: string
+  textTpl: string
+  aiEnabled: boolean
+  aiPrompt?: string | null
+  aiMaxWords: number
+  aiOnFailure: AiOnFailure
+  note?: string
+}
+
+export interface EmailTemplate extends EmailTemplateInput {
+  id: string
+  active: boolean
+  version: number
+  updatedAt: string | null
+  updatedBy: string
+}
+
+export interface EmailTemplateVersion {
+  version: number
+  note: string | null
+  createdAt: string | null
+  createdBy: string
+  subjectTpl: string | null
+  aiEnabled: boolean | null
+}
+
+export interface EmailPreview {
+  subject: string
+  html: string
+  text: string
+  aiSummary: string
+  aiError: string | null
+  ai: { provider: string; model: string; tokensIn: number; tokensOut: number; cost: number; latencyMs: number } | null
+  sample: boolean
+}
+
+export type OutboxStatus = "pending" | "sending" | "sent" | "failed" | "skipped"
+
+export interface OutboxRow extends Omit<JobNotification, "status"> {
+  status: OutboxStatus
+  createdAt: string | null
+  reservedAt: string | null
+  templateVersion: number | null
+}
+
+export interface OutboxPage extends Page<OutboxRow> {
+  counts: Partial<Record<OutboxStatus, number>>
+}
+
+export interface DeliveryAttempt {
+  attempt: number
+  startedAt: string | null
+  durationMs: number
+  outcome: "sent" | "retry" | "failed"
+  adapter: string | null
+  httpStatus: number | null
+  errorCode: string | null
+  error: string | null
+  retryable: boolean | null
+  providerRequestId: string | null
+}
+
+export interface NotificationDetail extends OutboxRow {
+  history: DeliveryAttempt[]
+  rendered: { subject: string | null; html: string | null; text: string | null; aiSummary: string | null; aiError: string | null } | null
+  body: string | null
+}
+
+export type DeadLetterStatus = "open" | "requeued" | "discarded"
+
+export interface DeadLetter {
+  id: string
+  notificationId: string
+  runId: string | null
+  pamId: string | null
+  channel: DeliveryChannel
+  recipient: string | null
+  subject: string | null
+  reason: "permanent" | "exhausted"
+  attempts: number
+  lastError: string | null
+  status: DeadLetterStatus
+  createdAt: string | null
+  resolvedAt: string | null
+  resolvedBy: string | null
+  resolutionNote: string | null
+  history: { attempt: number; at: string | null; outcome: string; httpStatus: number | null; errorCode: string | null; error: string }[]
+}
+
+export interface DeadLetterPage extends Page<DeadLetter> {
+  counts: Partial<Record<DeadLetterStatus, number>>
+}
+
+export interface EmailEstimate {
+  emails: number
+  queuedAhead: number
+  remainingToday: number
+  perDay: number
+  drainEta: string | null
+}

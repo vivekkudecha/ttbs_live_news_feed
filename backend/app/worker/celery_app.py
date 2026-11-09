@@ -2,7 +2,7 @@
 
 Queues (separate so a 10k-company research backlog never delays notifications):
     research     one task per company (slow, rate-limited LLM calls)
-    notify       digest delivery
+    notify       digest delivery + the email quota dispatcher
     maintenance  start_run fan-out + the periodic dispatcher/sweeper
 
 Windows has no prefork pool; run workers with the thread pool (research is I/O-bound):
@@ -39,6 +39,8 @@ celery_app.conf.update(
     },
     beat_schedule={
         "dispatcher-tick": {"task": "maintenance.tick", "schedule": float(settings.dispatcher_interval_s)},
+        # Email quota dispatcher: hands out as many pending emails as the sending limits allow.
+        "email-dispatch": {"task": "notify.dispatch_email", "schedule": float(settings.email_dispatch_interval_s)},
     },
     timezone="UTC",
 )

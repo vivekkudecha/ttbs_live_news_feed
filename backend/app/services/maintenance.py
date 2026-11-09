@@ -108,18 +108,30 @@ def recover_stuck() -> dict[str, int]:
             stats["results_pending"] = len(pending)
 
         # Notifications: stuck in 'sending', or pending and due (covers lost messages and backoff retries).
+        # A stuck email also loses its quota reservation, so the dispatcher hands it out again.
         s.execute(update(Notification).where(Notification.status == NOTE_SENDING, Notification.updated_at <= stale)
-                  .values(status=NOTE_PENDING, next_attempt_at=now))
+                  .values(status=NOTE_PENDING, next_attempt_at=now, reserved_at=None, quota_key=None))
         due = list(s.scalars(
             select(Notification.id)
-            .where(Notification.status == NOTE_PENDING, Notification.next_attempt_at <= now - timedelta(seconds=30))
+            .where(Notification.channel != "email", Notification.status == NOTE_PENDING,
+                   Notification.next_attempt_at <= now - timedelta(seconds=30))
             .limit(BATCH)
         ))
         if due:
             from app.worker.tasks import send_notification
 
             uow.after_commit(lambda: [send_notification.apply_async((nid,)) for nid in due])
-            stats["notifications"] = len(due)
+        # Email is owned by the quota dispatcher: release reservations whose worker never ran, then kick it.
+        from app.services import email_quota
+
+        lapsed = email_quota.release_lapsed(uow, now)
+        stats["notifications"] = len(due) + lapsed
+        email_due = s.scalar(select(Notification.id).where(*email_quota.due_filter(now)).limit(1))
+        if lapsed or email_due:
+            from app.worker.tasks import dispatch_email
+
+            uow.after_commit(lambda: dispatch_email.apply_async())
+        email_quota.prune(uow, now)
     if any(stats.values()):
         log.warning("sweeper re-enqueued work", extra=stats)
         for what, n in stats.items():

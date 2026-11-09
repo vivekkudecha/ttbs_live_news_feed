@@ -85,6 +85,17 @@ def record_message(uow: UnitOfWork, *, notification_id: int, run: Run, pam_id: i
     metrics.COST_USD.labels(COST_MESSAGING, channel).inc(price)
 
 
+def record_email_ai(uow: UnitOfWork, *, notification_id: int, run: Run, pam_id: int, meta: dict[str, Any]) -> None:
+    """The AI summary written for one email digest (LLM cost, attributed to the run and PAM)."""
+    cost = float(meta.get("cost") or 0.0)
+    uow.session.add(CostEntry(
+        ts=utcnow(), category=COST_LLM, provider=meta.get("provider") or "unknown", model=meta.get("model"), channel="email",
+        run_id=run.id, import_id=run.import_id, pam_id=pam_id, notification_id=notification_id, units=1,
+        tokens_in=int(meta.get("tokensIn") or 0), tokens_out=int(meta.get("tokensOut") or 0), cost=cost, outcome="email_ai",
+    ))
+    metrics.COST_USD.labels(COST_LLM, meta.get("provider") or "unknown").inc(cost)
+
+
 # --- Budget -----------------------------------------------------------------------------------
 
 

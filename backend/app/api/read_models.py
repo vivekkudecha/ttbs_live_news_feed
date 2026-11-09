@@ -770,6 +770,9 @@ def templates(uow: UnitOfWork) -> list[dict[str, Any]]:
 
 
 def channels() -> list[dict[str, Any]]:
+    from app.db.session import unit_of_work
+    from app.services import email_config
+
     s = get_settings()
 
     def one(key: str, name: str, adapter: str) -> dict[str, Any]:
@@ -777,4 +780,14 @@ def channels() -> list[dict[str, Any]]:
         return {"key": key, "name": name, "type": key, "adapter": f"{adapter} adapter", "status": "connected", "enabled": True,
                 "details": {"Delivery": "Logged to the worker console (not sent)" if console else adapter, "Max attempts": str(s.notify_max_attempts)}}
 
-    return [one("email", "Email", s.notify_email_adapter), one("whatsapp", "WhatsApp", s.notify_whatsapp_adapter)]
+    with unit_of_work() as uow:
+        row = email_config.get_row(uow)
+        if row is None:
+            email = one("email", "Email", s.notify_email_adapter)
+        else:
+            lim = email_config.limits(row)
+            email = {"key": "email", "name": "Email", "type": "email", "adapter": "Microsoft Graph", "enabled": row.enabled,
+                     "status": "connected" if row.last_check_ok else "error",
+                     "details": {"Sender": row.sender_address, "Limits": f"{lim.minute}/min · {lim.hour}/h · {lim.day}/day",
+                                 "Max attempts": str(row.max_attempts)}}
+    return [email, one("whatsapp", "WhatsApp", s.notify_whatsapp_adapter)]

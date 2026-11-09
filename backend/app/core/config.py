@@ -105,6 +105,14 @@ class Settings(BaseSettings):
     notify_email_adapter: str = "console"
     notify_whatsapp_adapter: str = "console"
     notify_max_attempts: int = 6
+    # Email via Microsoft Graph (credentials, limits and policy are set in the UI: Providers & channels).
+    graph_login_url: str = "https://login.microsoftonline.com"
+    graph_base_url: str = "https://graph.microsoft.com"
+    graph_timeout_s: float = 30.0
+    # The quota dispatcher runs this often (and is also kicked whenever new emails are queued).
+    email_dispatch_interval_s: int = 10
+    # AI summary in digests: output token budget for the active research AI (no web search).
+    email_ai_max_output_tokens: int = 1024
 
     # --- Queue maintenance ---------------------------------------------------------------
     dispatcher_interval_s: int = 30

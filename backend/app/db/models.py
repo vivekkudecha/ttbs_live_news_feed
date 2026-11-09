@@ -7,6 +7,7 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Date,
     DateTime,
@@ -271,8 +272,155 @@ class Notification(TimestampMixin, Base):
     payload: Mapped[dict[str, Any]] = mapped_column(default=dict)
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Email only: the rendered message (subject/html/text/ai_summary), frozen at the first attempt so
+    # retries resend exactly the same content and never pay for the AI summary twice.
+    template_id: Mapped[int | None] = mapped_column(Integer)
+    template_version: Mapped[int | None] = mapped_column(Integer)
+    rendered: Mapped[dict[str, Any] | None] = mapped_column(nullable=True)
+    # Email only: set when the quota dispatcher hands the row to a worker; `quota_key` is the minute
+    # bucket it was counted in, so a message the provider did not accept is refunded to that bucket.
+    reserved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    quota_key: Mapped[int | None] = mapped_column(BigId)
 
     pam: Mapped[Pam] = relationship(lazy="joined")
+
+
+class NotificationAttempt(Base):
+    """One row per delivery attempt (audit trail: what was tried, when, and what the provider said)."""
+
+    __tablename__ = "notification_attempts"
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    notification_id: Mapped[int] = mapped_column(ForeignKey("notifications.id", ondelete="CASCADE"), index=True)
+    attempt: Mapped[int] = mapped_column(Integer)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    outcome: Mapped[str] = mapped_column(String(20))  # sent | retry | failed
+    adapter: Mapped[str | None] = mapped_column(String(40))
+    http_status: Mapped[int | None] = mapped_column(Integer)
+    error_code: Mapped[str | None] = mapped_column(String(100))
+    error: Mapped[str | None] = mapped_column(Text)
+    retryable: Mapped[bool | None] = mapped_column(Boolean)
+    provider_request_id: Mapped[str | None] = mapped_column(String(100))
+
+
+DLQ_OPEN, DLQ_REQUEUED, DLQ_DISCARDED = "open", "requeued", "discarded"
+
+
+class DeadLetter(Base):
+    """Dead-letter queue: a notification that failed permanently or ran out of attempts. Kept for
+    audit with a snapshot of what was being sent; an operator can requeue it or discard it with a note."""
+
+    __tablename__ = "dead_letters"
+    __table_args__ = (Index("ix_dead_letters_status_created", "status", "created_at"),)
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    notification_id: Mapped[int] = mapped_column(ForeignKey("notifications.id", ondelete="CASCADE"), index=True)
+    run_id: Mapped[int | None] = mapped_column(Integer)
+    pam_id: Mapped[int | None] = mapped_column(Integer)
+    channel: Mapped[str] = mapped_column(String(20))
+    recipient: Mapped[str | None] = mapped_column(String(320))
+    subject: Mapped[str | None] = mapped_column(String(500))
+    reason: Mapped[str] = mapped_column(String(20))  # permanent | exhausted
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    snapshot: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    status: Mapped[str] = mapped_column(String(20), default=DLQ_OPEN)  # open | requeued | discarded
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[str | None] = mapped_column(String(100))
+    resolution_note: Mapped[str | None] = mapped_column(String(1000))
+
+
+# --- Email (Microsoft Graph) ----------------------------------------------------------------------
+
+
+class EmailConfig(TimestampMixin, Base):
+    """Microsoft Graph mail settings, managed from the UI (single row, id=1). App-to-app: the client
+    secret (client-credentials flow) is AES-GCM encrypted and never returned by the API."""
+
+    __tablename__ = "email_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    tenant_id: Mapped[str] = mapped_column(String(100))
+    client_id: Mapped[str] = mapped_column(String(100))
+    client_secret_enc: Mapped[str] = mapped_column(Text)
+    secret_hint: Mapped[str] = mapped_column(String(40))
+    sender_address: Mapped[str] = mapped_column(String(320))
+    sender_name: Mapped[str | None] = mapped_column(String(200))
+    reply_to: Mapped[str | None] = mapped_column(String(320))
+    save_to_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Sending limits of the mailbox (Exchange Online defaults) and a safety margin kept below them.
+    per_minute: Mapped[int] = mapped_column(Integer, default=30)
+    per_hour: Mapped[int] = mapped_column(Integer, default=3600)
+    per_day: Mapped[int] = mapped_column(Integer, default=10000)
+    safety_margin_pct: Mapped[int] = mapped_column(Integer, default=5)
+    # Retry policy
+    max_attempts: Mapped[int] = mapped_column(Integer, default=6)
+    backoff_base_s: Mapped[int] = mapped_column(Integer, default=60)
+    backoff_cap_s: Mapped[int] = mapped_column(Integer, default=3600)
+    # Delivery policy
+    send_when_no_signals: Mapped[bool] = mapped_column(Boolean, default=False)
+    paused_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    pause_reason: Mapped[str | None] = mapped_column(String(300))
+    # Last verification
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_check_ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_check_error: Mapped[str | None] = mapped_column(Text)
+    last_check_latency_ms: Mapped[int | None] = mapped_column(Integer)
+    updated_by: Mapped[str] = mapped_column(String(100))
+
+
+class EmailSendBucket(Base):
+    """Quota ledger: emails counted per UTC minute (key = epoch minute). The dispatcher sums the
+    current minute, the last 60 minutes and the last 1,440 minutes to enforce the per-minute,
+    per-hour and per-24-hour limits as rolling windows (how Exchange Online counts them)."""
+
+    __tablename__ = "email_send_buckets"
+
+    minute_key: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    used: Mapped[int] = mapped_column(Integer, default=0)
+
+
+AI_ON_FAILURE = ("send_without", "hold")
+
+
+class EmailTemplate(TimestampMixin, Base):
+    """Jinja2 (sandboxed) email template for PAM digests. Exactly one is active; every save bumps
+    `version` and stores a snapshot in email_template_versions (rollback + audit)."""
+
+    __tablename__ = "email_templates"
+    __table_args__ = (
+        Index("uq_email_templates_one_active", "active", unique=True, sqlite_where=text("active"), postgresql_where=text("active")),
+    )
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200), unique=True)
+    description: Mapped[str | None] = mapped_column(String(1000))
+    subject_tpl: Mapped[str] = mapped_column(Text)
+    html_tpl: Mapped[str] = mapped_column(Text)
+    text_tpl: Mapped[str] = mapped_column(Text)
+    ai_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_prompt: Mapped[str | None] = mapped_column(Text)
+    ai_max_words: Mapped[int] = mapped_column(Integer, default=120)
+    ai_on_failure: Mapped[str] = mapped_column(String(20), default="send_without")
+    active: Mapped[bool] = mapped_column(Boolean, default=False)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    updated_by: Mapped[str] = mapped_column(String(100))
+
+
+class EmailTemplateVersion(Base):
+    __tablename__ = "email_template_versions"
+    __table_args__ = (UniqueConstraint("template_id", "version", name="uq_email_template_versions_tpl_ver"),)
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    template_id: Mapped[int] = mapped_column(ForeignKey("email_templates.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    snapshot: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    note: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str] = mapped_column(String(100))
 
 
 class AuditLog(Base):

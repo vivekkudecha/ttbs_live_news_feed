@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react"
+import { FileText, Mail, Search } from "lucide-react"
 import { EmptyState } from "@/components/common/EmptyState"
 import { PageHeader } from "@/components/common/PageHeader"
 import { Badge } from "@/components/ui/badge"
@@ -8,9 +8,46 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useTemplates } from "@/api/hooks"
 import { errorMessage } from "@/api/http"
 import { Page } from "@/components/common/layout"
+import { EmailTemplates } from "@/components/templates/EmailTemplates"
+import { useSession } from "@/context/session"
+import { can } from "@/lib/access"
+
+/** Output templates: the email digest templates (editable) and the research prompt (read-only). */
+export default function Templates() {
+  const { user } = useSession()
+  const email = can(user, "integrations")
+  return (
+    <Page>
+      <PageHeader
+        title="Output templates"
+        description="How each PAM's digest email looks (editable, versioned, optional AI summary) and what the research looks for."
+      />
+      <Tabs defaultValue={email ? "email" : "research"}>
+        <TabsList>
+          {email && (
+            <TabsTrigger value="email">
+              <Mail /> Email templates
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="research">
+            <Search /> Research prompt
+          </TabsTrigger>
+        </TabsList>
+        {email && (
+          <TabsContent value="email" className="mt-4">
+            <EmailTemplates />
+          </TabsContent>
+        )}
+        <TabsContent value="research" className="mt-4">
+          <ResearchTemplate />
+        </TabsContent>
+      </Tabs>
+    </Page>
+  )
+}
 
 /** The research prompt every run uses (read-only: it lives in backend/app/research/prompts.py). */
-export default function Templates() {
+function ResearchTemplate() {
   const templates = useTemplates()
 
   if (templates.isLoading) return <Skeleton className="h-96" />
@@ -24,9 +61,7 @@ export default function Templates() {
     )
 
   return (
-    <Page>
-      <PageHeader title="Output templates" description="What the research looks for and the exact format each company's result comes back in." />
-
+    <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2">
@@ -91,6 +126,6 @@ export default function Templates() {
           </TabsContent>
         ))}
       </Tabs>
-    </Page>
+    </div>
   )
 }

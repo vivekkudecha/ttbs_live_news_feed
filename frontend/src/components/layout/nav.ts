@@ -5,6 +5,7 @@ import {
   FileSpreadsheet,
   Gauge,
   FileText,
+  Inbox,
   LayoutDashboard,
   MailCheck,
   PlugZap,
@@ -42,6 +43,7 @@ export const navGroups: NavGroup[] = [
       { to: "/signals", label: "Signals feed", icon: Zap, module: "signals" },
       { to: "/digest", label: "PAM digest preview", icon: MailCheck, module: "signals" },
       { to: "/runs", label: "Research runs", icon: Activity, module: "runs" },
+      { to: "/outbox", label: "Delivery outbox", icon: Inbox, module: "runs" },
     ],
   },
   {

@@ -39,6 +39,9 @@ class ResearchProvider(Protocol):
 
     def research(self, company: str, window_start: date, window_end: date) -> ResearchOutput: ...
 
+    # Plain text generation without web search (e.g. the AI summary in email digests).
+    def generate(self, prompt: str, *, system: str | None = None, max_tokens: int = 1024) -> ResearchOutput: ...
+
 
 class FakeProvider:
     """Deterministic-ish offline provider for development and tests."""
@@ -68,6 +71,12 @@ class FakeProvider:
                 "Opportunity type: Details not found\nRecommended outreach approach: Details not found"
             )
         return ResearchOutput(text=text, tokens_in=1200, tokens_out=180, cost=0.0, latency_ms=s.fake_latency_ms)
+
+    def generate(self, prompt: str, *, system: str | None = None, max_tokens: int = 1024) -> ResearchOutput:
+        if random.random() < get_settings().fake_failure_rate:
+            raise RetryableProviderError("fake transient failure", retry_after=0.1)
+        text = "Focus first on the accounts with fresh expansion news; each has a clear TTBS angle and a named next step below."
+        return ResearchOutput(text=text, tokens_in=max(1, len(prompt) // 4), tokens_out=24, cost=0.0)
 
 
 class AuthError(ProviderError):
@@ -141,6 +150,29 @@ class PerplexityProvider:
         if status not in (None, "completed", "in_progress"):
             raise ProviderError(f"perplexity response status={status}: {str(data.get('error'))[:300]}")
 
+        text = _output_text(data)
+        tin, tout, cost = _usage(data)
+        if cost is None:
+            cost = tin / 1000 * s.perplexity_price_in_per_1k + tout / 1000 * s.perplexity_price_out_per_1k
+        return ResearchOutput(text=text, tokens_in=tin, tokens_out=tout, cost=round(cost, 6), latency_ms=latency)
+
+    def generate(self, prompt: str, *, system: str | None = None, max_tokens: int = 1024) -> ResearchOutput:
+        """Plain completion with the configured model, no web search tool."""
+        s = get_settings()
+        payload: dict[str, Any] = {"model": self.model, "input": prompt, "max_output_tokens": max_tokens}
+        if system:
+            payload["instructions"] = system
+        t0 = time.perf_counter()
+        try:
+            resp = self._client.post("/v1/agent", json=payload)
+        except (httpx.TimeoutException, httpx.TransportError) as e:
+            raise RetryableProviderError(f"perplexity network error: {type(e).__name__}") from e
+        latency = int((time.perf_counter() - t0) * 1000)
+        _raise_for(resp)
+        try:
+            data = resp.json()
+        except ValueError as e:
+            raise RetryableProviderError("perplexity returned non-JSON body") from e
         text = _output_text(data)
         tin, tout, cost = _usage(data)
         if cost is None:

@@ -25,6 +25,19 @@ import type {
   AuditEntry,
   Page,
   DeliveryChannel,
+  DeadLetterPage,
+  DeadLetterStatus,
+  EmailConnectionInput,
+  EmailEstimate,
+  EmailPolicy,
+  EmailPreview,
+  EmailQuota,
+  EmailSettings,
+  EmailTemplate,
+  EmailTemplateInput,
+  EmailTemplateVersion,
+  NotificationDetail,
+  OutboxPage,
 } from "./types"
 
 // VITE_API_URL="/" means same origin: the SPA and the API sit behind one reverse proxy (Docker/nginx).
@@ -154,6 +167,40 @@ export const backend = {
   activateLlm: (p: AiProvider) => request<LlmSettings>("POST", `/settings/llm/${p}/activate`),
   testLlmConfig: (p: AiProvider) => request<LlmSettings & { ok: boolean; error: string | null }>("POST", `/settings/llm/${p}/test`),
   removeLlmConfig: (p: AiProvider) => request<void>("DELETE", `/settings/llm/${p}`),
+
+  // Email (Microsoft Graph, app-to-app). The client secret is write-only.
+  emailSettings: () => request<EmailSettings>("GET", "/settings/email"),
+  saveEmailSettings: (v: EmailConnectionInput) => request<EmailSettings>("PUT", "/settings/email", v),
+  testEmailSettings: () => request<EmailSettings & { ok: boolean; error: string | null }>("POST", "/settings/email/test"),
+  sendTestEmail: (to: string) => request<{ ok: boolean; to: string; requestId: string | null }>("POST", "/settings/email/test-send", { to }),
+  saveEmailLimits: (v: { perMinute: number; perHour: number; perDay: number; safetyMarginPct: number }) =>
+    request<EmailSettings>("PUT", "/settings/email/limits", v),
+  saveEmailPolicy: (v: EmailPolicy) => request<EmailSettings>("PUT", "/settings/email/policy", v),
+  enableEmail: (enabled: boolean) => request<EmailSettings>("POST", "/settings/email/enable", { enabled }),
+  pauseEmail: (minutes: number, reason?: string) => request<EmailSettings>("POST", "/settings/email/pause", { minutes, reason }),
+  resumeEmail: () => request<EmailSettings>("POST", "/settings/email/resume"),
+  removeEmailSettings: () => request<void>("DELETE", "/settings/email"),
+  emailQuota: () => request<EmailQuota>("GET", "/settings/email/quota"),
+  emailEstimate: (importId: string) => request<EmailEstimate>("GET", `/notifications/email-estimate${qs({ importId })}`),
+
+  // Email templates (Jinja2, versioned, one active; optional AI summary)
+  emailTemplates: () => request<EmailTemplate[]>("GET", "/email-templates"),
+  createEmailTemplate: (v: EmailTemplateInput) => request<EmailTemplate>("POST", "/email-templates", v),
+  updateEmailTemplate: (id: string, v: EmailTemplateInput) => request<EmailTemplate>("PUT", `/email-templates/${id}`, v),
+  deleteEmailTemplate: (id: string) => request<void>("DELETE", `/email-templates/${id}`),
+  activateEmailTemplate: (id: string) => request<EmailTemplate>("POST", `/email-templates/${id}/activate`),
+  emailTemplateVersions: (id: string) => request<EmailTemplateVersion[]>("GET", `/email-templates/${id}/versions`),
+  restoreEmailTemplate: (id: string, version: number) => request<EmailTemplate>("POST", `/email-templates/${id}/versions/${version}/restore`),
+  previewEmailTemplate: (v: EmailTemplateInput & { runId?: number; pamId?: number; withAi?: boolean }) =>
+    request<EmailPreview>("POST", "/email-templates/preview", v),
+
+  // Outbox + dead-letter queue
+  outbox: (q: { page: number; pageSize: number; status?: string; channel?: string; q?: string }) => request<OutboxPage>("GET", `/notifications/outbox${qs(q)}`),
+  notificationDetail: (id: string) => request<NotificationDetail>("GET", `/notifications/${id}/detail`),
+  deadLetters: (q: { page: number; pageSize: number; status?: DeadLetterStatus | ""; channel?: string }) =>
+    request<DeadLetterPage>("GET", `/notifications/dead-letters${qs({ ...q, status: q.status ?? "open" })}`),
+  requeueDeadLetters: (ids: string[]) => request<{ requeued: number }>("POST", "/notifications/dead-letters/requeue", { ids: ids.map(Number) }),
+  discardDeadLetter: (id: string, note: string) => request<unknown>("POST", `/notifications/dead-letters/${id}/discard`, { note }),
 }
 
 /**
