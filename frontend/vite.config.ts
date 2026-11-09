@@ -16,6 +16,8 @@ export default defineConfig({
           react: ["react", "react-dom", "react-router-dom", "@tanstack/react-query"],
           charts: ["recharts"],
           ui: ["radix-ui", "cmdk", "sonner", "lucide-react"],
+          motion: ["motion"],
+          table: ["@tanstack/react-table"],
         },
       },
     },

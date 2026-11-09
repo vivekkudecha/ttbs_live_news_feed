@@ -10,6 +10,9 @@ from pydantic import Field
 from app.api import read_models as rm
 from app.api import schemas as sch
 from app.api.deps import current_actor
+from app.api.listing import listing
+from app.core import cache
+from app.core.config import get_settings
 from app.core.timeutil import as_utc
 from app.db.session import unit_of_work
 from app.services import accounts, finops, notifications
@@ -89,9 +92,11 @@ def run_summary(run_id: str) -> dict[str, Any]:
 def pam_jobs(
     run_id: str, page: int = Query(0, ge=0), page_size: int = Query(50, ge=1, le=200, alias="pageSize"),
     search: str | None = None, filter: Literal["all", "attention", "done", "in_progress"] | None = None,
+    sort: str | None = Query(None, max_length=60), desc: bool = False, column_filter: str | None = Query(None, alias="columnFilter", max_length=4000),
 ) -> dict[str, Any]:
+    lst = listing(sort=sort, desc=desc, filter=column_filter)
     with unit_of_work() as uow:
-        return rm.pam_jobs(uow, run_id, page, page_size, search, filter)
+        return rm.pam_jobs(uow, run_id, page, page_size, search, filter, lst)
 
 
 @router.post("/run-summaries/{run_id}/pams/{pam_id}/resend")
@@ -138,8 +143,13 @@ def live_changes(run_id: str, since: datetime | None = None) -> dict[str, Any]:
 
 @router.post("/companies/query")
 def query_companies(body: CompanyQueryIn) -> dict[str, Any]:
-    with unit_of_work() as uow:
-        return rm.query_companies(uow, _dump(body))
+    q = _dump(body)
+
+    def load():
+        with unit_of_work() as uow:
+            return rm.query_companies(uow, q)
+
+    return cache.cached("accounts", _accounts_key("companies", q), get_settings().cache_ttl_lists, load)
 
 
 @router.get("/companies/search")
@@ -165,8 +175,21 @@ def reassign(body: ReassignIn, actor: str = Depends(current_actor)) -> dict[str,
 
 @router.post("/pams/query")
 def query_pams(body: PamQueryIn) -> dict[str, Any]:
-    with unit_of_work() as uow:
-        return rm.query_pams(uow, _dump(body))
+    q = _dump(body)
+
+    def load():
+        with unit_of_work() as uow:
+            return rm.query_pams(uow, q)
+
+    return cache.cached("accounts", _accounts_key("pams", q), get_settings().cache_ttl_lists, load)
+
+
+def _accounts_key(kind: str, q: dict[str, Any]) -> str:
+    """Company/PAM tables change with reassignments ("accounts"), uploads and row edits ("imports")
+    and research ("runs"): the key embeds those namespace versions so any of them invalidates it."""
+    import json
+
+    return f"{kind}:i{cache.version('imports')}:r{cache.version('runs')}:{json.dumps(q, sort_keys=True, default=str)}"
 
 
 @router.get("/pams/search")

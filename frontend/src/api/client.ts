@@ -4,7 +4,6 @@
  */
 import { request } from "./http"
 import type {
-  AuditEntry,
   Channel,
   CompanyDetail,
   CompanyOption,
@@ -56,7 +55,6 @@ export const api = {
   modules: () => request<ModuleInfo[]>("GET", "/auth/modules"),
 
   // ---- Users & access (admins only) -------------------------------------------------------
-  listUsers: () => request<ManagedUser[]>("GET", "/users"),
   createUser: (v: UserInput) => request<IssuedPassword>("POST", "/users", v),
   updateUser: (id: string, v: UserPatch) => request<ManagedUser>("PATCH", `/users/${id}`, v),
   resetUserPassword: (id: string) => request<IssuedPassword>("POST", `/users/${id}/reset-password`),
@@ -81,8 +79,10 @@ export const api = {
   dashboard: (pamId?: string) => request<DashboardSummary>("GET", `/dashboard${qs({ pamId })}`),
   listRuns: () => request<Run[]>("GET", "/run-summaries"),
   getRun: (id: string) => request<Run>("GET", `/run-summaries/${id}`),
-  pamJobs: (runId: string, q: { page: number; pageSize: number; search?: string; filter?: "all" | "attention" | "done" | "in_progress" }) =>
-    request<Page<PamJobRow>>("GET", `/run-summaries/${runId}/pam-jobs${qs(q)}`),
+  pamJobs: (
+    runId: string,
+    q: { page: number; pageSize: number; search?: string; filter?: "all" | "attention" | "done" | "in_progress"; sort?: string; desc?: boolean; columnFilter?: string },
+  ) => request<Page<PamJobRow>>("GET", `/run-summaries/${runId}/pam-jobs${qs({ ...q, desc: q.sort ? String(!!q.desc) : undefined })}`),
   querySignals: (q: SignalQuery) => request<SignalPage>("POST", "/signals/query", q),
   digest: (runId: string, pamId: string) => request<DigestData | null>("GET", `/digest${qs({ runId, pamId })}`),
   resendDigest: (runId: string, pamId: string) => request<{ requeued: number }>("POST", `/run-summaries/${runId}/pams/${pamId}/resend`),
@@ -94,7 +94,6 @@ export const api = {
   // ---- Small resources --------------------------------------------------------------------
   listTemplates: () => request<Template[]>("GET", "/templates"),
   listChannels: () => request<Channel[]>("GET", "/channels"),
-  listAudit: async () => (await request<Page<AuditEntry>>("GET", "/audit?pageSize=200")).rows,
   /** Cost analysis for an IST date range (inclusive, YYYY-MM-DD); default this month. USD. */
   finops: (range: { from?: string; to?: string } = {}) => {
     const p = new URLSearchParams()

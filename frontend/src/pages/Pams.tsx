@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { getCoreRowModel, useReactTable, type ColumnDef, type PaginationState, type RowSelectionState, type SortingState, type VisibilityState } from "@tanstack/react-table"
-import { ArrowRight, Building2, Copy, Download, Gauge, Loader2, Mail, MessageCircle, MoreHorizontal, Pencil, Search, Shuffle, UserMinus, Users, X } from "lucide-react"
+import { ArrowRight, Building2, Copy, Download,  Loader2, Mail, MessageCircle, MoreHorizontal, Pencil, Search, Shuffle, UserMinus, Users, X } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { EmptyState } from "@/components/common/EmptyState"
 import { StatusBadge } from "@/components/common/StatusBadge"
@@ -354,6 +354,7 @@ export default function Pams() {
         ) : (
           <div className={cn("transition-opacity", query.isPlaceholderData && "opacity-60")} aria-busy={query.isFetching}>
             <DataTable
+            dataKey={JSON.stringify([pagination, sorting])}
               table={table}
               stickyHeader
               minWidth="60rem"
@@ -365,9 +366,6 @@ export default function Pams() {
               }
             />
             <DataTablePagination table={table} totalRows={page.total} pageSizes={[20, 50, 100]} />
-            <p className="flex items-center gap-1 px-1 pt-1 text-xs text-muted-foreground" title="Server query time for this page">
-              <Gauge className="size-3.5" /> Loaded in {page.tookMs} ms
-            </p>
             <p className="px-1 pt-1 text-xs text-muted-foreground">{page.activeTotal.toLocaleString("en-IN")} active PAMs in total</p>
           </div>
         )}

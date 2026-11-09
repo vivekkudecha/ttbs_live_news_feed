@@ -73,7 +73,7 @@ def test_lockout_after_repeated_failures_and_admin_unlock(client):
         for _ in range(get_settings().auth_max_failed_attempts):
             assert c.post("/api/v1/auth/login", json={"username": "bob", "password": "Nope-Nope-12!x"}).status_code == 401
         assert sign_in(c, "bob").status_code == 401  # locked: even the right password is refused
-    users = {u["username"]: u for u in client.get("/api/v1/users").json()}
+    users = {u["username"]: u for u in client.get("/api/v1/users").json()["rows"]}
     assert users["bob"]["locked"] is True
     assert client.post(f"/api/v1/users/{uid}/unlock").json()["locked"] is False
     with anon_client() as c:

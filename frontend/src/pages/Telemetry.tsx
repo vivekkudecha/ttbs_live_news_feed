@@ -4,25 +4,31 @@
  * a per-step breakdown and the filterable event stream. Prometheus (/metrics) and OpenTelemetry
  * traces expose the same picture to external monitoring.
  */
-import { useState } from "react"
+import { useMemo, useState } from "react"
+import type { ColumnDef } from "@tanstack/react-table"
 import { Bar, BarChart, CartesianGrid, Legend, Tooltip, XAxis, YAxis } from "recharts"
 import { Activity, AlertTriangle, RotateCcw, Timer } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { StatCard } from "@/components/common/StatCard"
-import { EventTable, MiniPager } from "@/components/runs/RunInsights"
+import { EmptyState } from "@/components/common/EmptyState"
+import { DataTableColumnHeader } from "@/components/data-table/DataTableColumnHeader"
+import { SmartTable } from "@/components/data-table/SmartTable"
+import { useClientTable, useServerTable } from "@/components/data-table/useSmartTable"
+import { eventColumns } from "@/components/telemetry/columns"
 import { fmtMs, kindLabel, timeOf } from "@/lib/telemetry"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useTelemetryEvents, useTelemetrySummary } from "@/api/hooks"
-import { errorMessage } from "@/api/http"
+import { useTelemetrySummary } from "@/api/hooks"
+import { backend, errorMessage } from "@/api/http"
+import type { ProcessEvent, TelemetrySummary } from "@/api/types"
 import { cn } from "@/lib/utils"
 import { Page, StatGrid, Split } from "@/components/common/layout"
 import { ChartCard } from "@/components/common/ChartCard"
 import { chartTheme } from "@/components/common/chart-theme"
 
 const n = (x: number) => x.toLocaleString("en-IN")
+type KindRow = TelemetrySummary["byKind"][number]
 
 const WINDOWS: [string, string][] = [
   ["1", "Last hour"],
@@ -42,17 +48,68 @@ const KINDS: [string, string][] = [
 export default function Telemetry() {
   const [hours, setHours] = useState("24")
   const [kind, setKind] = useState("all")
-  const [status, setStatus] = useState("all")
-  const [page, setPage] = useState(0)
   const sum = useTelemetrySummary(Number(hours))
-  const ev = useTelemetryEvents({ page, pageSize: 25, hours: Number(hours), kind: kind === "all" ? undefined : kind, status: status === "all" ? undefined : status })
   const s = sum.data
+  const eventCols = useMemo(() => eventColumns(true), [])
+  const events = useServerTable<ProcessEvent>({
+    id: "events",
+    columns: eventCols,
+    queryKey: ["telemetryEvents", hours, kind],
+    fetcher: (q) => backend.telemetryEvents({ ...q, hours: Number(hours), kind: kind === "all" ? undefined : kind }),
+    pageSize: 25,
+    getRowId: (e) => e.id,
+    refetchInterval: 10_000,
+  })
+  const stepCols = useMemo<ColumnDef<KindRow, unknown>[]>(
+    () => [
+      {
+        id: "kind",
+        accessorFn: (k) => kindLabel(k.kind),
+        meta: { label: "Step", filter: { type: "text" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Step" />,
+        cell: ({ row }) => <span className="text-sm font-medium">{kindLabel(row.original.kind)}</span>,
+      },
+      {
+        id: "total",
+        accessorKey: "total",
+        sortDescFirst: true,
+        meta: { label: "Total", align: "right", filter: { type: "range" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Total" align="right" />,
+        cell: ({ row }) => <span className="tabular">{n(row.original.total)}</span>,
+      },
+      {
+        id: "retry",
+        accessorKey: "retry",
+        sortDescFirst: true,
+        meta: { label: "Retry", align: "right", filter: { type: "range" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Retry" align="right" />,
+        cell: ({ row }) => <span className="tabular">{row.original.retry ? n(row.original.retry) : "—"}</span>,
+      },
+      {
+        id: "error",
+        accessorKey: "error",
+        sortDescFirst: true,
+        meta: { label: "Error", align: "right", filter: { type: "range" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Error" align="right" />,
+        cell: ({ row }) => <span className={cn("tabular", row.original.error > 0 && "font-medium text-destructive")}>{row.original.error ? n(row.original.error) : "—"}</span>,
+      },
+      {
+        id: "avgMs",
+        accessorKey: "avgMs",
+        meta: { label: "Avg", align: "right", filter: { type: "range", unit: "ms" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Avg" align="right" />,
+        cell: ({ row }) => <span className="tabular text-muted-foreground">{fmtMs(row.original.avgMs)}</span>,
+      },
+    ],
+    [],
+  )
+  const steps = useClientTable<KindRow>({ id: "steps", data: s?.byKind, columns: stepCols, defaultSort: { id: "total", desc: true }, pageSize: 10, getRowId: (k) => k.kind })
 
   return (
     <div>
       <PageHeader title="Telemetry" description="Every upload, run, research attempt and delivery is recorded as an event. Use it to see what happened, when, how long it took and what failed." />
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        <Select value={hours} onValueChange={(v) => (setHours(v), setPage(0))}>
+        <Select value={hours} onValueChange={setHours}>
           <SelectTrigger className="w-44" aria-label="Time window">
             <SelectValue />
           </SelectTrigger>
@@ -62,31 +119,6 @@ export default function Telemetry() {
                 {l}
               </SelectItem>
             ))}
-          </SelectContent>
-        </Select>
-        <Select value={kind} onValueChange={(v) => (setKind(v), setPage(0))}>
-          <SelectTrigger className="w-40" aria-label="Step type">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {KINDS.map(([v, l]) => (
-              <SelectItem key={v} value={v}>
-                {l}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={status} onValueChange={(v) => (setStatus(v), setPage(0))}>
-          <SelectTrigger className="w-36" aria-label="Outcome">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Any outcome</SelectItem>
-            <SelectItem value="ok">OK</SelectItem>
-            <SelectItem value="retry">Retry</SelectItem>
-            <SelectItem value="error">Error</SelectItem>
-            <SelectItem value="skipped">Skipped</SelectItem>
-            <SelectItem value="info">Info</SelectItem>
           </SelectContent>
         </Select>
         {s && (
@@ -122,59 +154,52 @@ export default function Telemetry() {
               </BarChart>
             </ChartCard>
 
-            <Card className="py-0">
-              <CardHeader className="pt-5">
+            <Card className="gap-4 pb-0">
+              <CardHeader>
                 <CardTitle>By step</CardTitle>
                 <CardDescription>Outcome counts and average duration</CardDescription>
               </CardHeader>
-              <CardContent className="overflow-x-auto p-0">
-                <Table className="min-w-[26rem]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="pl-5">Step</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="text-right">Retry</TableHead>
-                      <TableHead className="text-right">Error</TableHead>
-                      <TableHead className="pr-5 text-right">Avg</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {s.byKind.map((k) => (
-                      <TableRow key={k.kind}>
-                        <TableCell className="pl-5 text-sm font-medium">{kindLabel(k.kind)}</TableCell>
-                        <TableCell className="tabular text-right">{n(k.total)}</TableCell>
-                        <TableCell className="tabular text-right">{k.retry ? n(k.retry) : "—"}</TableCell>
-                        <TableCell className={cn("tabular text-right", k.error > 0 && "font-medium text-destructive")}>{k.error ? n(k.error) : "—"}</TableCell>
-                        <TableCell className="tabular pr-5 text-right text-muted-foreground">{fmtMs(k.avgMs)}</TableCell>
-                      </TableRow>
-                    ))}
-                    {s.byKind.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={5} className="h-20 text-center text-sm text-muted-foreground">
-                          Nothing recorded in this window.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+              <CardContent className="pb-5">
+                <SmartTable
+                  state={steps}
+                  minWidth="26rem"
+                  empty={<p className="text-sm text-muted-foreground">Nothing recorded in this window.</p>}
+                />
               </CardContent>
             </Card>
           </Split>
         </Page>
       )}
 
-      <div className="mt-8 space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-base font-medium">Event stream</h2>
-          <span className="text-sm text-muted-foreground">newest first, refreshes every 10 s</span>
-          <div className="ml-auto">{ev.data && <MiniPager page={page} pageSize={25} total={ev.data.total} onPage={setPage} />}</div>
+      <section className="mt-8 space-y-3">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <h2 className="text-base font-semibold">Event stream</h2>
+          <span className="text-sm text-muted-foreground">refreshes every 10 s · sort or filter any column from its header</span>
         </div>
-        <Card className="py-0">
-          <CardContent className={cn("overflow-x-auto p-0 transition-opacity", ev.isPlaceholderData && "opacity-60")}>
-            <EventTable rows={ev.data?.rows ?? []} loading={ev.isLoading} showRun />
-          </CardContent>
-        </Card>
-      </div>
+        <SmartTable
+          state={events}
+          pageSizes={[25, 50, 100]}
+          toolbar={
+            <Select value={kind} onValueChange={setKind}>
+                  <SelectTrigger className="w-40" aria-label="Step type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                {KINDS.map(([v, l]) => (
+                      <SelectItem key={v} value={v}>
+                    {l}
+                      </SelectItem>
+                ))}
+                  </SelectContent>
+                </Select>
+          }
+          empty={
+            <EmptyState icon={Activity} title="No events match">
+              Widen the time window, pick another step type or clear a filter.
+            </EmptyState>
+          }
+        />
+      </section>
     </div>
   )
 }

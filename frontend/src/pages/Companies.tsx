@@ -10,7 +10,7 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table"
-import { AlertTriangle, Building2, CircleDashed, CircleOff, Copy, Download, Gauge, Upload, MoreHorizontal, PanelRightOpen, Play, Search, Sparkles, Trash2, UserRound, X, Zap } from "lucide-react"
+import { AlertTriangle, Building2, CircleDashed, CircleOff, Copy, Download,  Upload, MoreHorizontal, PanelRightOpen, Play, Search, Sparkles, Trash2, UserRound, X, Zap } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { EmptyState } from "@/components/common/EmptyState"
 import { StatusBadge } from "@/components/common/StatusBadge"
@@ -536,9 +536,9 @@ export function CompaniesList() {
       ) : (
         <div className={cn("transition-opacity", query.isPlaceholderData && "opacity-60")} aria-busy={query.isFetching}>
           <DataTable
+            dataKey={JSON.stringify([pagination, sorting])}
             table={table}
             stickyHeader
-            maxHeight="calc(100svh - 14rem)"
             onRowClick={(r) => openDrawer(r.id)}
             activeRowId={openId ?? undefined}
             empty={
@@ -548,9 +548,6 @@ export function CompaniesList() {
             }
           />
           <DataTablePagination table={table} totalRows={page.total} pageSizes={[20, 50, 100]} />
-          <p className="flex items-center gap-1 px-1 pt-1 text-xs text-muted-foreground" title="Server query time for this page">
-            <Gauge className="size-3.5" /> Loaded in {page.tookMs} ms
-          </p>
         </div>
       )}
 

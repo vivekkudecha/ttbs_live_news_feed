@@ -12,7 +12,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCompanyDetail } from "@/api/hooks"
-import { fmtDate, fmtUsd, initials } from "@/lib/format"
+import { fmtDate, initials } from "@/lib/format"
 import type { AssignmentReason } from "@/api/types"
 
 const reasonLabel: Record<AssignmentReason, { label: string; icon: typeof Shuffle }> = {
@@ -49,7 +49,6 @@ export function CompanyDrawer({
   const pamName = (id: string) => names.get(id) ?? (pam?.id === id ? pam.name : id)
 
   const signals = cycles.filter((c) => c.r.status === "signal")
-  const totalCost = cycles.reduce((s, c) => s + c.r.cost, 0)
   const totalTokens = cycles.reduce((s, c) => s + c.r.tokensIn + c.r.tokensOut, 0)
   const avgLatency = cycles.length ? Math.round(cycles.reduce((s, c) => s + c.r.latencyMs, 0) / cycles.length / 1000) : 0
 
@@ -204,11 +203,11 @@ export function CompanyDrawer({
                     </dl>
                   </section>
                   <section className="space-y-3">
-                    <h3 className="eyebrow">Research cost</h3>
+                    <h3 className="eyebrow">Research</h3>
                     <dl className="grid grid-cols-3 gap-4 text-sm">
                       <div>
-                        <dt className="text-xs text-muted-foreground">Total spend</dt>
-                        <dd className="tabular mt-0.5">{fmtUsd(totalCost, 3)}</dd>
+                        <dt className="text-xs text-muted-foreground">Cycles</dt>
+                        <dd className="tabular mt-0.5">{cycles.length.toLocaleString("en-IN")}</dd>
                       </div>
                       <div>
                         <dt className="text-xs text-muted-foreground">Tokens</dt>

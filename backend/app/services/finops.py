@@ -117,7 +117,7 @@ def check_budget(uow: UnitOfWork, estimate: float) -> dict[str, Any]:
     budget = s.monthly_budget_usd
     if s.budget_hard_cap and budget > 0 and spent >= budget:
         raise ValidationFailed(
-            f"Monthly budget reached: ${spent:,.2f} of ${budget:,.2f} spent. Raise MONTHLY_BUDGET_USD to run more research this month.",
+            "The monthly research budget has been reached (see Costs). Raise MONTHLY_BUDGET_USD to run more research this month.",
             code="budget_exceeded", details={"spent": round(spent, 2), "budget": budget},
         )
     after = spent + estimate

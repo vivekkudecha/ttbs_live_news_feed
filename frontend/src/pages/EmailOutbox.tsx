@@ -4,10 +4,11 @@
  * failed permanently or ran out of attempts land in the dead-letter queue, where an operator can
  * requeue them (after fixing the cause) or discard them with a note. Everything is audited.
  */
-import { useState } from "react"
+import { useMemo, useState } from "react"
+import type { ColumnDef } from "@tanstack/react-table"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { ChevronLeft, ChevronRight, Inbox, Loader2, MailWarning, RotateCcw, Search, Settings2, XCircle } from "lucide-react"
+import { Inbox, Loader2, MailWarning, RotateCcw, Search, Settings2, XCircle } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { EmptyState } from "@/components/common/EmptyState"
@@ -15,20 +16,20 @@ import { Page } from "@/components/common/layout"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTableColumnHeader } from "@/components/data-table/DataTableColumnHeader"
+import { SmartTable } from "@/components/data-table/SmartTable"
+import { useServerTable } from "@/components/data-table/useSmartTable"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { useDeadLetters, useDiscardDeadLetter, useNotificationDetail, useOutbox, useRequeueDeadLetters, useResendNotification } from "@/api/hooks"
-import { errorMessage } from "@/api/http"
-import type { DeadLetter, DeadLetterStatus, OutboxStatus } from "@/api/types"
+import { useDeadLetters, useDiscardDeadLetter, useNotificationDetail, useRequeueDeadLetters, useResendNotification } from "@/api/hooks"
+import { backend, errorMessage } from "@/api/http"
+import type { DeadLetter, DeadLetterPage, DeadLetterStatus, OutboxPage, OutboxRow, OutboxStatus } from "@/api/types"
 import { useDebounced } from "@/lib/use-debounced"
 import { fmtDateTime } from "@/lib/format"
 import { useSession } from "@/context/session"
@@ -36,24 +37,6 @@ import { can } from "@/lib/access"
 
 const PAGE = 50
 const num = (n: number | undefined) => (n ?? 0).toLocaleString("en-IN")
-
-function Pager({ page, total, onPage }: { page: number; total: number; onPage: (p: number) => void }) {
-  const from = total ? page * PAGE + 1 : 0
-  const to = Math.min(total, (page + 1) * PAGE)
-  return (
-    <nav aria-label="Pagination" className="flex items-center gap-2">
-      <span className="tabular text-sm text-muted-foreground">
-        {num(from)}–{num(to)} of {num(total)}
-      </span>
-      <Button variant="outline" size="icon-sm" onClick={() => onPage(page - 1)} disabled={page === 0} aria-label="Previous page">
-        <ChevronLeft />
-      </Button>
-      <Button variant="outline" size="icon-sm" onClick={() => onPage(page + 1)} disabled={to >= total} aria-label="Next page">
-        <ChevronRight />
-      </Button>
-    </nav>
-  )
-}
 
 export default function EmailOutbox() {
   const { user } = useSession()
@@ -102,116 +85,126 @@ function OutboxTab() {
   const [status, setStatus] = useState<OutboxStatus | "all">("all")
   const [channel, setChannel] = useState("email")
   const [q, setQ] = useState("")
-  const [page, setPage] = useState(0)
   const [openId, setOpenId] = useState<string | null>(null)
   const dq = useDebounced(q, 300)
-  const data = useOutbox({ page, pageSize: PAGE, status: status === "all" ? undefined : status, channel: channel === "all" ? undefined : channel, q: dq || undefined })
-  const counts = data.data?.counts ?? {}
+  const columns = useMemo<ColumnDef<OutboxRow, unknown>[]>(
+    () => [
+      {
+        id: "createdAt",
+        accessorKey: "createdAt",
+        meta: { label: "Queued", filter: { type: "date" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Queued" />,
+        cell: ({ row }) => <span className="tabular whitespace-nowrap text-sm text-muted-foreground">{fmtDateTime(row.original.createdAt)}</span>,
+      },
+      {
+        id: "pamName",
+        accessorKey: "pamName",
+        meta: { label: "Recipient", filter: { type: "text" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Recipient" />,
+        cell: ({ row }) => (
+          <div>
+            <div className="text-sm font-semibold">{row.original.pamName ?? "—"}</div>
+            <div className="text-xs text-muted-foreground">{row.original.recipient ?? "no address"}</div>
+          </div>
+        ),
+      },
+      {
+        id: "subject",
+        accessorKey: "subject",
+        enableSorting: false,
+        meta: { label: "Subject" },
+        header: "Subject",
+        cell: ({ row }) => <span className="line-clamp-2 max-w-[16rem] text-sm">{row.original.subject ?? "—"}</span>,
+      },
+      {
+        id: "status",
+        accessorKey: "status",
+        meta: { label: "Status", filter: { type: "enum", options: STATUSES.filter((x) => x !== "all").map((x) => ({ value: x, label: x[0].toUpperCase() + x.slice(1) })) } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => {
+          const n = row.original
+          return (
+            <div>
+              <span className="flex items-center gap-1.5">
+                <StatusBadge status={n.status === "sending" ? "processing" : n.status} label={n.status === "sending" ? "Sending" : undefined} />
+                {n.status === "pending" && n.reservedAt && <Badge variant="outline">slot reserved</Badge>}
+              </span>
+              {n.lastError && n.status !== "sent" && <div className="mt-1 max-w-xs truncate text-xs text-muted-foreground">{n.lastError}</div>}
+            </div>
+          )
+        },
+      },
+      {
+        id: "attempts",
+        accessorKey: "attempts",
+        meta: { label: "Attempts", align: "right", filter: { type: "range" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Attempts" align="right" />,
+        cell: ({ row }) => <span className="tabular text-sm">{row.original.attempts}</span>,
+      },
+      {
+        id: "sentAt",
+        accessorKey: "sentAt",
+        meta: { label: "Next try / sent", filter: { type: "date" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Next try / sent" />,
+        cell: ({ row }) => (
+          <span className="tabular whitespace-nowrap text-sm text-muted-foreground">
+            {row.original.sentAt ? fmtDateTime(row.original.sentAt) : fmtDateTime(row.original.nextAttemptAt)}
+          </span>
+        ),
+      },
+    ],
+    [],
+  )
+  const state = useServerTable<OutboxRow, OutboxPage>({
+    id: "outbox",
+    columns,
+    queryKey: ["outbox", { status, channel, dq }],
+    fetcher: (t) => backend.outbox({ ...t, status: status === "all" ? undefined : status, channel: channel === "all" ? undefined : channel, q: dq || undefined }),
+    pageSize: PAGE,
+    getRowId: (n) => n.id,
+    refetchInterval: 10_000,
+  })
+  const counts = state.data?.counts ?? {}
   const all = Object.values(counts).reduce((a, b) => a + (b ?? 0), 0)
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         {STATUSES.map((s) => (
-          <Button
-            key={s}
-            size="sm"
-            variant={status === s ? "default" : "outline"}
-            onClick={() => {
-              setStatus(s)
-              setPage(0)
-            }}
-            aria-pressed={status === s}
-            className="capitalize"
-          >
+          <Button key={s} size="sm" variant={status === s ? "default" : "outline"} onClick={() => setStatus(s)} aria-pressed={status === s} className="capitalize">
             {s} <span className="tabular opacity-70">{num(s === "all" ? all : counts[s])}</span>
           </Button>
         ))}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-1 flex-wrap gap-2">
-          <div className="relative min-w-56 flex-1 sm:max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search recipient…"
-              className="pl-8"
-              value={q}
-              onChange={(e) => {
-                setQ(e.target.value)
-                setPage(0)
-              }}
-            />
-          </div>
-          <Select
-            value={channel}
-            onValueChange={(c) => {
-              setChannel(c)
-              setPage(0)
-            }}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="email">Email</SelectItem>
-              <SelectItem value="whatsapp">WhatsApp</SelectItem>
-              <SelectItem value="all">All channels</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Pager page={page} total={data.data?.total ?? 0} onPage={setPage} />
-      </div>
-      <Card className="py-0">
-        <CardContent className="overflow-x-auto p-0">
-          <Table className="min-w-[60rem]">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="pl-5">Queued</TableHead>
-                <TableHead>Recipient</TableHead>
-                <TableHead>Subject</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Attempts</TableHead>
-                <TableHead className="pr-5">Next try / sent</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.isLoading && (
-                <TableRow>
-                  <TableCell colSpan={6}>
-                    <Skeleton className="h-24" />
-                  </TableCell>
-                </TableRow>
-              )}
-              {data.data?.rows.map((n) => (
-                <TableRow key={n.id} className="cursor-pointer" onClick={() => setOpenId(n.id)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && setOpenId(n.id)}>
-                  <TableCell className="tabular pl-5 text-sm text-muted-foreground">{fmtDateTime(n.createdAt)}</TableCell>
-                  <TableCell>
-                    <div className="text-sm font-medium">{n.pamName ?? "—"}</div>
-                    <div className="text-xs text-muted-foreground">{n.recipient ?? "no address"}</div>
-                  </TableCell>
-                  <TableCell className="max-w-sm truncate text-sm">{n.subject ?? "—"}</TableCell>
-                  <TableCell>
-                    <span className="flex items-center gap-1.5">
-                      <StatusBadge status={n.status === "sending" ? "processing" : n.status} label={n.status === "sending" ? "Sending" : undefined} />
-                      {n.status === "pending" && n.reservedAt && <Badge variant="outline">slot reserved</Badge>}
-                    </span>
-                    {n.lastError && n.status !== "sent" && <div className="mt-1 max-w-xs truncate text-xs text-muted-foreground">{n.lastError}</div>}
-                  </TableCell>
-                  <TableCell className="tabular text-right text-sm">{n.attempts}</TableCell>
-                  <TableCell className="tabular pr-5 text-sm text-muted-foreground">{n.sentAt ? fmtDateTime(n.sentAt) : fmtDateTime(n.nextAttemptAt)}</TableCell>
-                </TableRow>
-              ))}
-              {data.data && data.data.rows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
-                    Nothing here.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <SmartTable
+        state={state}
+        onRowClick={(n) => setOpenId(n.id)}
+        minWidth="60rem"
+        pageSizes={[25, 50, 100]}
+        toolbar={
+          <>
+            <div className="relative min-w-56 sm:w-72">
+              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Search recipient…" className="h-9 pl-8" value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+            <Select value={channel} onValueChange={setChannel}>
+              <SelectTrigger className="h-9 w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                <SelectItem value="all">All channels</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        }
+        empty={
+          <EmptyState icon={Inbox} title="Nothing here">
+            Try another status, channel or filter.
+          </EmptyState>
+        }
+      />
       <DetailSheet id={openId} onClose={() => setOpenId(null)} />
     </div>
   )
@@ -305,135 +298,163 @@ function DetailSheet({ id, onClose }: { id: string | null; onClose: () => void }
 
 function DeadLetterTab() {
   const [status, setStatus] = useState<DeadLetterStatus>("open")
-  const [page, setPage] = useState(0)
-  const [picked, setPicked] = useState<Set<string>>(new Set())
   const [discard, setDiscard] = useState<DeadLetter | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
-  const data = useDeadLetters({ page, pageSize: PAGE, status })
   const requeue = useRequeueDeadLetters()
-  const rows = data.data?.rows ?? []
-  const allPicked = rows.length > 0 && rows.every((r) => picked.has(r.id))
 
-  const doRequeue = (ids: string[]) =>
+  const doRequeue = (ids: string[], after?: () => void) =>
     requeue.mutate(ids, {
       onSuccess: (r) => {
         toast.success(`${num(r.requeued)} requeued`, { description: "They go back in line, oldest first, within the sending limits." })
-        setPicked(new Set())
+        after?.()
       },
       onError: (e) => toast.error("Not requeued", { description: errorMessage(e) }),
     })
 
+  const columns = useMemo<ColumnDef<DeadLetter, unknown>[]>(
+    () => [
+      ...(status === "open"
+        ? [
+            {
+              id: "select",
+              size: 40,
+              enableSorting: false,
+              enableHiding: false,
+              header: ({ table }) => (
+                <Checkbox
+                  checked={table.getIsAllPageRowsSelected() ? true : table.getIsSomePageRowsSelected() ? "indeterminate" : false}
+                  onCheckedChange={(c) => table.toggleAllPageRowsSelected(c === true)}
+                  aria-label="Select all on this page"
+                />
+              ),
+              cell: ({ row }) => (
+                <Checkbox checked={row.getIsSelected()} onCheckedChange={(c) => row.toggleSelected(c === true)} aria-label={`Select ${row.original.recipient}`} />
+              ),
+            } satisfies ColumnDef<DeadLetter, unknown>,
+          ]
+        : []),
+      {
+        id: "createdAt",
+        accessorKey: "createdAt",
+        meta: { label: "Failed", filter: { type: "date" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Failed" />,
+        cell: ({ row }) => <span className="tabular whitespace-nowrap text-sm text-muted-foreground">{fmtDateTime(row.original.createdAt)}</span>,
+      },
+      {
+        id: "recipient",
+        accessorKey: "recipient",
+        meta: { label: "Recipient", filter: { type: "text" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Recipient" />,
+        cell: ({ row }) => (
+          <div>
+            <button type="button" className="text-left text-sm font-semibold hover:underline" onClick={() => setOpenId(row.original.notificationId)}>
+              {row.original.recipient ?? "—"}
+            </button>
+            <div className="max-w-xs truncate text-xs text-muted-foreground">{row.original.subject}</div>
+          </div>
+        ),
+      },
+      {
+        id: "reason",
+        accessorKey: "reason",
+        meta: { label: "Reason", filter: { type: "enum", options: [{ value: "permanent", label: "Permanent" }, { value: "exhausted", label: "Out of attempts" }] } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Reason" />,
+        cell: ({ row }) => (
+          <Badge variant={row.original.reason === "permanent" ? "destructive" : "secondary"}>
+            {row.original.reason === "permanent" ? "Permanent" : `Gave up after ${row.original.attempts}`}
+          </Badge>
+        ),
+      },
+      {
+        id: "lastError",
+        accessorKey: "lastError",
+        enableSorting: false,
+        meta: { label: "Last error", filter: { type: "text" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Last error" />,
+        cell: ({ row }) => <span className="line-clamp-2 max-w-md whitespace-normal break-words text-xs text-muted-foreground">{row.original.lastError}</span>,
+      },
+      {
+        id: "actions",
+        enableSorting: false,
+        enableHiding: false,
+        meta: { align: "right" },
+        header: () => <span className="block text-right">{status === "open" ? "Actions" : "Resolved"}</span>,
+        cell: ({ row }) => {
+          const d = row.original
+          return status === "open" ? (
+            <span className="flex justify-end gap-1">
+              <Button size="sm" variant="outline" onClick={() => doRequeue([d.id])} disabled={requeue.isPending}>
+                <RotateCcw /> Requeue
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setDiscard(d)}>
+                <XCircle /> Discard
+              </Button>
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {fmtDateTime(d.resolvedAt)} · {d.resolvedBy}
+              {d.resolutionNote && <span className="block">{d.resolutionNote}</span>}
+            </span>
+          )
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [status, requeue.isPending],
+  )
+  const state = useServerTable<DeadLetter, DeadLetterPage>({
+    id: "dlq",
+    columns,
+    queryKey: ["deadLetters", status],
+    fetcher: (t) => backend.deadLetters({ ...t, status }),
+    pageSize: PAGE,
+    getRowId: (d) => d.id,
+    enableRowSelection: status === "open",
+    refetchInterval: 15_000,
+  })
+  const picked = Object.keys(state.table.getState().rowSelection)
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap gap-2">
-          {(["open", "requeued", "discarded"] as DeadLetterStatus[]).map((s) => (
-            <Button
-              key={s}
-              size="sm"
-              variant={status === s ? "default" : "outline"}
-              className="capitalize"
-              aria-pressed={status === s}
-              onClick={() => {
-                setStatus(s)
-                setPage(0)
-                setPicked(new Set())
-              }}
-            >
-              {s} <span className="tabular opacity-70">{num(data.data?.counts[s])}</span>
-            </Button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {status === "open" && (
-            <Button size="sm" disabled={picked.size === 0 || requeue.isPending} onClick={() => doRequeue([...picked])}>
-              {requeue.isPending ? <Loader2 className="animate-spin" /> : <RotateCcw />} Requeue {picked.size > 0 && num(picked.size)}
-            </Button>
-          )}
-          <Pager page={page} total={data.data?.total ?? 0} onPage={setPage} />
-        </div>
+      <div className="flex flex-wrap gap-2">
+        {(["open", "requeued", "discarded"] as DeadLetterStatus[]).map((s) => (
+          <Button
+            key={s}
+            size="sm"
+            variant={status === s ? "default" : "outline"}
+            className="capitalize"
+            aria-pressed={status === s}
+            onClick={() => {
+              setStatus(s)
+              state.table.resetRowSelection()
+            }}
+          >
+            {s} <span className="tabular opacity-70">{num(state.data?.counts[s])}</span>
+          </Button>
+        ))}
       </div>
-      {data.data && data.data.total === 0 ? (
+      {!state.loading && state.total === 0 && state.table.getState().columnFilters.length === 0 ? (
         <EmptyState icon={MailWarning} title={status === "open" ? "No undelivered emails" : `Nothing ${status}`}>
           {status === "open" ? "Emails that fail permanently or run out of attempts appear here for review." : undefined}
         </EmptyState>
       ) : (
-        <Card className="py-0">
-          <CardContent className="overflow-x-auto p-0">
-            <Table className="min-w-[62rem]">
-              <TableHeader>
-                <TableRow>
-                  {status === "open" && (
-                    <TableHead className="w-10 pl-5">
-                      <Checkbox
-                        checked={allPicked}
-                        onCheckedChange={(c) => setPicked(c === true ? new Set(rows.map((r) => r.id)) : new Set())}
-                        aria-label="Select all on this page"
-                      />
-                    </TableHead>
-                  )}
-                  <TableHead className={status === "open" ? "" : "pl-5"}>Failed</TableHead>
-                  <TableHead>Recipient</TableHead>
-                  <TableHead>Reason</TableHead>
-                  <TableHead>Last error</TableHead>
-                  <TableHead className="pr-5 text-right">{status === "open" ? "Actions" : "Resolved"}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((d) => (
-                  <TableRow key={d.id}>
-                    {status === "open" && (
-                      <TableCell className="pl-5">
-                        <Checkbox
-                          checked={picked.has(d.id)}
-                          onCheckedChange={(c) =>
-                            setPicked((p) => {
-                              const n = new Set(p)
-                              if (c === true) n.add(d.id)
-                              else n.delete(d.id)
-                              return n
-                            })
-                          }
-                          aria-label={`Select ${d.recipient}`}
-                        />
-                      </TableCell>
-                    )}
-                    <TableCell className={status === "open" ? "tabular text-sm text-muted-foreground" : "tabular pl-5 text-sm text-muted-foreground"}>
-                      {fmtDateTime(d.createdAt)}
-                    </TableCell>
-                    <TableCell>
-                      <button type="button" className="text-left text-sm font-medium hover:underline" onClick={() => setOpenId(d.notificationId)}>
-                        {d.recipient ?? "—"}
-                      </button>
-                      <div className="max-w-xs truncate text-xs text-muted-foreground">{d.subject}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={d.reason === "permanent" ? "destructive" : "secondary"}>{d.reason === "permanent" ? "Permanent" : `Gave up after ${d.attempts}`}</Badge>
-                    </TableCell>
-                    <TableCell className="max-w-md whitespace-normal break-words text-xs text-muted-foreground">{d.lastError}</TableCell>
-                    <TableCell className="pr-5 text-right">
-                      {status === "open" ? (
-                        <span className="flex justify-end gap-1">
-                          <Button size="sm" variant="outline" onClick={() => doRequeue([d.id])} disabled={requeue.isPending}>
-                            <RotateCcw /> Requeue
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setDiscard(d)}>
-                            <XCircle /> Discard
-                          </Button>
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">
-                          {fmtDateTime(d.resolvedAt)} · {d.resolvedBy}
-                          {d.resolutionNote && <span className="block">{d.resolutionNote}</span>}
-                        </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <SmartTable
+          state={state}
+          minWidth="62rem"
+          pageSizes={[25, 50, 100]}
+          actions={
+            status === "open" && (
+              <Button size="sm" className="h-9" disabled={picked.length === 0 || requeue.isPending} onClick={() => doRequeue(picked, () => state.table.resetRowSelection())}>
+                {requeue.isPending ? <Loader2 className="animate-spin" /> : <RotateCcw />} Requeue {picked.length > 0 && num(picked.length)}
+              </Button>
+            )
+          }
+          empty={
+            <EmptyState icon={MailWarning} title="Nothing matches">
+              Clear a filter to see every entry.
+            </EmptyState>
+          }
+        />
       )}
       <p className="text-xs text-muted-foreground">
         Fix the cause first (for example the mailbox permission or the recipient address), then requeue. Requeued emails are rendered again with the active

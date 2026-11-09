@@ -298,9 +298,18 @@ def _get(uow: UnitOfWork, user_id: int) -> User:
     return user
 
 
-def list_users() -> list[dict[str, Any]]:
+def list_users(*, page: int = 0, size: int = 50, spec: Any = None, lst: Any = None) -> dict[str, Any]:
+    """Users, paged; sortable/filterable by column when `spec` + `lst` (api/listing.py) are given."""
+    from sqlalchemy import func
+
+    from app.api.listing import conditions, ordering
+
+    where = conditions(spec, lst) if spec and lst else []
+    order = ordering(spec, lst, [User.username], User.id) if spec and lst else [User.username]
     with unit_of_work() as uow:
-        return [user_out(u, admin_view=True) for u in uow.session.scalars(select(User).order_by(User.username))]
+        rows = uow.session.scalars(select(User).where(*where).order_by(*order).limit(size).offset(page * size))
+        total = uow.session.scalar(select(func.count(User.id)).where(*where)) or 0
+        return {"rows": [user_out(u, admin_view=True) for u in rows], "total": total, "page": page, "pageSize": size}
 
 
 def create_user(data: dict[str, Any], *, actor: str) -> dict[str, Any]:

@@ -6,11 +6,13 @@ cannot read it); responses carry the CSRF token the SPA echoes on writes.
 
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import Field
 
 from app.api import schemas as sch
+from app.api import table_specs as spec
 from app.api.deps import Principal, current_principal
+from app.api.listing import Listing, listing
 from app.core import permissions as perm
 from app.core.config import get_settings
 from app.core.errors import NotFound
@@ -126,8 +128,9 @@ def _uid(user_id: str) -> int:
 
 
 @router.get("/users")
-def list_users() -> list[dict[str, Any]]:
-    return auth.list_users()
+def list_users(page: int = Query(0, ge=0), page_size: int = Query(50, ge=1, le=500, alias="pageSize"),
+               lst: Listing = Depends(listing)) -> dict[str, Any]:
+    return auth.list_users(page=page, size=page_size, spec=spec.USERS, lst=lst)
 
 
 @router.post("/users", status_code=201)

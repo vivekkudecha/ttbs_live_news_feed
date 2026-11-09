@@ -258,7 +258,33 @@ def _attention(j: dict[str, Any]) -> bool:
     return j["email"] == "failed" or j["whatsapp"] == "failed" or j["status"] == "partial"
 
 
-def pam_jobs(uow: UnitOfWork, run_id: str, page: int, size: int, search: str | None, flt: str | None) -> dict[str, Any]:
+# Per-PAM rows are aggregated in Python, so their sort / column filters are applied here too (same
+# rules as api/listing.py: whitelisted columns, text = contains, enum = any of, range = min/max).
+_PAM_JOB_COLS = {"pamName": "text", "status": "enum", "email": "enum", "whatsapp": "enum", "total": "range", "done": "range",
+                 "withSignal": "range"}
+
+
+def _match_pam_job(j: dict[str, Any], filters: dict[str, Any]) -> bool:
+    from app.core.errors import ValidationFailed
+
+    for col, val in filters.items():
+        kind = _PAM_JOB_COLS.get(col)
+        if kind is None:
+            raise ValidationFailed(f"Cannot filter by '{col}'")
+        v = j.get(col)
+        if kind == "text" and str(val).lower() not in str(v or "").lower():
+            return False
+        if kind == "enum" and str(v) not in [str(x) for x in (val if isinstance(val, list) else [val])]:
+            return False
+        if kind == "range" and isinstance(val, dict):
+            if val.get("min") not in (None, "") and (v or 0) < float(val["min"]):
+                return False
+            if val.get("max") not in (None, "") and (v or 0) > float(val["max"]):
+                return False
+    return True
+
+
+def pam_jobs(uow: UnitOfWork, run_id: str, page: int, size: int, search: str | None, flt: str | None, lst: Any = None) -> dict[str, Any]:
     run = _get_run(uow, run_id)
     toks = _tokens(search)
     rows = []
@@ -269,7 +295,17 @@ def pam_jobs(uow: UnitOfWork, run_id: str, page: int, size: int, search: str | N
         if (flt == "attention" and not _attention(j)) or (flt == "done" and not finished) or (flt == "in_progress" and finished):
             continue
         rows.append({k: v for k, v in j.items() if k != "_hay"})
-    rows.sort(key=lambda j: (j["email"] != "failed", j["pamName"].lower()))
+    if lst is not None and lst.filters:
+        rows = [j for j in rows if _match_pam_job(j, lst.filters)]
+    if lst is not None and lst.sort:
+        if lst.sort not in _PAM_JOB_COLS:
+            from app.core.errors import ValidationFailed
+
+            raise ValidationFailed(f"Cannot sort by '{lst.sort}'")
+        rows.sort(key=lambda j: (str(j[lst.sort]).lower() if isinstance(j[lst.sort], str) else (j[lst.sort] or 0), j["pamName"].lower()),
+                  reverse=lst.desc)
+    else:
+        rows.sort(key=lambda j: (j["email"] != "failed", j["pamName"].lower()))
     return _page(rows, page, size)
 
 

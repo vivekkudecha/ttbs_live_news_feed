@@ -37,6 +37,7 @@ from app.db.models import (
     DeadLetter,
     Notification,
     NotificationAttempt,
+    Pam,
     Run,
 )
 from app.db.session import UnitOfWork, unit_of_work
@@ -278,17 +279,24 @@ def list_for_run(uow: UnitOfWork, run_id: int, status: str | None = None, limit:
 
 
 def outbox(uow: UnitOfWork, *, page: int, size: int, status: str | None = None, channel: str | None = None,
-           q: str | None = None) -> dict[str, Any]:
-    base = []  # filters the status tabs share
+           q: str | None = None, where: Any = (), order: Any = None, run_id: int | None = None) -> dict[str, Any]:
+    """`where` / `order`: column filters and sort from a table request (api/listing.py)."""
+    base = [*where]  # filters the status tabs share
+    if run_id is not None:
+        base.append(Notification.run_id == run_id)
     if channel:
         base.append(Notification.channel == channel)
     if q:
         base.append(Notification.recipient.ilike(f"%{q.strip()}%"))
     conds = base + ([Notification.status == status] if status else [])
     s = uow.session
-    rows = list(s.scalars(select(Notification).where(*conds).order_by(Notification.id.desc()).limit(size).offset(page * size)))
-    total = s.scalar(select(func.count(Notification.id)).where(*conds)) or 0
-    counts = dict(s.execute(select(Notification.status, func.count(Notification.id)).where(*base).group_by(Notification.status)).all())
+    # Pam is outer-joined so the PAM name can be filtered/sorted on.
+    q_rows = select(Notification).outerjoin(Pam, Pam.id == Notification.pam_id)
+    q_count = select(func.count(Notification.id)).outerjoin(Pam, Pam.id == Notification.pam_id)
+    rows = list(s.scalars(q_rows.where(*conds).order_by(*(order or [Notification.id.desc()])).limit(size).offset(page * size)))
+    total = s.scalar(q_count.where(*conds)) or 0
+    counts = dict(s.execute(select(Notification.status, func.count(Notification.id)).outerjoin(Pam, Pam.id == Notification.pam_id)
+                            .where(*base).group_by(Notification.status)).all())
     return {"rows": rows, "total": total, "counts": counts}
 
 
@@ -299,14 +307,15 @@ def attempts(uow: UnitOfWork, notification_id: int) -> list[NotificationAttempt]
                                     .order_by(NotificationAttempt.id)))
 
 
-def dead_letters(uow: UnitOfWork, *, page: int, size: int, status: str | None = DLQ_OPEN, channel: str | None = None) -> dict[str, Any]:
-    conds = []
+def dead_letters(uow: UnitOfWork, *, page: int, size: int, status: str | None = DLQ_OPEN, channel: str | None = None,
+                 where: Any = (), order: Any = None) -> dict[str, Any]:
+    conds = [*where]
     if status:
         conds.append(DeadLetter.status == status)
     if channel:
         conds.append(DeadLetter.channel == channel)
     s = uow.session
-    rows = list(s.scalars(select(DeadLetter).where(*conds).order_by(DeadLetter.id.desc()).limit(size).offset(page * size)))
+    rows = list(s.scalars(select(DeadLetter).where(*conds).order_by(*(order or [DeadLetter.id.desc()])).limit(size).offset(page * size)))
     total = s.scalar(select(func.count(DeadLetter.id)).where(*conds)) or 0
     counts = dict(s.execute(select(DeadLetter.status, func.count(DeadLetter.id)).group_by(DeadLetter.status)).all())
     return {"rows": rows, "total": total, "counts": counts}

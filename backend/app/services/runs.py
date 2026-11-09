@@ -385,7 +385,8 @@ def finalize(uow: UnitOfWork, run: Run) -> None:
         telemetry.OK if final == RUN_COMPLETED else telemetry.ERROR if final == RUN_FAILED else telemetry.INFO,
         run_id=run.id, import_id=run.import_id, actor="system", provider=run.provider, model=run.model,
         cost=round(run.cost, 4), duration_ms=int(took * 1000) if took is not None else None,
-        message=f"{final}: {run.with_signal} signals, {run.failed} failed, {run.cache_hits} from cache, ${run.cost:,.4f}",
+        # Spend stays in the event's `cost` field (FinOps); the message shown in the UI carries no amounts.
+        message=f"{final}: {run.with_signal} signals, {run.failed} failed, {run.cache_hits} from cache",
         final=final, signals=run.with_signal, failed=run.failed, cache_hits=run.cache_hits,
     )
     metrics.RUNS_FINISHED.labels(final).inc()

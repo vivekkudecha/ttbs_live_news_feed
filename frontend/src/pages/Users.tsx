@@ -10,10 +10,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useCreateUser, useModules, useUpdateUser, useUserAction, useUsers } from "@/api/hooks"
-import { errorMessage } from "@/api/http"
+import type { ColumnDef } from "@tanstack/react-table"
+import { EmptyState } from "@/components/common/EmptyState"
+import { DataTableColumnHeader } from "@/components/data-table/DataTableColumnHeader"
+import { SmartTable } from "@/components/data-table/SmartTable"
+import { useServerTable } from "@/components/data-table/useSmartTable"
+import { useCreateUser, useModules, useUpdateUser, useUserAction } from "@/api/hooks"
+import { backend, errorMessage } from "@/api/http"
 import type { IssuedPassword, ManagedUser, ModuleKey, PermLevel, Role } from "@/api/types"
 import { useSession } from "@/context/session"
 import { fmtDateTime } from "@/lib/format"
@@ -226,13 +229,118 @@ const CONFIRM_TEXT: Record<Confirm["kind"], { title: string; body: string; cta: 
 
 export default function Users() {
   const { user: me } = useSession()
-  const { data: users, isLoading, error } = useUsers()
   const update = useUpdateUser()
   const action = useUserAction()
   const [dialog, setDialog] = useState<{ editing: ManagedUser | null } | null>(null)
   const [issued, setIssued] = useState<IssuedPassword | null>(null)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
-  const sorted = useMemo(() => [...(users ?? [])].sort((a, b) => Number(b.active) - Number(a.active) || a.username.localeCompare(b.username)), [users])
+
+  const columns = useMemo<ColumnDef<ManagedUser, unknown>[]>(
+    () => [
+      {
+        id: "name",
+        accessorKey: "name",
+        meta: { label: "User", filter: { type: "text" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="User" />,
+        cell: ({ row }) => {
+          const u = row.original
+          return (
+            <div className={u.active ? undefined : "opacity-60"}>
+              <p className="font-medium">
+                {u.name} {u.id === me?.id && <span className="text-xs font-normal text-muted-foreground">(you)</span>}
+              </p>
+              <p className="text-xs text-muted-foreground">@{u.username}{u.email ? ` · ${u.email}` : ""}</p>
+            </div>
+          )
+        },
+      },
+      { id: "username", accessorKey: "username", meta: { label: "Username", filter: { type: "text" } }, header: ({ column }) => <DataTableColumnHeader column={column} title="Username" />, cell: ({ row }) => <span className="text-sm">@{row.original.username}</span> },
+      { id: "email", accessorKey: "email", meta: { label: "Email", filter: { type: "text" } }, header: ({ column }) => <DataTableColumnHeader column={column} title="Email" />, cell: ({ row }) => <span className="text-sm text-muted-foreground">{row.original.email || "—"}</span> },
+      {
+        id: "role",
+        accessorKey: "role",
+        meta: { label: "Role", filter: { type: "enum", options: [{ value: "admin", label: "Admin" }, { value: "member", label: "Member" }] } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Role" />,
+        cell: ({ row }) => <Badge variant={row.original.role === "admin" ? "default" : "secondary"}>{row.original.role === "admin" ? "Admin" : "Member"}</Badge>,
+      },
+      { id: "access", enableSorting: false, meta: { label: "Access" }, header: "Access", cell: ({ row }) => <span className="text-sm">{accessSummary(row.original)}</span> },
+      {
+        id: "active",
+        accessorKey: "active",
+        meta: { label: "Status", filter: { type: "bool", labels: ["Active", "Deactivated"] } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => <StatusBadges u={row.original} />,
+      },
+      {
+        id: "lastLoginAt",
+        accessorKey: "lastLoginAt",
+        meta: { label: "Last sign-in", filter: { type: "date" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Last sign-in" />,
+        cell: ({ row }) => <span className="whitespace-nowrap text-sm text-muted-foreground">{row.original.lastLoginAt ? fmtDateTime(row.original.lastLoginAt) : "Never"}</span>,
+      },
+      {
+        id: "actions",
+        size: 48,
+        enableSorting: false,
+        enableHiding: false,
+        header: () => <span className="sr-only">Actions</span>,
+        cell: ({ row }) => {
+          const u = row.original
+          const self = u.id === me?.id
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={`Actions for @${u.username}`}>
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setDialog({ editing: u })}>
+                  <Pencil /> Edit details & access
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setConfirm({ user: u, kind: "reset" })}>
+                  <KeyRound /> Reset password
+                </DropdownMenuItem>
+                {u.locked && (
+                  <DropdownMenuItem onClick={() => void unlock(u)}>
+                    <Unlock /> Unlock
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => setConfirm({ user: u, kind: "revoke" })}>
+                  <LogOut /> Sign out everywhere
+                </DropdownMenuItem>
+                {!self && (
+                  <>
+                    <DropdownMenuSeparator />
+                    {u.active ? (
+                      <DropdownMenuItem variant="destructive" onClick={() => setConfirm({ user: u, kind: "deactivate" })}>
+                        <UserX /> Deactivate
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onClick={() => setConfirm({ user: u, kind: "activate" })}>
+                        <UserCheck /> Reactivate
+                      </DropdownMenuItem>
+                    )}
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [me?.id],
+  )
+  const state = useServerTable<ManagedUser>({
+    id: "users",
+    columns,
+    queryKey: ["users"],
+    fetcher: (q) => backend.users(q),
+    defaultSort: { id: "name", desc: false },
+    defaultHidden: ["username", "email"],
+    getRowId: (u) => u.id,
+  })
 
   const runConfirm = async () => {
     if (!confirm) return
@@ -273,90 +381,19 @@ export default function Users() {
         }
       />
 
-      {error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{errorMessage(error)}</AlertDescription>
-        </Alert>
-      ) : isLoading ? (
-        <Skeleton className="h-64" />
-      ) : (
-        <div className="overflow-x-auto rounded-lg border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Access</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last sign-in</TableHead>
-                <TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sorted.map((u) => {
-                const self = u.id === me?.id
-                return (
-                  <TableRow key={u.id} className={u.active ? undefined : "opacity-60"}>
-                    <TableCell>
-                      <p className="font-medium">
-                        {u.name} {self && <span className="text-xs font-normal text-muted-foreground">(you)</span>}
-                      </p>
-                      <p className="text-xs text-muted-foreground">@{u.username}{u.email ? ` · ${u.email}` : ""}</p>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={u.role === "admin" ? "default" : "secondary"}>{u.role === "admin" ? "Admin" : "Member"}</Badge>
-                    </TableCell>
-                    <TableCell className="text-sm">{accessSummary(u)}</TableCell>
-                    <TableCell>
-                      <StatusBadges u={u} />
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : "Never"}</TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" aria-label={`Actions for @${u.username}`}>
-                            <MoreHorizontal />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setDialog({ editing: u })}>
-                            <Pencil /> Edit details & access
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setConfirm({ user: u, kind: "reset" })}>
-                            <KeyRound /> Reset password
-                          </DropdownMenuItem>
-                          {u.locked && (
-                            <DropdownMenuItem onClick={() => void unlock(u)}>
-                              <Unlock /> Unlock
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem onClick={() => setConfirm({ user: u, kind: "revoke" })}>
-                            <LogOut /> Sign out everywhere
-                          </DropdownMenuItem>
-                          {!self && (
-                            <>
-                              <DropdownMenuSeparator />
-                              {u.active ? (
-                                <DropdownMenuItem variant="destructive" onClick={() => setConfirm({ user: u, kind: "deactivate" })}>
-                                  <UserX /> Deactivate
-                                </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem onClick={() => setConfirm({ user: u, kind: "activate" })}>
-                                  <UserCheck /> Reactivate
-                                </DropdownMenuItem>
-                              )}
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <SmartTable
+        state={state}
+        toolbar={
+          <p className="text-sm text-muted-foreground">
+            <span className="tabular font-medium text-foreground">{state.total}</span> users · sort or filter from the column headers
+          </p>
+        }
+        empty={
+          <EmptyState icon={ShieldCheck} title="No users match">
+            Clear a filter to see everyone.
+          </EmptyState>
+        }
+      />
 
       {dialog && <UserDialog open editing={dialog.editing} onClose={() => setDialog(null)} onIssued={setIssued} />}
       <IssuedPasswordDialog issued={issued} onClose={() => setIssued(null)} />

@@ -9,6 +9,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from app.core import cache
 from app.core.config import get_settings
 from app.core.errors import Conflict, NotFound, ValidationFailed
 from app.core.timeutil import utcnow
@@ -81,6 +82,7 @@ def deactivate_pam(uow: UnitOfWork, pam_id: str | int, actor: str) -> dict[str, 
     for m in plan["moves"]:
         assignments.assign(uow, companies[int(m["companyId"])], int(m["toPamId"]), reason="rebalance", actor=actor, ts=now)
     audit.record(uow, "pam.deactivate", "pam", pam.id, {"pam": pam.name, "companies_moved": len(plan["moves"])}, actor=actor)
+    uow.after_commit(lambda: cache.bump("accounts"))
     return {"pamId": plan["pamId"], "moves": plan["moves"]}
 
 
@@ -99,4 +101,5 @@ def reassign(uow: UnitOfWork, company_ids: list[str], to_pam_id: str, actor: str
     now = utcnow()
     moved = sum(assignments.assign(uow, c, to.id, reason="manual", actor=actor, ts=now) for c in companies)
     audit.record(uow, "company.reassign", "pam", to.id, {"to": to.name, "companies": len(companies), "moved": moved}, actor=actor)
+    uow.after_commit(lambda: cache.bump("accounts"))
     return moved

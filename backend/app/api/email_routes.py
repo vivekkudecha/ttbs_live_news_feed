@@ -8,7 +8,9 @@ from pydantic import Field
 from sqlalchemy import func, select
 
 from app.api import schemas as sch
+from app.api import table_specs as spec
 from app.api.deps import current_actor
+from app.api.listing import Listing, conditions, listing, ordering
 from app.core.config import get_settings
 from app.core.errors import NotFound
 from app.db.models import (
@@ -313,10 +315,12 @@ def preview_email_template(body: PreviewIn) -> dict[str, Any]:
 
 @router.get("/notifications/outbox")
 def list_outbox(pg: tuple[int, int] = Depends(_page), status: str | None = None, channel: str | None = None,
-                q: str | None = None) -> dict[str, Any]:
+                q: str | None = None, lst: Listing = Depends(listing)) -> dict[str, Any]:
     page, size = pg
     with unit_of_work() as uow:
-        r = notifications.outbox(uow, page=page, size=size, status=status, channel=channel, q=q)
+        r = notifications.outbox(uow, page=page, size=size, status=status, channel=channel, q=q,
+                                 where=conditions(spec.NOTIFICATIONS, lst),
+                                 order=ordering(spec.NOTIFICATIONS, lst, [], Notification.id) if lst.sort else None)
         return {"rows": [outbox_row(n) for n in r["rows"]], "total": r["total"], "counts": r["counts"], "page": page, "pageSize": size}
 
 
@@ -334,10 +338,13 @@ def email_estimate(emails: int = Query(0, ge=0, le=10_000_000), import_id: int |
 
 
 @router.get("/notifications/dead-letters")
-def list_dead_letters(pg: tuple[int, int] = Depends(_page), status: str | None = "open", channel: str | None = None) -> dict[str, Any]:
+def list_dead_letters(pg: tuple[int, int] = Depends(_page), status: str | None = "open", channel: str | None = None,
+                      lst: Listing = Depends(listing)) -> dict[str, Any]:
     page, size = pg
     with unit_of_work() as uow:
-        r = notifications.dead_letters(uow, page=page, size=size, status=status or None, channel=channel)
+        r = notifications.dead_letters(uow, page=page, size=size, status=status or None, channel=channel,
+                                       where=conditions(spec.DEAD_LETTERS, lst),
+                                       order=ordering(spec.DEAD_LETTERS, lst, [], DeadLetter.id) if lst.sort else None)
         return {"rows": [dead_letter_out(d) for d in r["rows"]], "total": r["total"], "counts": r["counts"], "page": page, "pageSize": size}
 
 

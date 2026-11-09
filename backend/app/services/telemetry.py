@@ -74,8 +74,10 @@ def _s(v: int | None) -> str | None:
 
 def query(uow: UnitOfWork, *, page: int, size: int, kind: str | None = None, status: str | None = None,
           run_id: int | None = None, import_id: int | None = None, company_id: int | None = None,
-          since: datetime | None = None, until: datetime | None = None, newest_first: bool = True) -> dict[str, Any]:
-    conds = []
+          since: datetime | None = None, until: datetime | None = None, newest_first: bool = True,
+          where: Any = (), order: Any = None) -> dict[str, Any]:
+    """`where` / `order`: extra conditions and ORDER BY from a table request (api/listing.py)."""
+    conds = list(where)
     if kind:
         conds.append(ProcessEvent.kind.like(f"{kind}%") if kind.endswith(".") else ProcessEvent.kind == kind)
     for col, val in ((ProcessEvent.status, status), (ProcessEvent.run_id, run_id), (ProcessEvent.import_id, import_id),
@@ -86,8 +88,8 @@ def query(uow: UnitOfWork, *, page: int, size: int, kind: str | None = None, sta
         conds.append(ProcessEvent.ts >= since)
     if until:
         conds.append(ProcessEvent.ts < until)
-    order = ProcessEvent.id.desc() if newest_first else ProcessEvent.id.asc()
-    rows = uow.session.scalars(select(ProcessEvent).where(*conds).order_by(order).limit(size).offset(page * size))
+    order = order or [ProcessEvent.id.desc() if newest_first else ProcessEvent.id.asc()]
+    rows = uow.session.scalars(select(ProcessEvent).where(*conds).order_by(*order).limit(size).offset(page * size))
     total = uow.session.scalar(select(func.count(ProcessEvent.id)).where(*conds)) or 0
     return {"rows": [event_out(e) for e in rows], "total": total, "page": page, "pageSize": size}
 
@@ -143,12 +145,12 @@ def run_timeline(uow: UnitOfWork, run_id: int, import_id: int | None) -> dict[st
     }
 
 
-def run_audit(uow: UnitOfWork, run_id: int, page: int, size: int) -> dict[str, Any]:
+def run_audit(uow: UnitOfWork, run_id: int, page: int, size: int, where: Any = (), order: Any = None) -> dict[str, Any]:
     from app.api.schemas import audit_out
 
-    cond = AuditLog.run_id == run_id
-    rows = uow.session.scalars(select(AuditLog).where(cond).order_by(AuditLog.id).limit(size).offset(page * size))
-    total = uow.session.scalar(select(func.count(AuditLog.id)).where(cond)) or 0
+    conds = [AuditLog.run_id == run_id, *where]
+    rows = uow.session.scalars(select(AuditLog).where(*conds).order_by(*(order or [AuditLog.id])).limit(size).offset(page * size))
+    total = uow.session.scalar(select(func.count(AuditLog.id)).where(*conds)) or 0
     return {"rows": [audit_out(a) for a in rows], "total": total, "page": page, "pageSize": size}
 
 

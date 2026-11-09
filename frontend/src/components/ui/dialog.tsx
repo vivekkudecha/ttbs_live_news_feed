@@ -37,7 +37,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-black/25 duration-200 supports-backdrop-filter:backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}
@@ -45,21 +45,51 @@ function DialogOverlay({
   )
 }
 
+/**
+ * Popups close only on purpose (✕, Cancel, Esc). An outside click is ignored and the panel gives a
+ * small pulse so the user sees it is still open. `dismissOnOutsideClick` restores the old behaviour.
+ */
+function useOutsideGuard<E extends Event>(dismissOnOutsideClick: boolean, onInteractOutside?: (e: E) => void) {
+  const ref = React.useRef<HTMLDivElement>(null)
+  const handler = React.useCallback(
+    (e: E) => {
+      onInteractOutside?.(e)
+      if (dismissOnOutsideClick) return
+      e.preventDefault()
+      // Only real pointer clicks nudge (focus moving to a toast etc. stays silent).
+      if (e.type === "dismissableLayer.pointerDownOutside" && ref.current) {
+        const el = ref.current
+        el.classList.remove("nudge")
+        void el.offsetWidth // restart the animation
+        el.classList.add("nudge")
+      }
+    },
+    [dismissOnOutsideClick, onInteractOutside],
+  )
+  return [ref, handler] as const
+}
+
 function DialogContent({
   className,
   children,
+  dismissOnOutsideClick = false,
+  onInteractOutside,
   showCloseButton = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  dismissOnOutsideClick?: boolean
 }) {
+  const [guardRef, guard] = useOutsideGuard(dismissOnOutsideClick, onInteractOutside)
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
+        ref={guardRef}
+        onInteractOutside={guard}
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground shadow-2xl ring-1 ring-foreground/10 duration-200 ease-[cubic-bezier(.2,.8,.2,1)] outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-open:slide-in-from-bottom-2 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-closed:duration-150",
           className
         )}
         {...props}

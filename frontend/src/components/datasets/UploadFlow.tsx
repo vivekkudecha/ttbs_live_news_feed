@@ -10,7 +10,8 @@
  *
  * Also opens an existing dataset (`datasetId`), e.g. from the Imports list.
  */
-import { useRef, useState, type ReactNode } from "react"
+import { useMemo, useRef, useState, type ReactNode } from "react"
+import type { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 import { AlertTriangle, CheckCircle2, ChevronDown, Download, FileSpreadsheet, Loader2, Pencil, RotateCcw, Table2, UploadCloud, XCircle, Zap } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -22,7 +23,9 @@ import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTableColumnHeader } from "@/components/data-table/DataTableColumnHeader"
+import { SmartTable } from "@/components/data-table/SmartTable"
+import { useClientTable } from "@/components/data-table/useSmartTable"
 import { useDataset, useRenameDataset, useResumeDataset, useSaveUpload, useUploadPreview } from "@/api/hooks"
 import { ApiError, backend, errorMessage, stageUpload } from "@/api/http"
 import { fmtDateTime } from "@/lib/format"
@@ -65,47 +68,80 @@ const CHANGE: Record<UploadPreview["rows"][number]["change"], { label: string; c
   unchanged: { label: "Already known", cls: "bg-muted text-muted-foreground" },
 }
 
+type PreviewRow = UploadPreview["rows"][number]
+
+/** First rows of the upload with what saving would do to each (sortable / filterable in the browser). */
 function PreviewTable({ p }: { p: UploadPreview }) {
+  const columns = useMemo<ColumnDef<PreviewRow, unknown>[]>(
+    () => [
+      {
+        id: "row",
+        accessorKey: "row",
+        size: 60,
+        meta: { label: "Row", filter: { type: "range" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Row" />,
+        cell: ({ row }) => <span className="tabular text-muted-foreground">{row.original.row}</span>,
+      },
+      {
+        id: "company",
+        accessorKey: "company",
+        meta: { label: "Company", filter: { type: "text" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Company" />,
+        cell: ({ row }) => (
+          <div className="max-w-64">
+            <span className="block truncate font-medium">{row.original.company}</span>
+            {row.original.industry && <span className="block truncate text-xs text-muted-foreground">{row.original.industry}</span>}
+          </div>
+        ),
+      },
+      {
+        id: "pamName",
+        accessorKey: "pamName",
+        meta: { label: "PAM", filter: { type: "text" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="PAM" />,
+        cell: ({ row }) => (
+          <div className="max-w-56">
+            <span className="block truncate">{row.original.pamName}</span>
+            <span className="block truncate text-xs text-muted-foreground">{row.original.pamEmail}</span>
+          </div>
+        ),
+      },
+      {
+        id: "pamWhatsapp",
+        accessorKey: "pamWhatsapp",
+        meta: { label: "WhatsApp", filter: { type: "text" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="WhatsApp" />,
+        cell: ({ row }) => <span className="tabular text-sm">{row.original.pamWhatsapp}</span>,
+      },
+      {
+        id: "segment",
+        accessorFn: (r) => r.segment ?? "",
+        meta: { label: "Segment", filter: { type: "enum", options: ["Enterprise", "Mid-market", "Emerging"].map((v) => ({ value: v, label: v })) } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Segment" />,
+        cell: ({ row }) => <span className="text-sm">{row.original.segment ?? "—"}</span>,
+      },
+      {
+        id: "change",
+        accessorKey: "change",
+        meta: { label: "On save", filter: { type: "enum", options: (Object.keys(CHANGE) as PreviewRow["change"][]).map((k) => ({ value: k, label: CHANGE[k].label })) } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="On save" />,
+        cell: ({ row }) => (
+          <div>
+            <Badge className={cn("font-normal", CHANGE[row.original.change].cls)}>{CHANGE[row.original.change].label}</Badge>
+            {row.original.change === "reassigned" && row.original.currentPam && <span className="block text-xs text-muted-foreground">from {row.original.currentPam}</span>}
+          </div>
+        ),
+      },
+    ],
+    [],
+  )
+  const state = useClientTable<PreviewRow>({ id: "upload-preview", data: p.rows, columns, pageSize: 10, getRowId: (r) => `${r.row}-${r.company}` })
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       <p className="text-sm font-medium">
         Preview <span className="font-normal text-muted-foreground">· first {n(p.rowsShown)} of {n(p.validRows)} valid rows</span>
       </p>
-      <div className="max-h-80 overflow-auto rounded-lg border">
-        <Table className="min-w-[52rem]">
-          <TableHeader className="sticky top-0 z-10 bg-muted [&_th]:bg-muted">
-            <TableRow>
-              <TableHead className="w-14 pl-4">Row</TableHead>
-              <TableHead>Company</TableHead>
-              <TableHead>PAM</TableHead>
-              <TableHead>WhatsApp</TableHead>
-              <TableHead>Segment</TableHead>
-              <TableHead className="pr-4">On save</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {p.rows.map((r) => (
-              <TableRow key={`${r.row}-${r.company}`}>
-                <TableCell className="tabular pl-4 text-muted-foreground">{r.row}</TableCell>
-                <TableCell className="max-w-64">
-                  <span className="block truncate font-medium">{r.company}</span>
-                  {r.industry && <span className="block truncate text-xs text-muted-foreground">{r.industry}</span>}
-                </TableCell>
-                <TableCell className="max-w-56">
-                  <span className="block truncate">{r.pamName}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{r.pamEmail}</span>
-                </TableCell>
-                <TableCell className="tabular text-sm">{r.pamWhatsapp}</TableCell>
-                <TableCell className="text-sm">{r.segment ?? "—"}</TableCell>
-                <TableCell className="pr-4">
-                  <Badge className={cn("font-normal", CHANGE[r.change].cls)}>{CHANGE[r.change].label}</Badge>
-                  {r.change === "reassigned" && r.currentPam && <span className="block text-xs text-muted-foreground">from {r.currentPam}</span>}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <SmartTable state={state} minWidth="52rem" pageSizes={[10, 25, 50]} empty={<p className="text-sm text-muted-foreground">No rows match.</p>} />
     </div>
   )
 }

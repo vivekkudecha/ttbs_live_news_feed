@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom"
 import { Bar, BarChart, CartesianGrid, LabelList, Tooltip, XAxis, YAxis } from "recharts"
-import { ArrowRight, Building2, CalendarClock, CheckCircle2, Mail, MessageCircle, Radio, Wallet, Zap } from "lucide-react"
+import { useMemo } from "react"
+import type { ColumnDef } from "@tanstack/react-table"
+import { ArrowRight, BellRing, Building2, CalendarClock, CheckCircle2, Mail, MessageCircle, Radio, Zap } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { StatCard } from "@/components/common/StatCard"
 import { StatusBadge } from "@/components/common/StatusBadge"
@@ -9,10 +11,13 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DataTableColumnHeader } from "@/components/data-table/DataTableColumnHeader"
+import { SmartTable } from "@/components/data-table/SmartTable"
+import { useClientTable } from "@/components/data-table/useSmartTable"
+import type { PamJobRow } from "@/api/types"
 import { useDashboard } from "@/api/hooks"
 import { useSession } from "@/context/session"
-import { fmtDate, fmtDateTime, fmtUsd, pct } from "@/lib/format"
+import { fmtDate, fmtDateTime, pct } from "@/lib/format"
 import { NewRunDialog } from "@/components/runs/NewRunDialog"
 import { Page, StatGrid, Split } from "@/components/common/layout"
 import { LiveDot } from "@/components/common/LiveDot"
@@ -52,6 +57,55 @@ function GettingStarted({ greeting, logos }: { greeting: string; logos: number }
           </CardContent>
         </Card>
     </Page>
+  )
+}
+
+const DELIVERY_OPTS = ["sent", "pending", "sending", "failed", "skipped", "none"].map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1) }))
+
+/** PAMs whose digest failed or is still waiting in the latest cycle (sortable / filterable). */
+function DeliveryAttention({ rows }: { rows: PamJobRow[] }) {
+  const columns = useMemo<ColumnDef<PamJobRow, unknown>[]>(
+    () => [
+      {
+        id: "pamName",
+        accessorKey: "pamName",
+        meta: { label: "PAM", filter: { type: "text" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="PAM" />,
+        cell: ({ row }) => <span className="font-medium">{row.original.pamName}</span>,
+      },
+      {
+        id: "withSignal",
+        accessorKey: "withSignal",
+        meta: { label: "Signals", filter: { type: "range" } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Signals" />,
+        cell: ({ row }) => (
+          <span className="tabular">
+            {row.original.withSignal}/{row.original.total}
+          </span>
+        ),
+      },
+      {
+        id: "email",
+        accessorKey: "email",
+        meta: { label: "Email", filter: { type: "enum", options: DELIVERY_OPTS } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Email" />,
+        cell: ({ row }) => <StatusBadge status={row.original.email} />,
+      },
+      {
+        id: "whatsapp",
+        accessorKey: "whatsapp",
+        meta: { label: "WhatsApp", filter: { type: "enum", options: DELIVERY_OPTS } },
+        header: ({ column }) => <DataTableColumnHeader column={column} title="WhatsApp" />,
+        cell: ({ row }) => <StatusBadge status={row.original.whatsapp} />,
+      },
+    ],
+    [],
+  )
+  const state = useClientTable<PamJobRow>({ id: "dash-attention", data: rows, columns, pageSize: 8, getRowId: (r) => r.pamId })
+  return (
+    <div className="px-6">
+      <SmartTable state={state} minWidth="28rem" pageSizes={[8, 20, 50]} empty={<p className="text-sm text-muted-foreground">No PAMs match.</p>} />
+    </div>
   )
 }
 
@@ -130,7 +184,13 @@ export default function Dashboard() {
             </span>
           }
         />
-        <StatCard icon={Wallet} tone="warning" label="Spend this month" value={fmtUsd(d.monthSpend)} hint={`${pct(d.monthSpend, d.monthBudget)}% of ${fmtUsd(d.monthBudget, 0)} budget`} />
+        <StatCard
+          icon={BellRing}
+          tone={d.deliveryAttention.length ? "warning" : "success"}
+          label="Delivery issues"
+          value={n(d.deliveryAttention.length)}
+          hint={d.deliveryAttention.length ? "PAMs whose digest failed or is still waiting" : "every digest in this cycle went out"}
+        />
       </StatGrid>
 
       <Split ratio="1.35fr 1fr">
@@ -206,32 +266,7 @@ export default function Dashboard() {
               {d.deliveryAttention.length === 0 ? (
                 <p className="px-6 text-sm text-muted-foreground">Every digest in this cycle was delivered.</p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="pl-6">PAM</TableHead>
-                      <TableHead>Signals</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead className="pr-6">WhatsApp</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {d.deliveryAttention.map((j) => (
-                      <TableRow key={j.pamId}>
-                        <TableCell className="pl-6 font-medium">{j.pamName}</TableCell>
-                        <TableCell className="tabular">
-                          {j.withSignal}/{j.total}
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={j.email} />
-                        </TableCell>
-                        <TableCell className="pr-6">
-                          <StatusBadge status={j.whatsapp} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <DeliveryAttention rows={d.deliveryAttention} />
               )}
             </CardContent>
           </Card>
@@ -264,7 +299,7 @@ export default function Dashboard() {
                   <div className="mt-2 flex items-center gap-3">
                     <Progress value={pct(r.done, r.companies)} className="h-1.5" />
                     <span className="tabular w-32 shrink-0 text-right text-xs text-muted-foreground">
-                      {n(r.done)}/{n(r.companies)} · {fmtUsd(r.cost)}
+                      {n(r.done)}/{n(r.companies)} logos
                     </span>
                   </div>
                 </Link>

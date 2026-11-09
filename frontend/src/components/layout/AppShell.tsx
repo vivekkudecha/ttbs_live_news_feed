@@ -1,5 +1,6 @@
-import { Suspense, useState } from "react"
-import { NavLink, Outlet, useNavigate } from "react-router-dom"
+import { Suspense, useEffect, useState } from "react"
+import { NavLink, useNavigate } from "react-router-dom"
+import { motion } from "motion/react"
 import { useTheme } from "next-themes"
 import { KeyRound, LogOut, Menu, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Sun } from "lucide-react"
 import { useIsFetching } from "@tanstack/react-query"
@@ -24,6 +25,8 @@ import { useSession } from "@/context/session"
 import { navGroups, visible, type NavItem as NavItemDef } from "./nav"
 import { TopbarProvider, useTopbarSlots } from "./topbar"
 import { cn } from "@/lib/utils"
+import { preloadRoute } from "@/lib/route-chunks"
+import { PageTransition } from "@/components/motion/PageTransition"
 import { initials } from "@/lib/format"
 
 const RAIL_KEY = "ttbs.sidebar.rail"
@@ -48,27 +51,49 @@ function useRail() {
       }
       return !r
     })
-  return [rail, toggle] as const
+  // Very short windows (< 640px tall) always get the icon rail, so nothing has to scroll.
+  const [tooShort, setTooShort] = useState(() => window.matchMedia("(max-height: 640px)").matches)
+  useEffect(() => {
+    const mq = window.matchMedia("(max-height: 640px)")
+    const on = () => setTooShort(mq.matches)
+    mq.addEventListener("change", on)
+    return () => mq.removeEventListener("change", on)
+  }, [])
+  return [rail || tooShort, toggle] as const
 }
 
-function NavItem({ item, rail, onNavigate }: { item: NavItemDef; rail: boolean; onNavigate?: () => void }) {
+function NavItem({ item, rail, onNavigate, layoutGroup }: { item: NavItemDef; rail: boolean; onNavigate?: () => void; layoutGroup: string }) {
   const link = (
     <NavLink
       to={item.to}
       end={item.to === "/"}
       onClick={onNavigate}
+      onMouseEnter={() => preloadRoute(item.to)}
+      onFocus={() => preloadRoute(item.to)}
       aria-label={rail ? item.label : undefined}
       className={({ isActive }) =>
         cn(
-          "group/nav relative flex items-center gap-3 rounded-lg px-3 py-2 text-[0.9375rem] text-sidebar-foreground transition-colors duration-200 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+          "group/nav relative flex items-center gap-3 rounded-lg px-3 py-2 text-[0.9375rem] text-sidebar-foreground transition-colors duration-200 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+          "short:py-1 tiny:py-[3px] tiny:text-sm",
           rail && "justify-center px-0",
-          isActive &&
-            "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:inset-y-2 before:left-0 before:w-1 before:rounded-full before:bg-brand-gradient",
+          isActive && "font-medium text-sidebar-accent-foreground",
         )
       }
     >
-      <item.icon className="size-[1.125rem] shrink-0 opacity-80 transition-transform group-hover/nav:scale-110" strokeWidth={1.75} />
-      {!rail && item.label}
+      {({ isActive }) => (
+        <>
+          {/* One shared highlight that glides to the active item. */}
+          {isActive && (
+            <motion.span
+              layoutId={`nav-active-${layoutGroup}`}
+              className="absolute inset-0 rounded-lg bg-sidebar-accent before:absolute before:inset-y-2 before:left-0 before:w-1 before:rounded-full before:bg-brand-gradient"
+              transition={{ type: "spring", stiffness: 520, damping: 40 }}
+            />
+          )}
+          <item.icon className="relative size-[1.125rem] shrink-0 opacity-80 transition-transform duration-200 group-hover/nav:scale-110" strokeWidth={1.75} />
+          {!rail && <span className="relative truncate">{item.label}</span>}
+        </>
+      )}
     </NavLink>
   )
   if (!rail) return link
@@ -80,24 +105,39 @@ function NavItem({ item, rail, onNavigate }: { item: NavItemDef; rail: boolean; 
   )
 }
 
-function Sidebar({ rail = false, onToggle, onNavigate }: { rail?: boolean; onToggle?: () => void; onNavigate?: () => void }) {
+function Sidebar({ rail = false, onToggle, onNavigate, layoutGroup = "desktop" }: { rail?: boolean; onToggle?: () => void; onNavigate?: () => void; layoutGroup?: string }) {
   const { user } = useSession()
   return (
-    <div className="flex h-full flex-col border-r border-sidebar-border bg-sidebar/95 text-sidebar-foreground backdrop-blur">
-      <div className={cn("pb-4 pt-6", rail ? "flex justify-center px-2" : "px-6")}>
+    <div className="flex h-full flex-col overflow-hidden border-r border-sidebar-border bg-sidebar/95 text-sidebar-foreground backdrop-blur">
+      <div className={cn("flex shrink-0 items-center gap-2 pb-3 pt-5 short:pb-1.5 short:pt-3", rail ? "flex-col justify-center px-2" : "px-5")}>
         <Logo compact={rail} />
+        {onToggle && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon-sm" onClick={onToggle} className={cn("text-muted-foreground", !rail && "ml-auto")} aria-label={rail ? "Expand sidebar" : "Collapse sidebar"}>
+                {rail ? <PanelLeftOpen /> : <PanelLeftClose />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{rail ? "Expand sidebar" : "Collapse sidebar"}</TooltipContent>
+          </Tooltip>
+        )}
       </div>
-      <nav className={cn("flex-1 space-y-5 overflow-y-auto py-4", rail ? "px-2.5" : "px-3")}>
+      {/* No scrollbar: spacing tightens on shorter screens (short:/tiny: variants) so everything fits. */}
+      <nav className={cn("flex min-h-0 flex-1 flex-col gap-4 py-2 short:gap-2 short:py-1 tiny:gap-1", rail ? "px-2.5" : "px-3")}>
         {navGroups.map((g) => {
           const items = g.items.filter((i) => visible(user, i))
           if (items.length === 0) return null
           return (
             <div key={g.label}>
-              {rail ? <Separator className="mx-auto mb-2 w-6" /> : <p className="eyebrow px-3 pb-2">{g.label}</p>}
-              <ul className="space-y-0.5">
+              {rail ? (
+                <Separator className="mx-auto mb-1.5 w-6" />
+              ) : (
+                <p className="eyebrow px-3 pb-1.5 short:pb-0.5 short:text-[0.6875rem]">{g.label}</p>
+              )}
+              <ul className="space-y-0.5 tiny:space-y-0">
                 {items.map((i) => (
                   <li key={i.to}>
-                    <NavItem item={i} rail={rail} onNavigate={onNavigate} />
+                    <NavItem item={i} rail={rail} onNavigate={onNavigate} layoutGroup={layoutGroup} />
                   </li>
                 ))}
               </ul>
@@ -105,13 +145,6 @@ function Sidebar({ rail = false, onToggle, onNavigate }: { rail?: boolean; onTog
           )
         })}
       </nav>
-      {onToggle && (
-        <div className={cn("border-t border-sidebar-border p-2.5", rail && "flex justify-center")}>
-          <Button variant="ghost" size={rail ? "icon" : "sm"} onClick={onToggle} className="text-muted-foreground" aria-label={rail ? "Expand sidebar" : "Collapse sidebar"}>
-            {rail ? <PanelLeftOpen /> : <><PanelLeftClose /> Collapse</>}
-          </Button>
-        </div>
-      )}
     </div>
   )
 }
@@ -168,14 +201,14 @@ function Shell() {
         <Sidebar rail={rail} onToggle={toggleRail} />
       </aside>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="left" className="w-72 border-0 p-0" showCloseButton={false}>
+        <SheetContent side="left" className="w-72 border-0 p-0" showCloseButton={false} dismissOnOutsideClick>
           <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <Sidebar onNavigate={() => setOpen(false)} />
+          <Sidebar onNavigate={() => setOpen(false)} layoutGroup="mobile" />
         </SheetContent>
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/75 px-4 backdrop-blur-md sm:px-6 lg:px-8 3xl:px-12">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/90 px-4 backdrop-blur-md sm:px-6 lg:px-8 3xl:px-12">
           <FetchIndicator />
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setOpen(true)} aria-label="Open navigation">
             <Menu />
@@ -213,7 +246,7 @@ function Shell() {
         </header>
         <main className="mx-auto w-full max-w-[120rem] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8 3xl:px-12">
           <Suspense fallback={<Skeleton className="h-96" />}>
-            <Outlet />
+            <PageTransition />
           </Suspense>
         </main>
       </div>

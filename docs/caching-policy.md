@@ -30,7 +30,8 @@ Server data is held in memory only while the tab is open, never in `localStorage
 
 | Data | Freshness (`staleTime`) | Refresh |
 |---|---|---|
-| Default | 30 s | on demand |
+| Default | 30 s (kept in memory 30 min after last use, for instant back/forward) | on demand |
+| Reference data (templates, channels) | 5 min | on demand; mutations invalidate |
 | Paged lists (companies, PAMs, signals, rows) | 15 s | on demand; previous page kept while the next loads |
 | Live run, its results, notifications, timeline | n/a | polled every 2-5 s **only while the run is active** |
 | Dashboard, run list, queues | n/a | polled every 5-10 s |
@@ -48,8 +49,12 @@ TTL). It holds no per-user data: access is checked before the cache is read.
 |---|---|---|
 | A running job's progress | `CACHE_TTL_JOB_RUNNING` | 2 s |
 | A finished job | `CACHE_TTL_JOB_FINISHED` | 300 s |
-| Lists | `CACHE_TTL_LISTS` | 15 s |
+| Lists (runs, uploads, companies & PAMs tables) | `CACHE_TTL_LISTS` | 15 s |
 | LLM model lists per provider + key fingerprint | `LLM_MODELS_CACHE_S` | 3600 s |
+
+Company and PAM table pages are cached per query (filters, sort, page) under the `accounts`
+namespace; their keys embed the `imports` and `runs` namespace versions, so an upload, a row edit,
+research progress or a reassignment (`bump("accounts")`) invalidates them.
 
 Research results are re-used (not re-bought) within `RESEARCH_WINDOW_DAYS` (default 10): that
 is a business rule stored in the database, not a cache, and it is recorded in the cost ledger

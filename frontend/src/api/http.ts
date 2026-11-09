@@ -3,6 +3,7 @@
  * defaulting to http://localhost:8010.
  */
 import type {
+  ManagedUser,
   Dataset,
   DatasetRow,
   DatasetRowPage,
@@ -119,6 +120,10 @@ const qs = (params: Record<string, string | number | undefined>) => {
   return s ? `?${s}` : ""
 }
 
+/** Sort / column filters / paging of a SmartTable (backend/app/api/listing.py). */
+export type TableQ = { page: number; pageSize: number; sort?: string; desc?: boolean; filter?: string }
+const tq = (q: TableQ) => ({ page: q.page, pageSize: q.pageSize, sort: q.sort, desc: q.sort ? String(!!q.desc) : undefined, filter: q.filter })
+
 export const backend = {
   // Datasets (uploaded Excel). Upload returns at once; rows are saved by a background job.
   uploadDataset: (file: File, label?: string) => {
@@ -132,7 +137,7 @@ export const backend = {
   uploadPreview: (id: string) => request<UploadPreview>("GET", `/imports/${id}/preview`),
   saveUpload: (id: string, label: string) => request<Dataset>("POST", `/imports/${id}/save`, { label }),
   discardUpload: (id: string) => request<void>("DELETE", `/imports/${id}`),
-  listDatasets: () => request<Dataset[]>("GET", "/imports"),
+  listDatasets: (q: TableQ = { page: 0, pageSize: 100 }) => request<Page<Dataset>>("GET", `/imports${qs(tq(q))}`),
   getDataset: (id: string) => request<Dataset>("GET", `/imports/${id}`),
   renameDataset: (id: string, label: string) => request<Dataset>("PATCH", `/imports/${id}`, { label }),
   resumeDataset: (id: string) => request<Dataset>("POST", `/imports/${id}/resume`),
@@ -144,25 +149,29 @@ export const backend = {
   scopes: () => request<ScopeOption[]>("GET", "/scopes"),
   startRun: (v: { importId: string; label?: string; templateId?: string; runAt?: string; channels?: DeliveryChannel[]; budgetCap?: number }) =>
     request<Job>("POST", "/runs", { ...v, importId: Number(v.importId) }),
-  listJobs: (q: { page: number; pageSize: number; status?: string; q?: string }) => request<JobPage>("GET", `/runs${qs(q)}`),
+  listJobs: (q: TableQ & { status?: string; q?: string }) => request<JobPage>("GET", `/runs${qs({ ...tq(q), status: q.status, q: q.q })}`),
   getJob: (id: string) => request<Job>("GET", `/runs/${id}`),
-  jobResults: (id: string, q: { page: number; pageSize: number; status?: string; q?: string }) => request<JobResultPage>("GET", `/runs/${id}/results${qs(q)}`),
-  jobNotifications: (id: string) => request<JobNotification[]>("GET", `/runs/${id}/notifications?pageSize=200`),
+  jobResults: (id: string, q: TableQ & { status?: string; q?: string }) =>
+    request<JobResultPage>("GET", `/runs/${id}/results${qs({ ...tq(q), status: q.status, q: q.q })}`),
+  jobNotifications: (id: string, q: TableQ & { status?: string }) =>
+    request<Page<JobNotification> & { counts: Record<string, number> }>("GET", `/runs/${id}/notifications${qs({ ...tq(q), status: q.status })}`),
   cancelJob: (id: string) => request<Job>("POST", `/runs/${id}/cancel`),
   retryFailed: (id: string) => request<{ requeued: number }>("POST", `/runs/${id}/retry-failed`),
   resendNotification: (id: string) => request<JobNotification>("POST", `/notifications/${id}/resend`),
   queues: () => request<QueueStats>("GET", "/queues"),
   // A run end to end: timeline (upload → lifecycle → digests → problems), every event, audit trail, costs.
   runTimeline: (id: string) => request<RunTimeline>("GET", `/runs/${id}/timeline`),
-  runEvents: (id: string, q: { page: number; pageSize: number; kind?: string; status?: string }) =>
-    request<Page<ProcessEvent>>("GET", `/runs/${id}/events${qs(q)}`),
-  runAudit: (id: string, q: { page: number; pageSize: number }) => request<Page<AuditEntry>>("GET", `/runs/${id}/audit${qs(q)}`),
+  runEvents: (id: string, q: TableQ & { kind?: string; status?: string }) =>
+    request<Page<ProcessEvent>>("GET", `/runs/${id}/events${qs({ ...tq(q), kind: q.kind, status: q.status })}`),
+  runAudit: (id: string, q: TableQ) => request<Page<AuditEntry>>("GET", `/runs/${id}/audit${qs(tq(q))}`),
   runCosts: (id: string) => request<RunCosts>("GET", `/runs/${id}/costs`),
 
   // Telemetry
   telemetrySummary: (hours: number) => request<TelemetrySummary>("GET", `/telemetry/summary?hours=${hours}`),
-  telemetryEvents: (q: { page: number; pageSize: number; kind?: string; status?: string; runId?: string; importId?: string; hours?: number }) =>
-    request<Page<ProcessEvent>>("GET", `/telemetry/events${qs(q)}`),
+  telemetryEvents: (q: TableQ & { kind?: string; status?: string; runId?: string; importId?: string; hours?: number }) =>
+    request<Page<ProcessEvent>>("GET", `/telemetry/events${qs({ ...tq(q), kind: q.kind, status: q.status, runId: q.runId, importId: q.importId, hours: q.hours })}`),
+  auditLog: (q: TableQ) => request<Page<AuditEntry>>("GET", `/audit${qs(tq(q))}`),
+  users: (q: TableQ) => request<Page<ManagedUser>>("GET", `/users${qs(tq(q))}`),
 
   // Research AI (provider + key + model; one active at a time). Keys are write-only.
   llmSettings: () => request<LlmSettings>("GET", "/settings/llm"),
@@ -207,10 +216,11 @@ export const backend = {
     request<EmailPreview>("POST", "/email-templates/preview", v),
 
   // Outbox + dead-letter queue
-  outbox: (q: { page: number; pageSize: number; status?: string; channel?: string; q?: string }) => request<OutboxPage>("GET", `/notifications/outbox${qs(q)}`),
+  outbox: (q: TableQ & { status?: string; channel?: string; q?: string }) =>
+    request<OutboxPage>("GET", `/notifications/outbox${qs({ ...tq(q), status: q.status, channel: q.channel, q: q.q })}`),
   notificationDetail: (id: string) => request<NotificationDetail>("GET", `/notifications/${id}/detail`),
-  deadLetters: (q: { page: number; pageSize: number; status?: DeadLetterStatus | ""; channel?: string }) =>
-    request<DeadLetterPage>("GET", `/notifications/dead-letters${qs({ ...q, status: q.status ?? "open" })}`),
+  deadLetters: (q: TableQ & { status?: DeadLetterStatus | ""; channel?: string }) =>
+    request<DeadLetterPage>("GET", `/notifications/dead-letters${qs({ ...tq(q), status: q.status ?? "open", channel: q.channel })}`),
   requeueDeadLetters: (ids: string[]) => request<{ requeued: number }>("POST", "/notifications/dead-letters/requeue", { ids: ids.map(Number) }),
   discardDeadLetter: (id: string, note: string) => request<unknown>("POST", `/notifications/dead-letters/${id}/discard`, { note }),
 }

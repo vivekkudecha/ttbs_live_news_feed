@@ -14,7 +14,9 @@ from sqlalchemy import case, func, select, text
 
 from app.api import read_models as rm
 from app.api import schemas as sch
+from app.api import table_specs as spec
 from app.api.deps import current_actor
+from app.api.listing import Listing, conditions, listing, ordering
 from app.core import cache
 from app.core.config import get_settings
 from app.core.errors import PayloadTooLarge, ValidationFailed
@@ -29,6 +31,7 @@ from app.db.models import (
     DatasetCompany,
     ImportBatch,
     Notification,
+    ProcessEvent,
     ResearchResult,
     Run,
 )
@@ -161,11 +164,17 @@ def discard_upload(import_id: int, actor: str = Depends(current_actor)) -> None:
 
 
 @router.get("/imports")
-def list_datasets() -> list[dict[str, Any]]:
+def list_datasets(pg: tuple[int, int] = Depends(_page), lst: Listing = Depends(listing)) -> dict[str, Any]:
+    """Saved uploads, newest first; sortable/filterable by column, paged."""
+    page, size = pg
     with unit_of_work() as uow:
+        where = [ImportBatch.status.not_in(IMPORT_UNSAVED), *conditions(spec.IMPORTS, lst)]
         batches = list(uow.session.scalars(
-            select(ImportBatch).where(ImportBatch.status.not_in(IMPORT_UNSAVED)).order_by(ImportBatch.id.desc()).limit(200)
+            select(ImportBatch).where(*where)
+            .order_by(*ordering(spec.IMPORTS, lst, [], ImportBatch.id.desc() if not lst.sort else ImportBatch.id))
+            .limit(size).offset(page * size)
         ))
+        total = uow.session.scalar(select(func.count(ImportBatch.id)).where(*where)) or 0
         ids = [b.id for b in batches]
         counts = dict(uow.session.execute(
             select(DatasetCompany.import_id, func.count(DatasetCompany.id))
@@ -177,7 +186,8 @@ def list_datasets() -> list[dict[str, Any]]:
                 .where(Run.import_id.in_(ids)).group_by(Run.import_id)
             )
         } if batches else {}
-        return [sch.dataset_out(b, companies=counts.get(b.id, 0), runs=run_stats.get(b.id)) for b in batches]
+        return {"rows": [sch.dataset_out(b, companies=counts.get(b.id, 0), runs=run_stats.get(b.id)) for b in batches],
+                "total": total, "page": page, "pageSize": size}
 
 
 @router.get("/imports/{import_id}")
@@ -302,7 +312,8 @@ RUN_GROUPS: dict[str, tuple[str, ...]] = {
 
 
 @router.get("/runs")
-def list_runs(pg: tuple[int, int] = Depends(_page), status: str | None = None, q: str | None = None) -> dict[str, Any]:
+def list_runs(pg: tuple[int, int] = Depends(_page), status: str | None = None, q: str | None = None,
+              lst: Listing = Depends(listing)) -> dict[str, Any]:
     """Runs, newest first. `status` = active | finished | attention | a raw status; `q` searches the
     label. `groups` carries the count per group (for tab badges) under the same search."""
     page, size = pg
@@ -310,10 +321,11 @@ def list_runs(pg: tuple[int, int] = Depends(_page), status: str | None = None, q
 
     def load():
         with unit_of_work() as uow:
-            conds = [Run.label.ilike(f"%{search}%")] if search else []
+            conds = ([Run.label.ilike(f"%{search}%")] if search else []) + conditions(spec.RUNS, lst)
             statuses = RUN_GROUPS.get(status or "", (status,) if status else None)
             where = conds + ([Run.status.in_(statuses)] if statuses else [])
-            rows = list(uow.session.scalars(select(Run).where(*where).order_by(Run.id.desc()).limit(size).offset(page * size)))
+            order = ordering(spec.RUNS, lst, [], Run.id.desc() if not lst.sort else Run.id)
+            rows = list(uow.session.scalars(select(Run).where(*where).order_by(*order).limit(size).offset(page * size)))
             notes = _note_counts(uow, [r.id for r in rows])
             by_status = dict(uow.session.execute(select(Run.status, func.count(Run.id)).where(*conds).group_by(Run.status)).all())
             groups = {"all": sum(by_status.values())} | {g: sum(by_status.get(s, 0) for s in sts) for g, sts in RUN_GROUPS.items()}
@@ -322,7 +334,7 @@ def list_runs(pg: tuple[int, int] = Depends(_page), status: str | None = None, q
 
     s = get_settings()
     ttl = lambda v: s.cache_ttl_job_running if any(r["status"] in RUN_ACTIVE for r in v["rows"]) or v["groups"]["active"] else s.cache_ttl_lists  # noqa: E731
-    return cache.cached("runs", f"list:{status}:{search.lower()}:{page}:{size}", ttl, load)
+    return cache.cached("runs", f"list:{status}:{search.lower()}:{page}:{size}:{lst.key()}", ttl, load)
 
 
 @router.get("/runs/{run_id}")
@@ -338,7 +350,8 @@ def get_run(run_id: int) -> dict[str, Any]:
 
 
 @router.get("/runs/{run_id}/results")
-def run_results(run_id: int, pg: tuple[int, int] = Depends(_page), status: str | None = None, q: str | None = None) -> dict[str, Any]:
+def run_results(run_id: int, pg: tuple[int, int] = Depends(_page), status: str | None = None, q: str | None = None,
+                lst: Listing = Depends(listing)) -> dict[str, Any]:
     """Results for a run: signals first, then by company name. `q` searches the company name;
     status `pending` also covers companies being researched right now."""
     page, size = pg
@@ -352,8 +365,10 @@ def run_results(run_id: int, pg: tuple[int, int] = Depends(_page), status: str |
         search = (q or "").strip()[:100]
         if search:
             conds.append(Company.name.ilike(f"%{search}%"))
+        conds += conditions(spec.RESULTS, lst)
         signal_first = case((ResearchResult.status == "signal", 0), (ResearchResult.status == "failed", 1), else_=2)
-        rows = uow.session.scalars(base.where(*conds).order_by(signal_first, Company.name, ResearchResult.id).limit(size).offset(page * size))
+        order = ordering(spec.RESULTS, lst, [signal_first, Company.name], ResearchResult.id)
+        rows = uow.session.scalars(base.where(*conds).order_by(*order).limit(size).offset(page * size))
         cq = cq.where(*conds)
         counts = dict(uow.session.execute(
             select(ResearchResult.status, func.count()).where(ResearchResult.run_id == run_id).group_by(ResearchResult.status)
@@ -386,22 +401,25 @@ def run_timeline(run_id: int) -> dict[str, Any]:
 @router.get("/runs/{run_id}/events")
 def run_events(
     run_id: int, pg: tuple[int, int] = Depends(_page), kind: str | None = None, status: str | None = None,
-    company_id: int | None = Query(None, alias="companyId"),
+    company_id: int | None = Query(None, alias="companyId"), lst: Listing = Depends(listing),
 ) -> dict[str, Any]:
     """Every process event of a run (one per research attempt, delivery attempt, …), newest first."""
     page, size = pg
     with unit_of_work() as uow:
         runs.get_run(uow, run_id)
-        return telemetry.query(uow, page=page, size=size, kind=kind, status=status, run_id=run_id, company_id=company_id)
+        return telemetry.query(uow, page=page, size=size, kind=kind, status=status, run_id=run_id, company_id=company_id,
+                               where=conditions(spec.EVENTS, lst),
+                               order=ordering(spec.EVENTS, lst, [], ProcessEvent.id) if lst.sort else None)
 
 
 @router.get("/runs/{run_id}/audit")
-def run_audit(run_id: int, pg: tuple[int, int] = Depends(_page)) -> dict[str, Any]:
+def run_audit(run_id: int, pg: tuple[int, int] = Depends(_page), lst: Listing = Depends(listing)) -> dict[str, Any]:
     """The run's audit trail (hash-chained rows tagged with this run), oldest first."""
     page, size = pg
     with unit_of_work() as uow:
         runs.get_run(uow, run_id)
-        return telemetry.run_audit(uow, run_id, page, size)
+        return telemetry.run_audit(uow, run_id, page, size, where=conditions(spec.AUDIT, lst),
+                                   order=ordering(spec.AUDIT, lst, [], AuditLog.id) if lst.sort else None)
 
 
 @router.get("/runs/{run_id}/costs")
@@ -427,7 +445,7 @@ def telemetry_summary(hours: int = Query(24, ge=1, le=24 * 31)) -> dict[str, Any
 def telemetry_events(
     pg: tuple[int, int] = Depends(_page), kind: str | None = None, status: str | None = None,
     run_id: int | None = Query(None, alias="runId"), import_id: int | None = Query(None, alias="importId"),
-    hours: int | None = Query(None, ge=1, le=24 * 366),
+    hours: int | None = Query(None, ge=1, le=24 * 366), lst: Listing = Depends(listing),
 ) -> dict[str, Any]:
     """Event stream with filters. `kind` ending in "." is a prefix ("research.")."""
     from datetime import timedelta
@@ -437,18 +455,26 @@ def telemetry_events(
     page, size = pg
     with unit_of_work() as uow:
         return telemetry.query(uow, page=page, size=size, kind=kind, status=status, run_id=run_id, import_id=import_id,
-                               since=utcnow() - timedelta(hours=hours) if hours else None)
+                               since=utcnow() - timedelta(hours=hours) if hours else None,
+                               where=conditions(spec.EVENTS, lst),
+                               order=ordering(spec.EVENTS, lst, [], ProcessEvent.id) if lst.sort else None)
 
 
 # --- Notifications -----------------------------------------------------------------------------
 
 
 @router.get("/runs/{run_id}/notifications")
-def run_notifications(run_id: int, pg: tuple[int, int] = Depends(_page), status: str | None = None) -> list[dict[str, Any]]:
+def run_notifications(run_id: int, pg: tuple[int, int] = Depends(_page), status: str | None = None,
+                      lst: Listing = Depends(listing)) -> dict[str, Any]:
+    """The run's digests (one per PAM × channel), paged, sortable and filterable by column."""
     page, size = pg
     with unit_of_work() as uow:
         runs.get_run(uow, run_id)
-        return [sch.notification_out(n) for n in notifications.list_for_run(uow, run_id, status, size, page * size)]
+        r = notifications.outbox(uow, page=page, size=size, status=status, run_id=run_id,
+                                 where=conditions(spec.NOTIFICATIONS, lst),
+                                 order=ordering(spec.NOTIFICATIONS, lst, [], Notification.id) if lst.sort else [Notification.id])
+        return {"rows": [sch.notification_out(n) for n in r["rows"]], "total": r["total"], "counts": r["counts"],
+                "page": page, "pageSize": size}
 
 
 @router.post("/notifications/{notification_id}/resend")
@@ -538,16 +564,18 @@ def remove_llm_config(provider: AiProvider, actor: str = Depends(current_actor))
 @router.get("/audit")
 def list_audit(
     pg: tuple[int, int] = Depends(_page), action: str | None = None, entity_type: str | None = Query(None, alias="entityType"),
-    entity_id: str | None = Query(None, alias="entityId"),
+    entity_id: str | None = Query(None, alias="entityId"), lst: Listing = Depends(listing),
 ) -> dict[str, Any]:
     page, size = pg
     with unit_of_work() as uow:
-        q = select(AuditLog)
-        cq = select(func.count(AuditLog.id))
+        extra = conditions(spec.AUDIT, lst)
+        q = select(AuditLog).where(*extra)
+        cq = select(func.count(AuditLog.id)).where(*extra)
         for col, val in ((AuditLog.action, action), (AuditLog.entity_type, entity_type), (AuditLog.entity_id, entity_id)):
             if val:
                 q, cq = q.where(col == val), cq.where(col == val)
-        rows = uow.session.scalars(q.order_by(AuditLog.id.desc()).limit(size).offset(page * size))
+        rows = uow.session.scalars(q.order_by(*ordering(spec.AUDIT, lst, [], AuditLog.id.desc() if not lst.sort else AuditLog.id))
+                                   .limit(size).offset(page * size))
         return {"rows": [sch.audit_out(a) for a in rows], "total": uow.session.scalar(cq) or 0, "page": page, "pageSize": size}
 
 

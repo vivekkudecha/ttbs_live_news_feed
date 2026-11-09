@@ -9,7 +9,7 @@ import { AlertTriangle, Ban, Download, Gauge, Info, PiggyBank, Target, TrendingU
 import { PageHeader } from "@/components/common/PageHeader"
 import { StatCard } from "@/components/common/StatCard"
 import { StatusBadge } from "@/components/common/StatusBadge"
-import { CostTable } from "@/components/runs/RunInsights"
+import { CostTable } from "@/components/finops/CostTable"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -194,12 +194,14 @@ function Report({ d, stale }: { d: NonNullable<ReturnType<typeof useFinops>["dat
         </TabsList>
         <TabsContent value="runs" className="mt-4">
           <CostTable
+            id="runs"
             title="Cost by run"
             description="Each research run in the range, most expensive first"
             rows={d.byRun.map((r) => ({
               key: r.id,
+              text: `#${r.id} ${r.label}`,
               name: (
-                <Link to={`/runs/${r.id}?tab=costs`} className="hover:underline">
+                <Link to={`/runs/${r.id}`} className="hover:underline">
                   #{r.id} {r.label}
                 </Link>
               ),
@@ -214,10 +216,12 @@ function Report({ d, stale }: { d: NonNullable<ReturnType<typeof useFinops>["dat
         </TabsContent>
         <TabsContent value="uploads" className="mt-4">
           <CostTable
+            id="uploads"
             title="Cost by upload"
             description="All runs of each upload, including re-runs"
             rows={d.byUpload.map((u) => ({
               key: u.id,
+              text: u.label,
               name: (
                 <Link to={`/imports?open=${u.id}`} className="hover:underline">
                   {u.label}
@@ -229,10 +233,11 @@ function Report({ d, stale }: { d: NonNullable<ReturnType<typeof useFinops>["dat
           />
         </TabsContent>
         <TabsContent value="pams" className="mt-4">
-          <CostTable title="Cost by PAM" description="Research of each PAM's logos plus their digests" rows={d.byPam.map((p) => ({ ...p, key: p.id, name: p.name, sub: p.email }))} />
+          <CostTable id="pams" title="Cost by PAM" description="Research of each PAM's logos plus their digests" rows={d.byPam.map((p) => ({ ...p, key: p.id, name: p.name, sub: p.email }))} />
         </TabsContent>
         <TabsContent value="models" className="mt-4">
           <CostTable
+            id="models"
             title="Cost by model and channel"
             description="Research AI models and delivery channels"
             rows={d.byModel.map((m) => ({
@@ -244,7 +249,7 @@ function Report({ d, stale }: { d: NonNullable<ReturnType<typeof useFinops>["dat
           />
         </TabsContent>
         <TabsContent value="logos" className="mt-4">
-          <CostTable title="Most expensive logos" description="Top 25 logos by research spend in the range" rows={d.topCompanies.map((c) => ({ ...c, key: c.id, name: c.name }))} />
+          <CostTable id="logos" title="Most expensive logos" description="Top 25 logos by research spend in the range" rows={d.topCompanies.map((c) => ({ ...c, key: c.id, name: c.name }))} />
         </TabsContent>
       </Tabs>
     </Page>

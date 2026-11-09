@@ -64,10 +64,10 @@ export const useScopeOptions = () =>
   useQuery({ queryKey: ["scopes"], queryFn: () => backend.scopes(), staleTime: 10_000 })
 
 // ---- Small resources --------------------------------------------------------------------
-export const useTemplates = () => useQuery({ queryKey: ["templates"], queryFn: () => api.listTemplates() })
-export const useChannels = () => useQuery({ queryKey: ["channels"], queryFn: () => api.listChannels() })
-export const useUsers = () => useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() })
-export const useAudit = () => useQuery({ queryKey: ["audit"], queryFn: () => api.listAudit() })
+/** Reference data changes rarely (and mutations invalidate it): fresh for 5 minutes. */
+const REFERENCE = 5 * 60_000
+export const useTemplates = () => useQuery({ queryKey: ["templates"], queryFn: () => api.listTemplates(), staleTime: REFERENCE })
+export const useChannels = () => useQuery({ queryKey: ["channels"], queryFn: () => api.listChannels(), staleTime: REFERENCE })
 export const useFinops = (range: { from?: string; to?: string } = {}) =>
   useQuery({ queryKey: ["finops", range], queryFn: () => api.finops(range), placeholderData: keepPreviousData, refetchInterval: 30_000 })
 
@@ -122,19 +122,8 @@ export const useResend = () => {
 // ---- Jobs, queues, schedules ------------------------------------------------------------------
 const ACTIVE = new Set(["scheduled", "queued", "running"])
 
-export const useJobs = (q: { page: number; pageSize: number; status?: string; q?: string }) =>
-  useQuery({
-    queryKey: ["jobs", q],
-    queryFn: () => backend.listJobs(q),
-    placeholderData: keepPreviousData,
-    refetchInterval: (query) => (query.state.data?.rows.some((r) => ACTIVE.has(r.status)) ? 3_000 : 15_000),
-  })
 export const useJob = (id: string) =>
   useQuery({ queryKey: ["job", id], queryFn: () => backend.getJob(id), refetchInterval: (q) => (q.state.data && ACTIVE.has(q.state.data.status) ? 2_000 : false) })
-export const useJobResults = (id: string, q: { page: number; pageSize: number; status?: string; q?: string }, live: boolean) =>
-  useQuery({ queryKey: ["jobResults", id, q], queryFn: () => backend.jobResults(id, q), placeholderData: keepPreviousData, refetchInterval: live ? 3_000 : false })
-export const useJobNotifications = (id: string, live: boolean) =>
-  useQuery({ queryKey: ["jobNotifications", id], queryFn: () => backend.jobNotifications(id), refetchInterval: live ? 3_000 : false })
 export const useQueues = () => useQuery({ queryKey: ["queues"], queryFn: () => backend.queues(), refetchInterval: 5_000 })
 
 const useJobInvalidate = () => useInvalidate([["jobs"], ["job"], ["jobResults"], ["jobNotifications"], ["queues"]])
@@ -183,13 +172,6 @@ export const useRemoveLlmConfig = () => {
 // ---- Datasets ------------------------------------------------------------------------------
 const SAVING = new Set(["analyzing", "queued", "processing"])
 
-/** All datasets; polls every 2 s while any is still being saved. */
-export const useDatasets = () =>
-  useQuery({
-    queryKey: ["datasets"],
-    queryFn: () => backend.listDatasets(),
-    refetchInterval: (q) => (q.state.data?.some((d) => SAVING.has(d.status)) ? 2_000 : false),
-  })
 /** One dataset; polls every second while it is being saved (progress bar). */
 export const useDataset = (id: string | null) =>
   useQuery({
@@ -296,8 +278,6 @@ export const usePreviewEmailTemplate = () =>
   useMutation({ mutationFn: (v: EmailTemplateInput & { runId?: number; pamId?: number; withAi?: boolean }) => backend.previewEmailTemplate(v) })
 
 // ---- Outbox & dead-letter queue ---------------------------------------------------------
-export const useOutbox = (q: { page: number; pageSize: number; status?: string; channel?: string; q?: string }) =>
-  useQuery({ queryKey: ["outbox", q], queryFn: () => backend.outbox(q), ...paged, refetchInterval: 10_000 })
 export const useNotificationDetail = (id: string | null) =>
   useQuery({ queryKey: ["notificationDetail", id], queryFn: () => backend.notificationDetail(id!), enabled: !!id })
 export const useDeadLetters = (q: { page: number; pageSize: number; status?: DeadLetterStatus | ""; channel?: string }) =>

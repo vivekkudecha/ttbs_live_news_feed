@@ -2,6 +2,7 @@ import { lazy, type ReactNode } from "react"
 import { HashRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ThemeProvider } from "next-themes"
+import { MotionConfig } from "motion/react"
 import { Lock } from "lucide-react"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -11,28 +12,30 @@ import { EmptyState } from "@/components/common/EmptyState"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SessionProvider, useSession } from "@/context/session"
 import { can, isAdmin } from "@/lib/access"
+import { routeChunks } from "@/lib/route-chunks"
 import type { ModuleKey } from "@/api/types"
 import Login from "@/pages/Login"
 import Dashboard from "@/pages/Dashboard"
 import ChangePassword from "@/pages/ChangePassword"
 
-// Secondary pages load on demand to keep the first paint small.
-const Signals = lazy(() => import("@/pages/Signals"))
-const Digest = lazy(() => import("@/pages/Digest"))
-const RunsList = lazy(() => import("@/pages/Runs").then((m) => ({ default: m.RunsList })))
-const RunDetail = lazy(() => import("@/pages/Runs").then((m) => ({ default: m.RunDetail })))
-const JobsRedirect = lazy(() => import("@/pages/Runs").then((m) => ({ default: m.JobsRedirect })))
-const CompaniesList = lazy(() => import("@/pages/Companies").then((m) => ({ default: m.CompaniesList })))
-const CompanyDetail = lazy(() => import("@/pages/Companies").then((m) => ({ default: m.CompanyDetail })))
-const Pams = lazy(() => import("@/pages/Pams"))
-const Imports = lazy(() => import("@/pages/Imports"))
-const Templates = lazy(() => import("@/pages/Templates"))
-const Telemetry = lazy(() => import("@/pages/Telemetry"))
-const Integrations = lazy(() => import("@/pages/Integrations"))
-const Costs = lazy(() => import("@/pages/Costs"))
-const Audit = lazy(() => import("@/pages/Audit"))
-const EmailOutbox = lazy(() => import("@/pages/EmailOutbox"))
-const Users = lazy(() => import("@/pages/Users"))
+// Secondary pages load on demand to keep the first paint small (and are preloaded on nav hover).
+const c = routeChunks
+const Signals = lazy(c.signals)
+const Digest = lazy(c.digest)
+const RunsList = lazy(() => c.runs().then((m) => ({ default: m.RunsList })))
+const RunDetail = lazy(() => c.runs().then((m) => ({ default: m.RunDetail })))
+const JobsRedirect = lazy(() => c.runs().then((m) => ({ default: m.JobsRedirect })))
+const CompaniesList = lazy(() => c.companies().then((m) => ({ default: m.CompaniesList })))
+const CompanyDetail = lazy(() => c.companies().then((m) => ({ default: m.CompanyDetail })))
+const Pams = lazy(c.pams)
+const Imports = lazy(c.imports)
+const Templates = lazy(c.templates)
+const Telemetry = lazy(c.telemetry)
+const Integrations = lazy(c.integrations)
+const Costs = lazy(c.costs)
+const Audit = lazy(c.audit)
+const EmailOutbox = lazy(c.outbox)
+const Users = lazy(c.users)
 
 // The shareable demo build (VITE_ROUTER=memory) runs inside a hosted viewer where URL hashes
 // are not reliable, so it routes in memory. Local dev and the real deployment use URLs.
@@ -40,7 +43,11 @@ const Router = import.meta.env.VITE_ROUTER === "memory" ? MemoryRouter : HashRou
 // Honour a host-provided theme (data-theme on <html>) when present; otherwise follow the OS.
 const hostTheme = document.documentElement.getAttribute("data-theme") ?? "system"
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } } })
+// Cache: lists are fresh for 30 s, unused results stay in memory for 30 min (instant back/forward
+// navigation), one retry on failure. Reference data sets a longer staleTime in its own hook.
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: 30_000, gcTime: 30 * 60_000, refetchOnWindowFocus: false, retry: 1 } },
+})
 
 function Booting() {
   return (
@@ -92,6 +99,7 @@ function ChangePasswordRoute() {
 
 export default function App() {
   return (
+    <MotionConfig reducedMotion="user">
     <ThemeProvider attribute="class" defaultTheme={hostTheme} enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>
         <SessionProvider>
@@ -136,5 +144,6 @@ export default function App() {
         </SessionProvider>
       </QueryClientProvider>
     </ThemeProvider>
+    </MotionConfig>
   )
 }

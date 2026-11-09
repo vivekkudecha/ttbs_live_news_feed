@@ -12,11 +12,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useEmailEstimate, useStartRun } from "@/api/hooks"
 import { ApiError, errorMessage } from "@/api/http"
-import { fmtDateTime, fmtUsd } from "@/lib/format"
+import { fmtDateTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { DeliveryChannel } from "@/api/types"
 
-const PER_COMPANY_USD = 0.0125
 type Mode = "now" | "at" | "later"
 
 /** datetime-local value one hour from now (browser time). */
@@ -192,10 +191,6 @@ export function ResearchPlan({
             <div>
               <dt className="text-xs text-muted-foreground">Logos</dt>
               <dd className="tabular font-semibold">{companies.toLocaleString("en-IN")}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Est. cost</dt>
-              <dd className="tabular font-semibold">≤ {fmtUsd(companies * PER_COMPANY_USD)}</dd>
             </div>
             <div>
               <dt className="text-xs text-muted-foreground">Delivery</dt>

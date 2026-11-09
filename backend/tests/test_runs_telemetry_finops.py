@@ -210,7 +210,7 @@ def test_monthly_budget_is_a_hard_cap(client, monkeypatch):
 def test_rows_before_run_correlation_still_verify(client):
     """Audit rows written before audit_log.run_id existed (run_id NULL, not hashed) verify alongside new ones."""
     upload(client)  # dataset.* rows: no run_id
-    imp = client.get("/api/v1/imports").json()[0]
+    imp = client.get("/api/v1/imports").json()["rows"][0]
     research(client, imp["id"], [])
     assert client.get("/api/v1/audit/verify").json() == {"ok": True, "checked": client.get("/api/v1/audit").json()["total"]}
     assert GOOD_ROWS

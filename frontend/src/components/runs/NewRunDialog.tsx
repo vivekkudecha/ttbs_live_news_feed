@@ -16,12 +16,11 @@ import { DatasetGrid } from "@/components/datasets/DatasetGrid"
 import { ResearchPlan } from "@/components/datasets/ResearchPlan"
 import { UploadFlow } from "@/components/datasets/UploadFlow"
 import { useScopeOptions } from "@/api/hooks"
-import { fmtDate, fmtDateTime, fmtUsd } from "@/lib/format"
+import { fmtDate, fmtDateTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { ScopeOption } from "@/api/types"
 
 type Source = "upload" | "rerun"
-const PER_COMPANY_USD = 0.0125
 const n = (x: number) => x.toLocaleString("en-IN")
 const importIdOf = (key: string) => (key.startsWith("import:") ? key.slice("import:".length) : key)
 /** "name · 09 Nov 2026, 13:59" → ["name", "09 Nov 2026, 13:59"] */
@@ -211,7 +210,7 @@ function UploadList({ onPick }: { onPick: (importId: string, opt: ScopeOption) =
                 style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
                 className="group flex min-w-0 flex-col gap-3 rounded-xl border bg-card p-4 text-left transition-all duration-200 animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-both hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <div className="flex min-w-0 items-start gap-3">
+                <div className="flex w-full min-w-0 items-start gap-3">
                   <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                     <FileSpreadsheet className="size-5" />
                   </span>
@@ -224,11 +223,11 @@ function UploadList({ onPick }: { onPick: (importId: string, opt: ScopeOption) =
                     )}
                   </span>
                   {u.runs === 0 ? (
-                    <Badge className="shrink-0 bg-brand-gradient text-white">
+                    <Badge className="ml-auto shrink-0 bg-brand-gradient text-white">
                       <Sparkles /> New
                     </Badge>
                   ) : (
-                    <Badge variant="secondary" className="shrink-0">
+                    <Badge variant="secondary" className="ml-auto shrink-0">
                       Run {u.runs}×
                     </Badge>
                   )}
@@ -258,7 +257,7 @@ function PickedUpload({ picked, onChange, onDone }: { picked: { id: string; opt:
     ["Logos", n(opt.count)],
     ["Previous runs", opt.runs ? n(opt.runs) : "None"],
     ["Last run", opt.lastRunAt ? fmtDateTime(opt.lastRunAt) : "—"],
-    ["Est. cost", `≤ ${fmtUsd(opt.count * PER_COMPANY_USD)}`],
+    ["Type", opt.runs ? "Re-run" : "First run"],
   ]
 
   return (
