@@ -29,3 +29,14 @@ export const initials = (name: string) =>
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("")
+
+/** "in 5 min" / "3 h ago" for the recent past and near future; a date beyond a week. */
+export function fmtRelative(iso: string | null | undefined): string {
+  if (!iso) return "—"
+  const diff = new Date(iso).getTime() - Date.now()
+  const abs = Math.abs(diff)
+  if (abs > 7 * 86_400_000) return fmtDateTime(iso)
+  const [v, u] = abs < 60_000 ? [0, ""] : abs < 3_600_000 ? [Math.round(abs / 60_000), "min"] : abs < 86_400_000 ? [Math.round(abs / 3_600_000), "h"] : [Math.round(abs / 86_400_000), "d"]
+  if (!u) return diff > 0 ? "in a moment" : "just now"
+  return diff > 0 ? `in ${v} ${u}` : `${v} ${u} ago`
+}

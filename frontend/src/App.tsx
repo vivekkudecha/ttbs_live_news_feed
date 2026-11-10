@@ -24,6 +24,7 @@ const Signals = lazy(c.signals)
 const Digest = lazy(c.digest)
 const RunsList = lazy(() => c.runs().then((m) => ({ default: m.RunsList })))
 const RunDetail = lazy(() => c.runs().then((m) => ({ default: m.RunDetail })))
+const Schedules = lazy(c.schedules)
 const JobsRedirect = lazy(() => c.runs().then((m) => ({ default: m.JobsRedirect })))
 const CompaniesList = lazy(() => c.companies().then((m) => ({ default: m.CompaniesList })))
 const CompanyDetail = lazy(() => c.companies().then((m) => ({ default: m.CompanyDetail })))
@@ -128,8 +129,7 @@ export default function App() {
                   <Route path="pams" element={<Allow module="pams"><Pams /></Allow>} />
                   <Route path="imports" element={<Allow module="imports"><Imports /></Allow>} />
                   <Route path="templates" element={<Templates />} />
-                  {/* Recurring schedules are retired: every run starts from an upload. */}
-                  <Route path="schedules" element={<Navigate to="/runs" replace />} />
+                  <Route path="schedules" element={<Allow module="runs"><Schedules /></Allow>} />
                   <Route path="telemetry" element={<Allow module="telemetry"><Telemetry /></Allow>} />
                   <Route path="integrations" element={<Allow module="integrations"><Integrations /></Allow>} />
                   <Route path="costs" element={<Allow module="costs"><Costs /></Allow>} />

@@ -175,6 +175,7 @@ export const backend = {
     request<Page<BoardLogo>>("GET", `/runs/${id}/board/logos${qs({ ...tq(q), q: q.q, pamId: q.pamId })}`),
   boardFacets: (id: string, q: { q?: string; filter?: string }) => request<BoardFacets>("GET", `/runs/${id}/board/facets${qs(q)}`),
   logoTimeline: (id: string, resultId: string) => request<LogoTimeline>("GET", `/runs/${id}/board/logos/${resultId}/timeline`),
+  companyRunTimeline: (id: string, companyId: string) => request<LogoTimeline>("GET", `/runs/${id}/board/companies/${companyId}/timeline`),
   pamDigest: (id: string, pamId: string) => request<DigestRender>("GET", `/runs/${id}/board/pams/${pamId}/digest`),
   boardRetry: (id: string, body: { resultIds?: string[]; pamIds?: string[] }) => request<{ requeued: number }>("POST", `/runs/${id}/board/retry`, body),
   boardResend: (id: string, body: { pamIds: string[]; channel?: DeliveryChannel }) =>

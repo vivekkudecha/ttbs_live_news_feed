@@ -27,6 +27,7 @@ import { TopbarProvider, useTopbarSlots } from "./topbar"
 import { cn } from "@/lib/utils"
 import { preloadRoute } from "@/lib/route-chunks"
 import { PageTransition } from "@/components/motion/PageTransition"
+import { LogoDrawerProvider } from "@/components/logo/LogoDrawer"
 import { initials } from "@/lib/format"
 
 const RAIL_KEY = "ttbs.sidebar.rail"
@@ -183,7 +184,9 @@ function ThemeToggle() {
 export function AppShell() {
   return (
     <TopbarProvider>
-      <Shell />
+      <LogoDrawerProvider>
+        <Shell />
+      </LogoDrawerProvider>
     </TopbarProvider>
   )
 }

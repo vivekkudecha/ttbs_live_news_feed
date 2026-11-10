@@ -34,7 +34,6 @@ import { EmptyState } from "@/components/common/EmptyState"
 import { StatCard } from "@/components/common/StatCard"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { LiveRunPanel } from "@/components/live/LiveRunPanel"
-import { CompanyDrawer } from "@/components/companies/CompanyDrawer"
 import { ReassignDialog } from "@/components/companies/ReassignDialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -56,12 +55,13 @@ import {
   useRun,
 } from "@/api/hooks"
 import { useDebounced } from "@/lib/use-debounced"
-import { durationMin, fmtDate, fmtDateTime, pct } from "@/lib/format"
+import { durationMin, fmtDate, fmtDateTime, pct, fmtRelative } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Job, JobPage } from "@/api/types"
 import { NewRunDialog } from "@/components/runs/NewRunDialog"
 import { AuditTab, EventsTab, TimelineTab } from "@/components/runs/RunInsights"
 import { RunBoard } from "@/components/runs/board/RunBoard"
+import { useLogoDrawer } from "@/components/logo/logo-drawer-context"
 import { Page, StatGrid } from "@/components/common/layout"
 import { LiveDot } from "@/components/common/LiveDot"
 
@@ -74,17 +74,6 @@ const TRIGGER: Record<Job["trigger"], { label: string; icon: typeof Play }> = {
   import: { label: "Import", icon: FileSpreadsheet },
   scheduled: { label: "Scheduled", icon: CalendarClock },
   adhoc: { label: "Ad-hoc", icon: Play },
-}
-
-/** "in 5 min" / "3 h ago" for the recent past and near future; a date beyond a week. */
-function relative(iso: string | null | undefined): string {
-  if (!iso) return "—"
-  const diff = new Date(iso).getTime() - Date.now()
-  const abs = Math.abs(diff)
-  if (abs > 7 * 86_400_000) return fmtDateTime(iso)
-  const [v, u] = abs < 60_000 ? [0, ""] : abs < 3_600_000 ? [Math.round(abs / 60_000), "min"] : abs < 86_400_000 ? [Math.round(abs / 3_600_000), "h"] : [Math.round(abs / 86_400_000), "d"]
-  if (!u) return diff > 0 ? "in a moment" : "just now"
-  return diff > 0 ? `in ${v} ${u}` : `${v} ${u} ago`
 }
 
 function eta(remaining: number, rate?: number | null): string | null {
@@ -280,7 +269,7 @@ function runColumns(): ColumnDef<Job, unknown>[] {
         return (
           <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-muted-foreground">
             <Clock className="size-3.5" />
-            {j.status === "scheduled" ? `Starts ${relative(j.scheduledFor)}` : j.finishedAt ? `Finished ${relative(j.finishedAt)}` : `Started ${relative(j.startedAt ?? j.scheduledFor)}`}
+            {j.status === "scheduled" ? `Starts ${fmtRelative(j.scheduledFor)}` : j.finishedAt ? `Finished ${fmtRelative(j.finishedAt)}` : `Started ${fmtRelative(j.startedAt ?? j.scheduledFor)}`}
           </span>
         )
       },
@@ -439,7 +428,7 @@ function ProgressHero({ j, rate }: { j: Job; rate?: number | null }) {
           <div className="flex items-center gap-3 rounded-lg border border-dashed p-4">
             <CalendarClock className="size-5 text-muted-foreground" />
             <div>
-              <p className="font-medium">Starts {relative(j.scheduledFor)}</p>
+              <p className="font-medium">Starts {fmtRelative(j.scheduledFor)}</p>
               <p className="text-sm text-muted-foreground">
                 {fmtDateTime(j.scheduledFor)} IST · {n(j.companies)} companies in scope
               </p>
@@ -500,7 +489,7 @@ export function RunDetail() {
   const [params, setParams] = useSearchParams()
   const job = useJob(id)
   const summary = useRun(id) // per-PAM roll-ups + live completion rate
-  const [openCompany, setOpenCompany] = useState<string | null>(null)
+  const drawer = useLogoDrawer()
   const [reassign, setReassign] = useState<string[]>([])
 
   const j = job.data
@@ -585,13 +574,13 @@ export function RunDetail() {
         {started && (
           <TabsContent value="live" className="mt-4">
             <div className="space-y-6">
-              <LiveRunPanel runId={j.id} finishedAt={j.finishedAt} onOpenCompany={setOpenCompany} />
+              <LiveRunPanel runId={j.id} finishedAt={j.finishedAt} onOpenCompany={(companyId) => drawer.open({ companyId, runId: j.id })} />
               <TimelineTab runId={j.id} live={live} />
             </div>
           </TabsContent>
         )}
         <TabsContent value="results" className="mt-4">
-          <RunBoard runId={j.id} live={live} onOpenCompany={setOpenCompany} onReassign={setReassign} />
+          <RunBoard runId={j.id} live={live} onReassign={setReassign} />
         </TabsContent>
         <TabsContent value="events" className="mt-4">
           <EventsTab runId={j.id} live={live} />
@@ -601,7 +590,6 @@ export function RunDetail() {
         </TabsContent>
       </Tabs>
 
-      <CompanyDrawer companyId={openCompany} onOpenChange={(o) => !o && setOpenCompany(null)} onReassign={(cid) => setReassign([cid])} />
       <ReassignDialog companyIds={reassign} open={reassign.length > 0} onOpenChange={(o) => !o && setReassign([])} />
     </Page>
   )

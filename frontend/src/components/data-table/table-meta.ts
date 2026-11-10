@@ -22,6 +22,8 @@ declare module "@tanstack/react-table" {
     label?: string
     filter?: FilterDef
     align?: "left" | "right"
+    /** Column width in a fixed-layout table (e.g. "22%", "3rem"); leave one column without it to take the rest. */
+    width?: string
   }
 }
 

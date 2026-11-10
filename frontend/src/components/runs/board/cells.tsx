@@ -8,6 +8,7 @@ import { fmtDateTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { BoardDigest, BoardLogo, BoardPam, DeliveryChannel } from "@/api/types"
 import { n } from "./board-utils"
+import { withoutUrls } from "@/lib/findings"
 
 // ---- Avatar ------------------------------------------------------------------------------------
 
@@ -49,7 +50,7 @@ export function OutcomeBar({ g }: { g: BoardPam }) {
   const total = Math.max(1, g.logos)
   const label = parts.filter(([, v]) => v).map(([l, v]) => `${l} ${v}`).join(", ")
   return (
-    <div className="w-32 space-y-1.5">
+    <div className="w-full max-w-36 space-y-1.5">
       <div className="flex h-1.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={label || "No logos"}>
         {parts.map(([l, v, cls]) => (v ? <span key={l} className={cn("h-full transition-[width] duration-500", cls)} style={{ width: `${(v / total) * 100}%` }} /> : null))}
       </div>
@@ -69,14 +70,14 @@ export function DigestBadges({ g }: { g: BoardPam }) {
   const chans = Object.entries(g.digests) as [DeliveryChannel, BoardDigest][]
   if (!chans.length) return <span className="text-xs text-muted-foreground">{g.doneAll < g.totalAll ? "After the last logo" : "—"}</span>
   return (
-    <div className="flex flex-col items-start gap-1">
+    <div className="flex flex-col items-start gap-1 [&_[data-slot=badge]]:text-[11px]">
       {chans.map(([ch, d]) => {
         const Icon = CH_ICON[ch] ?? Mail
         const detail = d.status === "sent" ? `Sent ${fmtDateTime(d.sentAt)}` : d.lastError ?? d.status
         return (
           <Tooltip key={ch}>
             <TooltipTrigger asChild>
-              <span className="inline-flex items-center gap-1.5">
+              <span className="inline-flex flex-wrap items-center gap-1">
                 <Icon className="size-3.5 text-muted-foreground" aria-label={ch} />
                 <StatusBadge status={d.status === "sending" ? "running" : d.status} />
                 {d.outdated && (
@@ -111,21 +112,21 @@ export function Findings({ r, full = false }: { r: BoardLogo; full?: boolean }) 
     return <span className="text-muted-foreground">{r.status === "running" ? "Researching now…" : r.error ? `Retrying: ${r.error}` : "Waiting in queue…"}</span>
   return (
     <div className="space-y-1.5">
-      <div className={cn(!open && "line-clamp-2")}>
-        <RichText text={r.keySignals ?? undefined} />
+      <div className={cn("wrap-anywhere", !open && "line-clamp-2")}>
+        <RichText text={withoutUrls(r.keySignals)} />
       </div>
       {open && (
         <>
           {r.opportunity && (
             <p className="text-muted-foreground">
               <span className="font-medium text-foreground">Opportunity: </span>
-              <RichText text={r.opportunity} />
+              <RichText text={withoutUrls(r.opportunity)} />
             </p>
           )}
           {r.outreach && (
             <p className="text-muted-foreground">
               <span className="font-medium text-foreground">Outreach: </span>
-              <RichText text={r.outreach} />
+              <RichText text={withoutUrls(r.outreach)} />
             </p>
           )}
           {r.sources.length > 0 && (

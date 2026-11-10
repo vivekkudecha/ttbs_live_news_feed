@@ -58,7 +58,7 @@ export function DataTable<T>({
     <div ref={box} className={cn("rounded-xl border bg-card shadow-xs", fits ? "overflow-x-clip" : "overflow-x-auto")}>
       <Table
         style={{ "--table-min": minWidth } as CSSProperties}
-        className="min-w-(--table-min) lg:min-w-0 lg:[&_td]:whitespace-normal lg:[&_td]:break-words"
+        className="min-w-(--table-min) lg:min-w-0 lg:text-[13px] 2xl:text-sm lg:[&_td]:whitespace-normal lg:[&_td]:break-words lg:[&_th]:whitespace-normal"
         containerClassName="overflow-visible"
       >
         <TableHeader
@@ -101,7 +101,7 @@ export function DataTable<T>({
                     : undefined
                 }
                 className={cn(
-                  "group/row outline-none transition-colors duration-150 focus-visible:bg-muted/60",
+                  "group/row outline-none transition-colors duration-150 focus-visible:bg-muted/60 has-[[data-state=open]]:bg-muted/50",
                   density === "compact" ? "h-10" : "h-14",
                   onRowClick && "cursor-pointer",
                   activeRowId === row.id && "bg-accent/60",

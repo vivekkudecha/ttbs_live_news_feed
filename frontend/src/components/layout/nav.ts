@@ -1,5 +1,6 @@
 import {
   Activity,
+  CalendarClock,
   BarChart3,
   Building2,
   FileSpreadsheet,
@@ -43,6 +44,7 @@ export const navGroups: NavGroup[] = [
       { to: "/signals", label: "Signals feed", icon: Zap, module: "signals" },
       { to: "/digest", label: "PAM digest preview", icon: MailCheck, module: "signals" },
       { to: "/runs", label: "Research runs", icon: Activity, module: "runs" },
+      { to: "/schedules", label: "Schedules", icon: CalendarClock, module: "runs" },
       { to: "/outbox", label: "Delivery outbox", icon: Inbox, module: "runs" },
     ],
   },

@@ -15,7 +15,6 @@ import {
   RotateCcw,
   Send,
   UserRoundCog,
-  Building2,
   XCircle,
   Zap,
 } from "lucide-react"
@@ -51,8 +50,7 @@ export interface BoardCtx {
   facets?: BoardFacets
   isOpen: (key: string) => boolean
   toggle: (key: string) => void
-  openLogo: (id: string) => void
-  openCompany: (id: string) => void
+  openLogo: (r: BoardLogo) => void
   openDigest: (pamId: string) => void
   retry: (b: { resultIds?: string[]; pamIds?: string[] }) => void
   resend: (pamIds: string[], names: string[]) => void
@@ -72,6 +70,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
     {
       id: "select",
       size: 40,
+      meta: { width: "2.5rem" },
       enableSorting: false,
       enableHiding: false,
       header: ({ table }) => (
@@ -96,7 +95,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
       accessorFn: (r) => val(r, "account"),
       size: grouped ? 270 : 250,
       enableHiding: false,
-      meta: { label: "Logo", filter: { type: "text", placeholder: "Company name contains…" } },
+      meta: { label: "Logo", width: grouped ? "24%" : "21%", filter: { type: "text", placeholder: "Company name contains…" } },
       header: ({ column }) => <DataTableColumnHeader column={column} title={grouped ? "PAM / logo" : "Logo"} />,
       cell: ({ row }) => <AccountCell row={row} ctx={ctx} />,
     },
@@ -106,17 +105,17 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
       id: "pamName",
       accessorFn: (r) => val(r, "pamName"),
       size: 170,
-      meta: { label: "PAM", filter: { type: "text", placeholder: "PAM name contains…" } },
+      meta: { label: "PAM", width: "12%", filter: { type: "text", placeholder: "PAM name contains…" } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="PAM" />,
       cell: ({ row }) => {
         const r = row.original as BoardLogo
         return r.pamName ? (
           <span className="flex items-center gap-2">
-            <Avatar name={r.pamName} className="size-6 text-[10px]" />
-            <span className="truncate text-sm">{r.pamName}</span>
+            <Avatar name={r.pamName} className="size-6 shrink-0 text-[10px]" />
+            <span className="min-w-0 break-words">{r.pamName}</span>
           </span>
         ) : (
-          <span className="text-sm text-muted-foreground">Unassigned</span>
+          <span className="text-muted-foreground">Unassigned</span>
         )
       },
     })
@@ -124,7 +123,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
       id: "attempts",
       accessorFn: (r) => val(r, "attempts"),
       size: 100,
-      meta: { label: "Attempts", align: "right", filter: { type: "range" } },
+      meta: { label: "Attempts", width: "7%", align: "right", filter: { type: "range" } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Attempts" align="right" />,
       cell: ({ row }) => {
         const r = row.original
@@ -139,7 +138,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
       id: "status",
       accessorFn: (r) => val(r, "status"),
       size: grouped ? 150 : 120,
-      meta: { label: "Status", filter: { type: "enum", options: RESULT_STATUS } },
+      meta: { label: "Status", width: grouped ? "14%" : "10%", filter: { type: "enum", options: RESULT_STATUS } },
       header: ({ column }) => <DataTableColumnHeader column={column} title={grouped ? "Outcome" : "Status"} />,
       cell: ({ row }) => {
         const r = row.original
@@ -152,12 +151,12 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
       id: "category",
       accessorFn: (r) => val(r, "category"),
       size: 130,
-      meta: { label: "Category", filter: { type: "enum", options: categoryOptions } },
+      meta: { label: "Category", width: "10%", filter: { type: "enum", options: categoryOptions } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Category" />,
       cell: ({ row }) => {
         const r = row.original
         if (r.kind !== "logo") return null
-        return r.category ? <Badge variant="outline">{r.category}</Badge> : <span className="text-muted-foreground">—</span>
+        return r.category ? <Badge variant="outline" className="max-w-full truncate" title={r.category}>{r.category}</Badge> : <span className="text-muted-foreground">—</span>
       },
     },
     {
@@ -187,7 +186,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
           )
         if (r.kind === "logo")
           return (
-            <div className="min-w-44 whitespace-normal text-sm">
+            <div className="whitespace-normal break-words">
               <Findings r={r} />
             </div>
           )
@@ -199,7 +198,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
       accessorFn: (r) => val(r, "digest"),
       size: 150,
       enableSorting: false,
-      meta: { label: "Digest", filter: { type: "enum", options: DIGEST_STATUS } },
+      meta: { label: "Digest", width: grouped ? "13%" : "10%", filter: { type: "enum", options: DIGEST_STATUS } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Digest" />,
       cell: ({ row }) => {
         const r = row.original
@@ -218,7 +217,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
       id: "finishedAt",
       accessorFn: (r) => val(r, "finishedAt"),
       size: 150,
-      meta: { label: "Finished", filter: { type: "date" } },
+      meta: { label: "Finished", width: "10%", filter: { type: "date" } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Finished" />,
       cell: ({ row }) => {
         const r = row.original
@@ -231,6 +230,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
       size: 56,
       enableSorting: false,
       enableHiding: false,
+      meta: { width: "2.75rem" },
       header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => <RowActions row={row.original} ctx={ctx} />,
     },
@@ -270,15 +270,15 @@ function AccountCell({ row, ctx }: { row: Row<BoardRow>; ctx: BoardCtx }) {
   }
   if (r.kind !== "logo") return null
   return (
-    <div className={cn("min-w-0", row.depth > 0 && "relative pl-[4.6rem]")}>
-      {row.depth > 0 && <span aria-hidden="true" className="absolute bottom-[-0.9rem] left-[1.05rem] top-[-0.9rem] w-px bg-border" />}
+    <div className={cn("min-w-0", row.depth > 0 && "relative pl-10")}>
+      {row.depth > 0 && <span aria-hidden="true" className="absolute bottom-[-0.9rem] left-[0.85rem] top-[-0.9rem] w-px bg-border" />}
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation()
-          ctx.openLogo(r.id)
+          ctx.openLogo(r)
         }}
-        className="text-left font-medium underline-offset-2 transition-colors hover:text-primary hover:underline"
+        className="text-left font-medium leading-snug underline-offset-2 transition-colors hover:text-primary hover:underline"
       >
         {r.companyName}
       </button>
@@ -339,11 +339,8 @@ function RowActions({ row: r, ctx }: { row: BoardRow; ctx: BoardCtx }) {
           ) : (
             <>
               <DropdownMenuLabel className="truncate">{r.companyName}</DropdownMenuLabel>
-              <DropdownMenuItem onSelect={() => ctx.openLogo(r.id)}>
-                <History /> View timeline
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => ctx.openCompany(r.companyId)}>
-                <Building2 /> Company profile
+              <DropdownMenuItem onSelect={() => ctx.openLogo(r)}>
+                <History /> Details &amp; timeline
               </DropdownMenuItem>
               {r.pamId && (
                 <DropdownMenuItem onSelect={() => ctx.openDigest(r.pamId!)}>

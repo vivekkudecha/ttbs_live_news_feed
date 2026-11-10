@@ -65,7 +65,7 @@ import type { BoardLogo, Page } from "@/api/types"
 import { DIGEST_STATUS, GROUP_SORT, LOGO_SORT, RESULT_STATUS, categoryLabel, download, n, pamKey, toCsv } from "./board-utils"
 import { boardColumns, type BoardCtx, type BoardRow, type PamRow } from "./columns"
 import { DigestPreviewDialog } from "./DigestPreviewDialog"
-import { LogoTimelineSheet } from "./LogoTimelineSheet"
+import { useLogoDrawer } from "@/components/logo/logo-drawer-context"
 import { useBoardUrl } from "./useBoardUrl"
 
 const SUB_PAGE = 25
@@ -98,14 +98,13 @@ function store(key: string, v: unknown) {
 export function RunBoard({
   runId,
   live,
-  onOpenCompany,
   onReassign,
 }: {
   runId: string
   live: boolean
-  onOpenCompany: (companyId: string) => void
   onReassign: (companyIds: string[]) => void
 }) {
+  const drawer = useLogoDrawer()
   const url = useBoardUrl()
   const { user } = useSession()
   const canManage = can(user, "runs", "manage")
@@ -258,8 +257,10 @@ export function RunBoard({
   }
 
   // ---- timeline / digest navigation -----------------------------------------------------------------
-  const logoOrder = useMemo(() => [...byId.values()].filter((r): r is BoardLogo => r.kind === "logo").map((r) => r.id), [byId])
-  const openIdx = url.open ? logoOrder.indexOf(url.open) : -1
+  // The logo drawer steps through the logos in table order.
+  const logoOrder = useMemo(() => [...byId.values()].filter((r): r is BoardLogo => r.kind === "logo").map((r) => ({ companyId: r.companyId, runId })), [byId, runId])
+  const openLogo = (r: BoardLogo) => drawer.open({ companyId: r.companyId, runId, siblings: logoOrder })
+  const activeLogo = drawer.current?.runId === runId ? drawer.current.companyId : null
   const digestPamName = useMemo(() => {
     if (!url.digest) return undefined
     for (const r of byId.values()) if ((r.kind === "pam" || r.kind === "logo") && r.pamId === url.digest) return r.pamName ?? undefined
@@ -275,8 +276,7 @@ export function RunBoard({
     facets: facets.data,
     isOpen: (k) => !!expanded[k],
     toggle,
-    openLogo: url.openLogo,
-    openCompany: onOpenCompany,
+    openLogo,
     openDigest: url.openDigest,
     retry: doRetry,
     resend: (pamIds, names) => setConfirmResend({ pamIds, names }),
@@ -292,7 +292,7 @@ export function RunBoard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const columns = useMemo(() => boardColumns(ctx), [url.view, catKey])
 
-  const [columnVisibility, setVis] = useState<VisibilityState>(() => stored("ttbs.table.board.cols", { finishedAt: false }))
+  const [columnVisibility, setVis] = useState<VisibilityState>(() => stored("ttbs.table.board.v2.cols", { finishedAt: false, attempts: false }))
   const [density, setDensityState] = useState<"comfortable" | "compact">(() => stored("ttbs.table.board.density", "comfortable"))
   const setDensity = (d: "comfortable" | "compact") => {
     setDensityState(d)
@@ -338,7 +338,7 @@ export function RunBoard({
     onColumnVisibilityChange: (u) =>
       setVis((old) => {
         const next = typeof u === "function" ? u(old) : u
-        store("ttbs.table.board.cols", next)
+        store("ttbs.table.board.v2.cols", next)
         return next
       }),
     getCoreRowModel: getCoreRowModel(),
@@ -509,9 +509,9 @@ export function RunBoard({
             table={table}
             density={density}
             dataKey={viewKey}
-            onRowClick={(r) => (r.kind === "pam" ? toggle(pamKey(r)) : r.kind === "logo" ? url.openLogo(r.id) : undefined)}
+            onRowClick={(r) => (r.kind === "pam" ? toggle(pamKey(r)) : r.kind === "logo" ? openLogo(r) : undefined)}
             onMore={(k, shown) => setExpanded((e) => ({ ...e, [k]: shown + SUB_PAGE }))}
-            activeId={url.open}
+            activeId={activeLogo}
             empty={
               <EmptyState icon={Search} title="Nothing matches">
                 {filterEntries.length || url.q ? "Try another tab, or clear a filter." : "This run has no logos yet."}
@@ -560,19 +560,6 @@ export function RunBoard({
         </div>
       )}
 
-      <LogoTimelineSheet
-        runId={runId}
-        resultId={url.open}
-        live={live}
-        canManage={canManage}
-        onClose={() => url.openLogo(null)}
-        prev={openIdx > 0 ? logoOrder[openIdx - 1] : undefined}
-        next={openIdx >= 0 && openIdx < logoOrder.length - 1 ? logoOrder[openIdx + 1] : undefined}
-        onNavigate={url.openLogo}
-        onRetry={(id) => doRetry({ resultIds: [id] })}
-        onOpenCompany={onOpenCompany}
-        onOpenDigest={url.openDigest}
-      />
       <DigestPreviewDialog
         runId={runId}
         pamId={url.digest}
@@ -683,7 +670,12 @@ function BoardTable({
   const span = table.getVisibleLeafColumns().length
   return (
     <div ref={box} className={cn("rounded-xl border bg-card shadow-xs", fits ? "overflow-x-clip" : "overflow-x-auto")}>
-      <Table className="min-w-[64rem] lg:min-w-0 lg:[&_td]:whitespace-normal" containerClassName="overflow-visible">
+      {/* Laptop and up: fixed column proportions and wrapping text, so the table always fits its box
+          (no sideways scroll). Phones keep a minimum width and scroll inside the box. */}
+      <Table
+        className="min-w-[60rem] text-[13px] lg:min-w-0 lg:table-fixed [&_td]:whitespace-normal [&_td]:break-words [&_th]:whitespace-normal"
+        containerClassName="overflow-visible"
+      >
         <TableHeader
           className={cn(
             "[&_th]:bg-[color-mix(in_oklab,var(--muted)_60%,var(--card))] [&_tr]:border-b-0 [&_th]:shadow-[inset_0_-1px_0_var(--border)]",
@@ -695,9 +687,9 @@ function BoardTable({
               {hg.headers.map((h) => (
                 <TableHead
                   key={h.id}
-                  style={{ width: h.column.columnDef.size !== 150 ? h.column.columnDef.size : undefined }}
+                  style={{ width: h.column.columnDef.meta?.width }}
                   className={cn(
-                    "group/th h-11 text-xs font-medium text-muted-foreground first:rounded-tl-xl first:pl-4 last:rounded-tr-xl last:pr-4",
+                    "group/th h-11 py-1.5 text-xs font-medium text-muted-foreground first:rounded-tl-xl first:pl-3 last:rounded-tr-xl last:pr-3",
                     h.column.columnDef.meta?.align === "right" && "text-right",
                   )}
                 >
@@ -720,7 +712,7 @@ function BoardTable({
               if (r.kind === "loading")
                 return (
                   <TableRow key={row.id} className="hover:bg-transparent">
-                    <TableCell colSpan={span} className="py-3 pl-[5.5rem]">
+                    <TableCell colSpan={span} className="py-3 pl-16">
                       <div className="space-y-2">
                         <Skeleton className="h-8 w-2/3" />
                         <Skeleton className="h-8 w-1/2 opacity-70" />
@@ -731,7 +723,7 @@ function BoardTable({
               if (r.kind === "more")
                 return (
                   <TableRow key={row.id} className="hover:bg-transparent">
-                    <TableCell colSpan={span} className="py-2 pl-[5.5rem]">
+                    <TableCell colSpan={span} className="py-2 pl-14">
                       <Button variant="ghost" size="sm" className="h-8 text-primary" onClick={() => onMore(r.pamKey, r.shown)}>
                         <ChevronsUpDown /> Show {Math.min(SUB_PAGE, r.total - r.shown)} more · {n(r.total - r.shown)} left
                       </Button>
@@ -744,7 +736,7 @@ function BoardTable({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() ? "selected" : undefined}
-                  aria-current={activeId === r.id ? "true" : undefined}
+                  aria-current={r.kind === "logo" && activeId === r.companyId ? "true" : undefined}
                   aria-expanded={isPam ? row.getIsExpanded() : undefined}
                   tabIndex={0}
                   onClick={(e) => {
@@ -760,18 +752,18 @@ function BoardTable({
                     }
                   }}
                   className={cn(
-                    "group/row cursor-pointer outline-none transition-colors duration-150 focus-visible:bg-muted/60",
+                    "group/row cursor-pointer outline-none transition-colors duration-150 focus-visible:bg-muted/60 has-[[data-state=open]]:bg-muted/50",
                     density === "compact" ? "h-11" : isPam ? "h-16" : "h-14",
                     isPam && "bg-muted/25 font-normal",
                     isPam && row.getIsExpanded() && "border-b-0 bg-muted/40",
                     sub && "animate-in fade-in-0 slide-in-from-top-1 duration-200 bg-card",
-                    activeId === r.id && "bg-accent/60",
+                    r.kind === "logo" && activeId === r.companyId && "bg-accent/60",
                   )}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
-                      className={cn("align-middle first:pl-4 last:pr-4", density === "compact" && "py-1.5", cell.column.columnDef.meta?.align === "right" && "text-right")}
+                      className={cn("align-middle first:pl-3 last:pr-3", density === "compact" && "py-1.5", cell.column.columnDef.meta?.align === "right" && "text-right")}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>

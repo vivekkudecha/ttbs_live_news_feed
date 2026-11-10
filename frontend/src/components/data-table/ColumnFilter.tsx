@@ -36,14 +36,12 @@ export function ColumnFilter<T>({ column, def, title }: { column: Column<T>; def
           aria-label={`Filter ${title}${active ? " (active)" : ""}`}
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            "relative inline-grid h-6 place-items-center overflow-hidden rounded transition-all hover:bg-muted hover:text-foreground",
-            // Inactive: no width until the header is hovered/focused, so it never shifts the title.
-            active
-              ? "w-6 text-primary opacity-100"
-              : "w-0 opacity-0 group-hover/th:w-6 group-hover/th:opacity-60 focus-visible:w-6 focus-visible:opacity-100 data-[state=open]:w-6 data-[state=open]:opacity-100",
+            "relative inline-grid size-5 shrink-0 place-items-center rounded transition-colors hover:bg-muted hover:text-foreground",
+            // Always visible next to the title (dim until hovered or active).
+            active ? "text-primary" : "opacity-45 group-hover/th:opacity-75 focus-visible:opacity-100 data-[state=open]:opacity-100",
           )}
         >
-          <Filter className="size-3.5" fill={active ? "currentColor" : "none"} />
+          <Filter className="size-3" fill={active ? "currentColor" : "none"} />
           {active && <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-brand" />}
         </button>
       </PopoverTrigger>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 import {
@@ -21,7 +21,7 @@ import { DataTableFacetedFilter } from "@/components/data-table/DataTableFaceted
 import { DataTablePagination } from "@/components/data-table/DataTablePagination"
 import { DataTableCompactPager } from "@/components/data-table/DataTableCompactPager"
 import { DataTableViewOptions } from "@/components/data-table/DataTableViewOptions"
-import { CompanyDrawer } from "@/components/companies/CompanyDrawer"
+import { useLogoDrawer } from "@/components/logo/logo-drawer-context"
 import { ReassignDialog } from "@/components/companies/ReassignDialog"
 import { PamMultiFilter } from "@/components/pickers/Pickers"
 import { Badge } from "@/components/ui/badge"
@@ -181,7 +181,8 @@ function CoverageStrip({ counts, value, onChange }: { counts: Record<string, num
 export function CompaniesList() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const openId = params.get("company")
+  const drawer = useLogoDrawer()
+  const openId = drawer.current?.companyId ?? null
 
   // All of this is sent to the server; the browser only ever holds one page.
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }])
@@ -197,8 +198,14 @@ export function CompaniesList() {
   const debouncedSearch = useDebounced(search, 250)
 
   const resetPage = () => setPagination((p) => ({ ...p, pageIndex: 0 }))
-  const openDrawer = (id: string) => setParams((p) => (p.set("company", id), p))
-  const closeDrawer = () => setParams((p) => (p.delete("company"), p))
+  // The app-wide logo drawer; it steps through this page's rows. Old links (?company=ID) still open it.
+  const pageRowsRef = useRef<{ companyId: string }[]>([])
+  const openDrawer = (id: string) => drawer.open({ companyId: id, siblings: pageRowsRef.current })
+  const legacyId = params.get("company")
+  useEffect(() => {
+    if (!legacyId) return
+    setParams((p) => (p.delete("company"), p.set("logo", legacyId), p), { replace: true })
+  }, [legacyId, setParams])
 
   const query = useCompanyPage({
     page: pagination.pageIndex,
@@ -210,6 +217,7 @@ export function CompaniesList() {
     sort: sorting[0],
   })
   const page = query.data
+  pageRowsRef.current = (page?.rows ?? []).map((r) => ({ companyId: r.id }))
 
   const columns = useMemo<ColumnDef<CompanyListRow>[]>(() => {
     const cols: ColumnDef<CompanyListRow>[] = []
@@ -551,7 +559,6 @@ export function CompaniesList() {
         </div>
       )}
 
-      <CompanyDrawer companyId={openId} onOpenChange={(o) => !o && closeDrawer()} onReassign={(id) => setReassignIds([id])} />
       <ReassignDialog companyIds={reassignIds} open={reassignIds.length > 0} onOpenChange={(o) => !o && setReassignIds([])} onDone={() => setRowSelection({})} />
     </Page>
   )
@@ -560,5 +567,5 @@ export function CompaniesList() {
 /** Old deep links (/companies/:id) now open the drawer on the list. */
 export function CompanyDetail() {
   const { id = "" } = useParams()
-  return <Navigate to={`/companies?company=${encodeURIComponent(id)}`} replace />
+  return <Navigate to={`/companies?logo=${encodeURIComponent(id)}`} replace />
 }

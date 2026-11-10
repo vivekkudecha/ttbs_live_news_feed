@@ -1,8 +1,9 @@
 /**
  * The results board's state lives in the URL (prefix `b.`), so a view can be shared and the Back
- * button restores it: search, grouping, sort, filters, page, and the open logo timeline / digest.
+ * button restores it: search, grouping, sort, filters, page and the open digest preview (the logo
+ * drawer has its own `logo` param, see components/logo).
  *
- *   ?b.q=acme&b.view=logo&b.sort=status.desc&b.filter={"status":["failed"]}&b.page=2&b.open=123
+ *   ?b.q=acme&b.view=logo&b.sort=status.desc&b.filter={"status":["failed"]}&b.page=2
  */
 import { useCallback, useMemo } from "react"
 import { useSearchParams } from "react-router-dom"
@@ -34,7 +35,6 @@ export function useBoardUrl() {
       filters,
       page: Math.max(0, Number(get("page") ?? 1) - 1) || 0,
       size: Number(get("size")) || 0,
-      open: get("open"),
       digest: get("digest"),
     }
   }, [get])
@@ -73,7 +73,6 @@ export function useBoardUrl() {
     setFilter,
     setPage: (p: number) => write({ page: p ? String(p + 1) : null }),
     setSize: (n: number) => write({ size: String(n), page: null }),
-    openLogo: (id: string | null) => write({ open: id }),
     openDigest: (pamId: string | null) => write({ digest: pamId }),
   }
 }

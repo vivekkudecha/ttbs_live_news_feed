@@ -140,6 +140,15 @@ export const useLogoTimeline = (runId: string, resultId: string | null, live: bo
     placeholderData: keepPreviousData,
     refetchInterval: live ? 4_000 : false,
   })
+/** A logo's run timeline by company (the logo drawer). Polls while the logo is still being researched. */
+export const useCompanyRunTimeline = (runId: string | undefined, companyId: string | null, enabled = true) =>
+  useQuery({
+    queryKey: ["logoTimeline", runId, "company", companyId],
+    queryFn: () => backend.companyRunTimeline(runId!, companyId!),
+    enabled: enabled && !!runId && !!companyId,
+    placeholderData: keepPreviousData,
+    refetchInterval: (q) => (q.state.data && ["pending", "running"].includes(q.state.data.logo.status) ? 4_000 : false),
+  })
 export const usePamDigest = (runId: string, pamId: string | null) =>
   useQuery({ queryKey: ["pamDigest", runId, pamId], queryFn: () => backend.pamDigest(runId, pamId!), enabled: !!runId && !!pamId })
 export const useBoardRetry = (runId: string) =>

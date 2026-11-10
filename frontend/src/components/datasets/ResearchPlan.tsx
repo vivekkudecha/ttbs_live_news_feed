@@ -1,12 +1,12 @@
 /**
  * "Research this upload?" — shown when an upload finishes saving, and when re-running an earlier one.
- * Now · at a time (once) · not now. Every run covers exactly this upload's logos and delivers to the
+ * Now · at a time (once) · repeat on a schedule · not now. Every run covers exactly this upload's logos and delivers to the
  * PAMs this upload mapped them to.
  */
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
-import { CalendarClock, Check, Clock, Info, Loader2, Mail, MessageCircle, Play, Rocket } from "lucide-react"
+import { CalendarClock, Check, Clock, Info, Loader2, Mail, Play, Repeat, Rocket } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,54 +15,17 @@ import { ApiError, errorMessage } from "@/api/http"
 import { fmtDateTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { DeliveryChannel } from "@/api/types"
+import { ChannelPicker } from "./ChannelPicker"
+import { ScheduleForm } from "@/components/schedules/ScheduleForm"
+import { DEFAULT_RULE, useCreateSchedule } from "@/api/schedules"
 
-type Mode = "now" | "at" | "later"
+type Mode = "now" | "at" | "repeat" | "later"
 
 /** datetime-local value one hour from now (browser time). */
 const inAnHour = () => {
   const d = new Date(Date.now() + 3_600_000)
   d.setSeconds(0, 0)
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-}
-
-const CHANNELS: { key: DeliveryChannel; label: string; hint: string; icon: typeof Mail }[] = [
-  { key: "email", label: "Email", hint: "Digest to each PAM's inbox", icon: Mail },
-  { key: "whatsapp", label: "WhatsApp", hint: "Short alert to each PAM", icon: MessageCircle },
-]
-
-/** Delivery channels as toggle tiles (any combination; at least one is required to start). */
-export function ChannelPicker({ value, onChange }: { value: DeliveryChannel[]; onChange: (v: DeliveryChannel[]) => void }) {
-  return (
-    <div className="grid gap-2 sm:grid-cols-2">
-      {CHANNELS.map((c) => {
-        const on = value.includes(c.key)
-        return (
-          <button
-            key={c.key}
-            type="button"
-            role="switch"
-            aria-checked={on}
-            onClick={() => onChange(on ? value.filter((x) => x !== c.key) : [...value, c.key])}
-            className={cn(
-              "flex items-center gap-3 rounded-lg border p-2.5 text-left transition-all duration-200 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              on ? "border-primary/60 bg-primary/[0.06]" : "bg-card opacity-80 hover:opacity-100",
-            )}
-          >
-            <span className={cn("grid size-8 shrink-0 place-items-center rounded-md transition-colors", on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
-              <c.icon className="size-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium">{c.label}</span>
-              <span className="block truncate text-xs text-muted-foreground">{c.hint}</span>
-            </span>
-            <span className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", on ? "bg-primary" : "bg-muted-foreground/30")}>
-              <span className={cn("absolute top-0.5 size-4 rounded-full bg-white shadow transition-all", on ? "left-[18px]" : "left-0.5")} />
-            </span>
-          </button>
-        )
-      })}
-    </div>
-  )
 }
 
 /** Email digests this run will send (one per PAM) against the mailbox's sending limits. */
@@ -109,6 +72,7 @@ export function ResearchPlan({
   const options: { key: Mode; icon: typeof Play; title: string; hint: string }[] = [
     { key: "now", icon: Play, title: previousRuns ? "Run again now" : "Research now", hint: "Starts immediately" },
     { key: "at", icon: Clock, title: "At a time", hint: "Once, later" },
+    { key: "repeat", icon: Repeat, title: "Repeat", hint: "On a schedule" },
     { key: "later", icon: CalendarClock, title: "Not now", hint: "Keep the upload; run it any time" },
   ]
 
@@ -128,7 +92,7 @@ export function ResearchPlan({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="When to run">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4" role="radiogroup" aria-label="When to run">
         {options.map((o) => {
           const on = mode === o.key
           return (
@@ -156,59 +120,92 @@ export function ResearchPlan({
         })}
       </div>
 
-      {mode !== "later" && (
-        <div className="grid gap-4 animate-in fade-in-0 duration-200">
-          {mode === "at" && (
-            <div className="grid max-w-xs gap-2 animate-in fade-in-0 slide-in-from-top-1 duration-200">
-              <Label htmlFor="plan-at">Run at (your local time)</Label>
-              <Input id="plan-at" type="datetime-local" value={runAt} onChange={(e) => setRunAt(e.target.value)} />
+      {mode === "repeat" ? (
+        <RepeatPlan importId={importId} label={label} onDone={onDone} />
+      ) : (
+        <>
+          {mode !== "later" && (
+            <div className="grid gap-4 animate-in fade-in-0 duration-200">
+              {mode === "at" && (
+                <div className="grid max-w-xs gap-2 animate-in fade-in-0 slide-in-from-top-1 duration-200">
+                  <Label htmlFor="plan-at">Run at (your local time)</Label>
+                  <Input id="plan-at" type="datetime-local" value={runAt} onChange={(e) => setRunAt(e.target.value)} />
+                </div>
+              )}
+              <div className="grid gap-2">
+                <Label>Send digests by</Label>
+                <ChannelPicker value={channels} onChange={setChannels} />
+                {channels.length === 0 && <p className="text-xs text-destructive">Choose at least one channel.</p>}
+              </div>
             </div>
           )}
-          <div className="grid gap-2">
-            <Label>Send digests by</Label>
-            <ChannelPicker value={channels} onChange={setChannels} />
-            {channels.length === 0 && <p className="text-xs text-destructive">Choose at least one channel.</p>}
+
+          {mode !== "later" && channels.includes("email") && <EmailCapacityNote importId={importId} />}
+
+          {previousRuns > 0 && mode !== "later" && (
+            <p className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+              <Info className="mt-0.5 size-3.5 shrink-0" />
+              This upload has run {previousRuns} time{previousRuns === 1 ? "" : "s"}
+              {lastRunAt ? ` (last ${fmtDateTime(lastRunAt)})` : ""}. A re-run researches the same logos for the PAMs this upload mapped them to;
+              answers still fresh from an earlier run come from the cache at no cost.
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 p-3">
+            {mode === "later" ? (
+              <p className="text-sm text-muted-foreground">Run it any time from Research runs → New run, or from Imports.</p>
+            ) : (
+              <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Logos</dt>
+                  <dd className="tabular font-semibold">{companies.toLocaleString("en-IN")}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Delivery</dt>
+                  <dd className="font-semibold">{channels.length ? channels.map((c) => (c === "email" ? "Email" : "WhatsApp")).join(" + ") : "—"}</dd>
+                </div>
+              </dl>
+            )}
+            <Button
+              variant={mode === "later" ? "outline" : "brand"}
+              size="lg"
+              onClick={submit}
+              disabled={start.isPending || companies === 0 || (mode !== "later" && channels.length === 0)}
+              className="min-w-40"
+            >
+              {start.isPending ? <Loader2 className="animate-spin" /> : mode === "now" ? <Rocket /> : mode === "at" ? <Clock /> : null}
+              {mode === "now" ? (previousRuns ? "Run again" : "Start research") : mode === "at" ? "Schedule run" : "Done"}
+            </Button>
           </div>
-        </div>
+        </>
       )}
+    </div>
+  )
+}
 
-      {mode !== "later" && channels.includes("email") && <EmailCapacityNote importId={importId} />}
-
-      {previousRuns > 0 && mode !== "later" && (
-        <p className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
-          <Info className="mt-0.5 size-3.5 shrink-0" />
-          This upload has run {previousRuns} time{previousRuns === 1 ? "" : "s"}
-          {lastRunAt ? ` (last ${fmtDateTime(lastRunAt)})` : ""}. A re-run researches the same logos for the PAMs this upload mapped them to;
-          answers still fresh from an earlier run come from the cache at no cost.
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 p-3">
-        {mode === "later" ? (
-          <p className="text-sm text-muted-foreground">Run it any time from Research runs → New run, or from Imports.</p>
-        ) : (
-          <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-            <div>
-              <dt className="text-xs text-muted-foreground">Logos</dt>
-              <dd className="tabular font-semibold">{companies.toLocaleString("en-IN")}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Delivery</dt>
-              <dd className="font-semibold">{channels.length ? channels.map((c) => (c === "email" ? "Email" : "WhatsApp")).join(" + ") : "—"}</dd>
-            </div>
-          </dl>
-        )}
-        <Button
-          variant={mode === "later" ? "outline" : "brand"}
-          size="lg"
-          onClick={submit}
-          disabled={start.isPending || companies === 0 || (mode !== "later" && channels.length === 0)}
-          className="min-w-40"
-        >
-          {start.isPending ? <Loader2 className="animate-spin" /> : mode === "now" ? <Rocket /> : mode === "at" ? <Clock /> : null}
-          {mode === "now" ? (previousRuns ? "Run again" : "Start research") : mode === "at" ? "Schedule run" : "Done"}
-        </Button>
-      </div>
+/** "Repeat": turn this upload into a recurring schedule, then show it on the Schedules page. */
+function RepeatPlan({ importId, label, onDone }: { importId: string; label: string; onDone?: () => void }) {
+  const navigate = useNavigate()
+  const create = useCreateSchedule()
+  const name = label.split(" · ")[0]
+  return (
+    <div className="animate-in fade-in-0 slide-in-from-top-1 rounded-lg border p-4 duration-200">
+      <ScheduleForm
+        initial={{ ...DEFAULT_RULE, name, target: "upload", importId, channels: ["email", "whatsapp"] }}
+        fixedUpload={{ id: importId, label }}
+        submitLabel="Create schedule"
+        pending={create.isPending}
+        onSubmit={async (v) => {
+          try {
+            const s = await create.mutateAsync(v)
+            toast.success(`Schedule “${s.name}” created`, { description: `${s.summary}. First run ${fmtDateTime(s.nextRunAt)}.` })
+            onDone?.()
+            navigate("/schedules")
+          } catch (e) {
+            toast.error("Could not create the schedule", { description: errorMessage(e) })
+          }
+        }}
+      />
     </div>
   )
 }

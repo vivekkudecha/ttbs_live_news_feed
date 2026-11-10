@@ -62,6 +62,9 @@ def test_timeline_retry_and_resend(client, monkeypatch):
     assert t["logo"]["companyName"].startswith("Havells") and t["logo"]["error"]
     assert any(e["kind"] == "research.attempt" and e["status"] == "error" for e in t["events"])
     assert t["digests"][0]["includesLogo"] is False
+    by_company = client.get(f"/api/v1/runs/{run_id}/board/companies/{failed['companyId']}/timeline").json()
+    assert by_company["logo"]["id"] == failed["id"]
+    assert client.get(f"/api/v1/runs/{run_id}/board/companies/999999/timeline").status_code == 404
 
     monkeypatch.setattr(providers.FakeProvider, "research", real)
     assert client.post(f"/api/v1/runs/{run_id}/board/retry", json={"resultIds": [failed["id"]]}).json() == {"requeued": 1}

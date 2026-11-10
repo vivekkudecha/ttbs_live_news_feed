@@ -37,7 +37,7 @@ function SignalCardRow({ r, showPam, pamFilter }: { r: SignalRow; showPam: boole
               {pamFilter ? `#${p.rank}` : `PAM rank #${p.rank}`}
             </Badge>
           )}
-          <Link to={`/companies?company=${r.companyId}`} className="font-semibold hover:text-brand-blue hover:underline">
+          <Link to={{ search: `?logo=${r.companyId}&logoRun=${r.runId}` }} className="font-semibold hover:text-brand-blue hover:underline">
             {r.companyName}
           </Link>
           <CategoryBadge category={r.category} />

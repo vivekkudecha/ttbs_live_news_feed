@@ -46,6 +46,12 @@ def board_timeline(run_id: int, result_id: int) -> dict[str, Any]:
         return run_board.timeline(uow, run_board.get_run(uow, run_id), result_id)
 
 
+@router.get("/runs/{run_id}/board/companies/{company_id}/timeline")
+def board_company_timeline(run_id: int, company_id: int) -> dict[str, Any]:
+    with unit_of_work() as uow:
+        return run_board.timeline_for_company(uow, run_board.get_run(uow, run_id), company_id)
+
+
 @router.get("/runs/{run_id}/board/pams/{pam_id}/digest")
 def board_digest(run_id: int, pam_id: int) -> dict[str, Any]:
     with unit_of_work() as uow:

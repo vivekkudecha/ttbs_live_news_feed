@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { RichText, safeHref } from "./RichText"
+import { withoutUrls } from "@/lib/findings"
 import type { ResearchResult } from "@/api/types"
 import { cn } from "@/lib/utils"
 
@@ -21,12 +22,12 @@ export function SignalSections({ result, compact = false }: { result: ResearchRe
     ["Recommended outreach", result.outreach],
   ]
   return (
-    <div className={cn("space-y-3 text-sm leading-relaxed text-foreground/85", compact && "space-y-1.5")}>
+    <div className={cn("min-w-0 space-y-3 text-sm leading-relaxed text-foreground/85", compact && "space-y-1.5")}>
       {rows.map(([label, text]) => (
-        <div key={label} className="grid gap-0.5 sm:grid-cols-[11rem_1fr] sm:gap-4">
+        <div key={label} className="grid gap-0.5 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-4">
           <span className="text-[0.9375rem] text-muted-foreground">{label}</span>
-          <span>
-            <RichText text={text} />
+          <span className="min-w-0 wrap-anywhere">
+            <RichText text={withoutUrls(text)} />
           </span>
         </div>
       ))}

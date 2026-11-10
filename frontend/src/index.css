@@ -190,6 +190,10 @@
   body { background-image: var(--surface-wash); background-attachment: fixed; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; font-feature-settings: "cv11", "ss01", "ss03"; font-size: 0.9375rem; line-height: 1.55; }
   /* One smooth scroll for the whole page (tables no longer scroll on their own). */
   html { scroll-behavior: smooth; scrollbar-gutter: stable; }
+  /* Popups (menus, selects, dialogs, sheets) lock page scroll. The scrollbar's space is already kept
+     by scrollbar-gutter above, so the lock must not add its own compensation: that extra margin is
+     what made the whole page jump sideways whenever a menu or drawer opened. */
+  body[data-scroll-locked] { margin-right: 0 !important; padding-right: 0 !important; --removed-body-scroll-bar-size: 0px !important; }
   /* Pressable controls give a little under the finger/cursor. */
   button:not(:disabled), [role="button"], a[data-slot="button"] { transition-property: color, background-color, border-color, box-shadow, transform, opacity; }
   [data-slot="button"]:not(:disabled):active { transform: scale(0.98); }

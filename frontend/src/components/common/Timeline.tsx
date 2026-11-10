@@ -73,7 +73,7 @@ export function Timeline({
         const delay = { "--tl-delay": `${Math.min(i, 8) * 70}ms` } as CSSProperties
         const Row = item.detail ? "button" : "div"
         return (
-          <li key={item.id} className="relative grid grid-cols-[2rem_1fr] gap-x-4 pb-6 last:pb-0" style={delay}>
+          <li key={item.id} className="relative grid grid-cols-[2rem_minmax(0,1fr)] gap-x-4 pb-6 last:pb-0" style={delay}>
             {!last && (
               <span
                 aria-hidden="true"
@@ -115,13 +115,13 @@ export function Timeline({
                 <div
                   id={detailId}
                   className={cn(
-                    "grid transition-[grid-template-rows,opacity] duration-300 ease-out",
+                    "grid grid-cols-[minmax(0,1fr)] transition-[grid-template-rows,opacity] duration-300 ease-out",
                     expanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
                   )}
                   inert={!expanded}
                 >
-                  <div className="overflow-hidden">
-                    <div className="pb-1 pt-3">{item.detail}</div>
+                  <div className="min-w-0 overflow-hidden">
+                    <div className="min-w-0 pb-1 pt-3">{item.detail}</div>
                   </div>
                 </div>
               )}

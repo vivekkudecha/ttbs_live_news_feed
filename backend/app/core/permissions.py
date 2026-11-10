@@ -71,6 +71,7 @@ PREFIXES: tuple[tuple[str, str], ...] = (
     (f"{P}/digest", "signals"),
     (f"{P}/run-summaries", "runs"),
     (f"{P}/runs", "runs"),
+    (f"{P}/schedules", "runs"),
     (f"{P}/scopes", "runs"),
     (f"{P}/notifications", "runs"),
     (f"{P}/companies", "companies"),
@@ -93,6 +94,7 @@ READ_POSTS = frozenset({
     f"{P}/pams/query",
     f"{P}/settings/llm/{{provider}}/models",
     f"{P}/research-prompt/preview",
+    f"{P}/schedules/preview",
 })
 
 

@@ -174,13 +174,25 @@ class DatasetCompany(Base):
 
 
 class Schedule(TimestampMixin, Base):
+    """A recurring research job (services/schedules.py). Each firing creates an ordinary run.
+
+    Repeat rule: `frequency` interval (every `interval_days`) | weekly (on `weekdays`, 0 = Mon) |
+    monthly (on `month_day`, clamped to the month's last day), at `run_at_time` in `timezone`,
+    until `ends_on` (inclusive) if set. Target (`scope_key`): "import:<id>" = always that upload;
+    "latest" = the newest saved upload at firing time. `channels` [] = research only, no digests.
+    """
+
     __tablename__ = "schedules"
 
     id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200))
+    frequency: Mapped[str] = mapped_column(String(10), default="interval")
     interval_days: Mapped[int] = mapped_column(Integer)
+    weekdays: Mapped[list[Any] | None] = mapped_column(default=list)
+    month_day: Mapped[int | None] = mapped_column(Integer)
     run_at_time: Mapped[str] = mapped_column(String(5))  # "HH:MM" in `timezone`
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Kolkata")
+    ends_on: Mapped[date | None] = mapped_column(Date)
     scope_key: Mapped[str] = mapped_column(String(100), default="all")
     template_id: Mapped[str] = mapped_column(String(50), default="t1")
     channels: Mapped[list[Any]] = mapped_column(default=lambda: ["email", "whatsapp"])
@@ -188,6 +200,10 @@ class Schedule(TimestampMixin, Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Outcome of the latest firing: started | skipped | failed (+ why, and the run it created).
+    last_outcome: Mapped[str | None] = mapped_column(String(10))
+    last_error: Mapped[str | None] = mapped_column(String(500))
+    last_run_id: Mapped[int | None] = mapped_column(BigInteger)  # no FK: runs already reference schedules
     created_by: Mapped[str] = mapped_column(String(100))
 
 
@@ -666,7 +682,7 @@ class PasswordHistory(Base):
 
 ARCHIVED = (
     ResearchResult, Notification, NotificationAttempt, DeadLetter, ProcessEvent, CostEntry,
-    DatasetCompany, EmailTemplate, EmailTemplateVersion, LlmProviderConfig, EmailConfig,
+    DatasetCompany, EmailTemplate, EmailTemplateVersion, LlmProviderConfig, EmailConfig, Schedule,
 )
 
 

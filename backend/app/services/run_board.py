@@ -330,6 +330,14 @@ def timeline(uow: UnitOfWork, run: Run, result_id: int) -> dict[str, Any]:
     }
 
 
+def timeline_for_company(uow: UnitOfWork, run: Run, company_id: int) -> dict[str, Any]:
+    """The same timeline, addressed by company (callers that know the logo but not its result row)."""
+    rid = uow.session.scalar(select(ResearchResult.id).where(*_in_run(run), ResearchResult.company_id == company_id))
+    if rid is None:
+        raise NotFound(f"Company {company_id} is not in run {run.id}")
+    return timeline(uow, run, rid)
+
+
 # --- Bulk actions ---------------------------------------------------------------------------------------
 
 

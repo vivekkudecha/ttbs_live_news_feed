@@ -209,7 +209,7 @@ export default function Dashboard() {
           <CardContent className="-mx-2 space-y-0.5">
             {d.topPriority.length === 0 && <p className="px-2 text-sm text-muted-foreground">No signals in this cycle.</p>}
             {d.topPriority.map((p, i) => (
-              <Link key={`${p.pamId}-${p.companyId}`} to={`/companies?company=${p.companyId}`} className="group flex gap-4 rounded-lg px-3 py-3.5 transition-colors hover:bg-muted/60">
+              <Link key={`${p.pamId}-${p.companyId}`} to={{ search: `?logo=${p.companyId}&logoRun=${p.runId}` }} className="group flex gap-4 rounded-lg px-3 py-3.5 transition-colors hover:bg-muted/60">
                 <span className="tabular mt-0.5 w-5 shrink-0 text-right text-sm font-medium text-muted-foreground">{i + 1}</span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">

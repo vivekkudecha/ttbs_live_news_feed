@@ -138,12 +138,6 @@ def test_scheduled_for_later_then_dispatcher_starts_it(client):
     assert client.get(f"/api/v1/runs/{run['id']}").json()["status"] == "completed"
 
 
-def test_recurring_schedules_are_retired(client):
-    upload(client)
-    assert client.post("/api/v1/schedules", json={"name": "10-day cycle", "intervalDays": 10, "runAtTime": "06:00"}).status_code in (404, 405)
-    assert "schedules_fired" not in maintenance.tick()
-
-
 def test_sweeper_recovers_lost_notifications(client, monkeypatch):
     from app.worker import tasks
 

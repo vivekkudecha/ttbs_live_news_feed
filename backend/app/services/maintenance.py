@@ -1,11 +1,10 @@
 """Dispatcher + sweeper, run every `dispatcher_interval_s` by Celery beat.
 
-1. Promote 'scheduled' runs (an upload set to run at a later time) whose time has come.
+1. Promote 'scheduled' runs (an upload set to run at a later time) whose time has come, and fire
+   recurring schedules that are due (services/schedules.py: each firing creates a normal run).
 2. Recover lost work: queue messages can be lost (Redis restart, worker crash). The database is
    the source of truth, so anything that should be moving but is not gets re-enqueued. Every
    task is idempotent, so a duplicate is harmless. Each recovery is a telemetry event.
-
-Recurring schedules are retired: every run starts from an upload (rows stay for history).
 """
 
 import logging
@@ -29,7 +28,7 @@ from app.db.models import (
     Run,
 )
 from app.db.session import UnitOfWork, unit_of_work
-from app.services import runs, telemetry
+from app.services import runs, schedules, telemetry
 
 log = logging.getLogger(__name__)
 BATCH = 500
@@ -145,5 +144,6 @@ def recover_stuck() -> dict[str, int]:
 def tick() -> dict:
     return {
         "runs_promoted": promote_scheduled_runs(),
+        "schedules_fired": schedules.fire_due(),
         "recovered": recover_stuck(),
     }

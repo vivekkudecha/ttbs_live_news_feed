@@ -7,6 +7,7 @@ export const routeChunks = {
   signals: () => import("@/pages/Signals"),
   digest: () => import("@/pages/Digest"),
   runs: () => import("@/pages/Runs"),
+  schedules: () => import("@/pages/Schedules"),
   companies: () => import("@/pages/Companies"),
   pams: () => import("@/pages/Pams"),
   imports: () => import("@/pages/Imports"),
