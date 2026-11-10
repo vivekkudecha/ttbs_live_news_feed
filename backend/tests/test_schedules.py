@@ -172,13 +172,6 @@ def test_delete_archives_the_schedule_and_keeps_its_runs(client):
     assert client.delete(f"/api/v1/schedules/{s['id']}").status_code == 404
 
 
-def test_one_time_runs_are_listed_with_schedules(client):
-    imp = upload(client).json()
-    later = (datetime.now(UTC) + timedelta(hours=3)).isoformat()
-    run = client.post("/api/v1/runs", json={"importId": int(imp["id"]), "runAt": later}).json()
-    assert [r["id"] for r in client.get("/api/v1/schedules").json()["oneTime"]] == [run["id"]]
-
-
 def test_validation_and_preview(client):
     imp = upload(client).json()
     assert make(client, imp["id"], frequency="weekly").status_code == 422  # no days picked
@@ -209,3 +202,27 @@ def test_accepts_the_payloads_the_web_app_sends(client):
     patched = client.patch(f"/api/v1/schedules/{created.json()['id']}", json=edit)
     assert patched.status_code == 200, patched.text
     assert patched.json()["target"] == "latest" and patched.json()["summary"] == "Monthly on the last day at 06:00"
+
+
+def test_each_schedule_lists_its_own_runs(client):
+    """The Research page: schedules with their run counts; a schedule page lists only its runs."""
+    from tests.conftest import research
+
+    imp = upload(client).json()
+    a = make(client, imp["id"], name="A").json()
+    b = make(client, imp["id"], name="B").json()
+    run_a = client.post(f"/api/v1/schedules/{a['id']}/run").json()["id"]
+    client.post(f"/api/v1/schedules/{b['id']}/run")
+    client.post(f"/api/v1/schedules/{b['id']}/run")
+    research(client, imp["id"], [])  # a run no schedule started
+
+    listing = client.get("/api/v1/schedules").json()
+    assert {s["name"]: s["runs"] for s in listing["rows"]} == {"A": 1, "B": 2} and listing["unscheduled"] == 1
+    assert client.get(f"/api/v1/schedules/{a['id']}").json()["runs"] == 1
+    assert client.get("/api/v1/schedules/999").status_code == 404
+
+    only_a = client.get("/api/v1/runs", params={"schedule": a["id"]}).json()
+    assert [r["id"] for r in only_a["rows"]] == [run_a] and only_a["groups"]["all"] == 1
+    assert client.get("/api/v1/runs", params={"schedule": b["id"]}).json()["total"] == 2
+    assert client.get("/api/v1/runs", params={"schedule": "none"}).json()["total"] == 1
+    assert client.get("/api/v1/runs").json()["total"] == 4

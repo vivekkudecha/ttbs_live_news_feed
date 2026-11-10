@@ -23,6 +23,8 @@ export interface LiveState extends Omit<LiveSnapshot, "status"> {
 }
 
 const RECENT_MAX = 80
+const WAIT_MS = 2000
+const FINISHED = new Set<RunStatus>(["completed", "partial", "failed", "cancelled"])
 const PAMS_MAX = 40
 
 /**
@@ -33,6 +35,8 @@ const PAMS_MAX = 40
  *  - React re-renders at most once per animation frame, however many events arrive.
  *  - Events that arrive before the snapshot are buffered and replayed (idempotent), so
  *    nothing is lost or double-counted at subscribe time.
+ *  - A queued run has no companies yet (they are created when a worker starts it). Subscribing
+ *    then would pin an empty grid, so we wait until the run has companies or has finished.
  */
 export function useLiveRun(runId: string | undefined) {
   const ref = useRef<LiveState | null>(null)
@@ -62,22 +66,34 @@ export function useLiveRun(runId: string | undefined) {
       Object.assign(st, { done: b.done, signals: b.signals, failed: b.failed, pamsDone: b.pamsDone, ratePerSec: b.ratePerSec, status: b.status, version: st.version + 1, receivedAt: performance.now() })
     }
 
-    const unsubscribe = subscribeRun(runId, (b) => {
+    let unsubscribe = () => {}
+    let wait: ReturnType<typeof setTimeout> | undefined
+    const whenStarted = async () => {
+      const probe = await api.liveSnapshot(runId).catch(() => null)
       if (cancelled) return
-      if (!ref.current) buffer.push(b)
-      else {
-        apply(b)
+      if (probe && probe.total === 0 && !FINISHED.has(probe.status)) wait = setTimeout(whenStarted, WAIT_MS)
+      else begin()
+    }
+    const begin = () => {
+      unsubscribe = subscribeRun(runId, (b) => {
+        if (cancelled) return
+        if (!ref.current) buffer.push(b)
+        else {
+          apply(b)
+          flush()
+        }
+      })
+      void api.liveSnapshot(runId).then((snap) => {
+        if (cancelled || !snap) return
+        ref.current = { ...snap, ratePerSec: 0, recent: [], pamsCompleted: [], dirty: [], version: 0, receivedAt: performance.now() }
+        buffer.splice(0).forEach(apply)
         flush()
-      }
-    })
-    void api.liveSnapshot(runId).then((snap) => {
-      if (cancelled || !snap) return
-      ref.current = { ...snap, ratePerSec: 0, recent: [], pamsCompleted: [], dirty: [], version: 0, receivedAt: performance.now() }
-      buffer.splice(0).forEach(apply)
-      flush()
-    })
+      })
+    }
+    void whenStarted()
     return () => {
       cancelled = true
+      clearTimeout(wait)
       unsubscribe()
       cancelAnimationFrame(raf)
     }

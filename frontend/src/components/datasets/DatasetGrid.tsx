@@ -148,7 +148,7 @@ export function DatasetGrid({ datasetId, pageSize = 25, className }: { datasetId
           <Input
             aria-label="Search rows"
             placeholder="Search company, industry or PAM"
-            className="h-9 pl-8"
+            className="pl-8"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value)
@@ -163,7 +163,7 @@ export function DatasetGrid({ datasetId, pageSize = 25, className }: { datasetId
             reset()
           }}
         >
-          <SelectTrigger className="h-9 lg:w-48" aria-label="Filter by segment">
+          <SelectTrigger className="lg:w-48" aria-label="Filter by segment">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -183,7 +183,7 @@ export function DatasetGrid({ datasetId, pageSize = 25, className }: { datasetId
             reset()
           }}
         >
-          <SelectTrigger className="h-9 lg:w-56" aria-label="Filter by PAM">
+          <SelectTrigger className="lg:w-56" aria-label="Filter by PAM">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -20,11 +20,9 @@ import ChangePassword from "@/pages/ChangePassword"
 
 // Secondary pages load on demand to keep the first paint small (and are preloaded on nav hover).
 const c = routeChunks
-const Signals = lazy(c.signals)
-const Digest = lazy(c.digest)
-const RunsList = lazy(() => c.runs().then((m) => ({ default: m.RunsList })))
 const RunDetail = lazy(() => c.runs().then((m) => ({ default: m.RunDetail })))
-const Schedules = lazy(c.schedules)
+const Research = lazy(c.schedules)
+const ScheduleDetail = lazy(() => c.schedules().then((m) => ({ default: m.ScheduleDetail })))
 const JobsRedirect = lazy(() => c.runs().then((m) => ({ default: m.JobsRedirect })))
 const CompaniesList = lazy(() => c.companies().then((m) => ({ default: m.CompaniesList })))
 const CompanyDetail = lazy(() => c.companies().then((m) => ({ default: m.CompanyDetail })))
@@ -117,9 +115,7 @@ export default function App() {
                   }
                 >
                   <Route index element={<Home />} />
-                  <Route path="signals" element={<Allow module="signals"><Signals /></Allow>} />
-                  <Route path="digest" element={<Allow module="signals"><Digest /></Allow>} />
-                  <Route path="runs" element={<Allow module="runs"><RunsList /></Allow>} />
+                  <Route path="runs" element={<JobsRedirect />} />
                   <Route path="runs/:id" element={<Allow module="runs"><RunDetail /></Allow>} />
                   <Route path="outbox" element={<Allow module="runs"><EmailOutbox /></Allow>} />
                   <Route path="jobs" element={<JobsRedirect />} />
@@ -129,7 +125,8 @@ export default function App() {
                   <Route path="pams" element={<Allow module="pams"><Pams /></Allow>} />
                   <Route path="imports" element={<Allow module="imports"><Imports /></Allow>} />
                   <Route path="templates" element={<Templates />} />
-                  <Route path="schedules" element={<Allow module="runs"><Schedules /></Allow>} />
+                  <Route path="schedules" element={<Allow module="runs"><Research /></Allow>} />
+                  <Route path="schedules/:id" element={<Allow module="runs"><ScheduleDetail /></Allow>} />
                   <Route path="telemetry" element={<Allow module="telemetry"><Telemetry /></Allow>} />
                   <Route path="integrations" element={<Allow module="integrations"><Integrations /></Allow>} />
                   <Route path="costs" element={<Allow module="costs"><Costs /></Allow>} />

@@ -22,7 +22,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from app.core import cache
 from app.core.errors import AppError, NotFound, ValidationFailed
@@ -313,7 +313,7 @@ def fire_due() -> dict[str, int]:
 # --- Read model -----------------------------------------------------------------------------------
 
 
-def out(uow: UnitOfWork, s: Schedule, last_run: Run | None = None) -> dict[str, Any]:
+def out(uow: UnitOfWork, s: Schedule, last_run: Run | None = None, runs_count: int | None = None) -> dict[str, Any]:
     rule = Rule.of(s)
     return {
         "id": str(s.id),
@@ -337,11 +337,24 @@ def out(uow: UnitOfWork, s: Schedule, last_run: Run | None = None) -> dict[str, 
         "lastError": s.last_error,
         "lastRun": {"id": str(last_run.id), "status": last_run.status} if last_run else None,
         "createdBy": s.created_by,
+        "runs": runs_count if runs_count is not None else _run_counts(uow).get(s.id, 0),
     }
 
 
-def listing(uow: UnitOfWork) -> list[dict[str, Any]]:
+def _run_counts(uow: UnitOfWork) -> dict[int | None, int]:
+    """Runs per schedule id (None = runs no schedule started)."""
+    return dict(uow.session.execute(select(Run.schedule_id, func.count(Run.id)).group_by(Run.schedule_id)).all())
+
+
+def listing(uow: UnitOfWork) -> dict[str, Any]:
+    """Every schedule (with its run count and latest run), plus how many runs no schedule started."""
     rows = list(uow.session.scalars(select(Schedule).order_by(Schedule.enabled.desc(), Schedule.next_run_at)))
     last = {r.id: r for r in uow.session.scalars(select(Run).where(Run.id.in_([s.last_run_id for s in rows if s.last_run_id])))}
-    return [out(uow, s, last.get(s.last_run_id)) for s in rows]
+    counts = _run_counts(uow)
+    return {"rows": [out(uow, s, last.get(s.last_run_id), counts.get(s.id, 0)) for s in rows], "unscheduled": counts.get(None, 0)}
+
+
+def detail(uow: UnitOfWork, schedule_id: int) -> dict[str, Any]:
+    s = get(uow, schedule_id)
+    return out(uow, s, uow.session.get(Run, s.last_run_id) if s.last_run_id else None)
 

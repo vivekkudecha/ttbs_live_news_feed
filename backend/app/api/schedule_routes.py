@@ -1,17 +1,15 @@
-"""Recurring research schedules (services/schedules.py) and the one-time runs waiting to start."""
+"""Recurring research schedules (services/schedules.py). Every research run starts from one."""
 
 from datetime import date
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import Field
-from sqlalchemy import select
 
 from app.api import schemas as sch
 from app.api.deps import current_actor
 from app.core.config import get_settings
 from app.core.errors import ValidationFailed
-from app.db.models import RUN_SCHEDULED, Run
 from app.db.session import unit_of_work
 from app.services import schedules
 
@@ -65,10 +63,14 @@ def _scope_key(target: str | None, import_id: int | None) -> str | None:
 
 @router.get("/schedules")
 def list_schedules() -> dict[str, Any]:
-    """Recurring schedules, plus one-time runs waiting for their start time (soonest first)."""
     with unit_of_work() as uow:
-        once = uow.session.scalars(select(Run).where(Run.status == RUN_SCHEDULED).order_by(Run.scheduled_for).limit(50))
-        return {"rows": schedules.listing(uow), "oneTime": [sch.run_out(r) for r in once]}
+        return schedules.listing(uow)
+
+
+@router.get("/schedules/{schedule_id}")
+def get_schedule(schedule_id: int) -> dict[str, Any]:
+    with unit_of_work() as uow:
+        return schedules.detail(uow, schedule_id)
 
 
 @router.post("/schedules", status_code=201)

@@ -45,12 +45,14 @@ export interface Schedule extends RepeatRule {
   lastError: string | null
   lastRun: { id: string; status: RunStatus } | null
   createdBy: string
+  /** Research runs this schedule has started. */
+  runs: number
 }
 
 export interface ScheduleList {
   rows: Schedule[]
-  /** One-time runs waiting for their start time. */
-  oneTime: Job[]
+  /** Runs no schedule started (from before every run came from one). */
+  unscheduled: number
 }
 
 export const DEFAULT_RULE: RepeatRule = { frequency: "interval", intervalDays: 10, weekdays: [0], monthDay: 1, runAtTime: "06:00", endsOn: null }
@@ -59,6 +61,7 @@ const wire = (v: Partial<ScheduleInput>) => ({ ...v, importId: v.importId ? Numb
 
 const schedulesApi = {
   list: () => request<ScheduleList>("GET", "/schedules"),
+  get: (id: string) => request<Schedule>("GET", `/schedules/${id}`),
   create: (v: ScheduleInput) => request<Schedule>("POST", "/schedules", wire(v)),
   update: (id: string, v: Partial<ScheduleInput>) => request<Schedule>("PATCH", `/schedules/${id}`, wire(v)),
   remove: (id: string) => request<void>("DELETE", `/schedules/${id}`),
@@ -67,13 +70,17 @@ const schedulesApi = {
 }
 
 /** Refreshes while anything is due within the hour, so countdowns and outcomes stay live. */
+/** One schedule (its page header). Shares the "schedules" key, so every schedule change refreshes it. */
+export const useSchedule = (id: string | undefined) =>
+  useQuery({ queryKey: ["schedules", "one", id], queryFn: () => schedulesApi.get(id!), enabled: !!id, refetchInterval: 30_000 })
+
 export const useSchedules = () =>
   useQuery({
     queryKey: ["schedules"],
     queryFn: schedulesApi.list,
     refetchInterval: (q) => {
       const soon = Date.now() + 3_600_000
-      const due = [...(q.state.data?.rows ?? []).map((s) => s.nextRunAt), ...(q.state.data?.oneTime ?? []).map((r) => r.scheduledFor)]
+      const due = (q.state.data?.rows ?? []).map((s) => s.nextRunAt)
       return due.some((t) => t && new Date(t).getTime() < soon) ? 15_000 : 60_000
     },
   })
@@ -89,7 +96,8 @@ function useScheduleMutation<V, R>(fn: (v: V) => Promise<R>) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: fn,
-    onSuccess: () => ["schedules", "runs", "jobs", "audit"].forEach((k) => qc.invalidateQueries({ queryKey: [k] })),
+    // A schedule change can start a run: refresh everything a new run shows up in.
+    onSuccess: () => ["schedules", "runs", "jobs", "scopes", "datasets", "audit", "finops"].forEach((k) => qc.invalidateQueries({ queryKey: [k] })),
   })
 }
 

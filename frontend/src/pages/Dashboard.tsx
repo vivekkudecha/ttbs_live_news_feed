@@ -18,7 +18,7 @@ import type { PamJobRow } from "@/api/types"
 import { useDashboard } from "@/api/hooks"
 import { useSession } from "@/context/session"
 import { fmtDate, fmtDateTime, pct } from "@/lib/format"
-import { NewRunDialog } from "@/components/runs/NewRunDialog"
+import { NewScheduleButton } from "@/components/schedules/NewScheduleButton"
 import { Page, StatGrid, Split } from "@/components/common/layout"
 import { LiveDot } from "@/components/common/LiveDot"
 import { ChartCard } from "@/components/common/ChartCard"
@@ -31,11 +31,11 @@ function GettingStarted({ greeting, logos }: { greeting: string; logos: number }
   const steps = [
     { done: false, title: "Connect a research AI", hint: "Providers & channels → Perplexity or Gemini key + model", to: "/integrations" },
     { done: logos > 0, title: "Upload this run's logos", hint: logos > 0 ? `${n(logos)} logos known so far` : "Excel/CSV: Company, PAM Name, PAM Email, PAM WhatsApp", to: "/imports" },
-    { done: false, title: "Run research", hint: "Research the upload now or at a set time; each PAM gets their own results", to: "/runs" },
+    { done: false, title: "Schedule research", hint: "Pick the upload, how often, and how PAMs get results; the first run can start right away", to: "/schedules" },
   ]
   return (
     <Page>
-      <PageHeader title={greeting} description="No research has run yet. Results, signals and digests appear here after the first run." actions={<NewRunDialog />} />
+      <PageHeader title={greeting} description="No research has run yet. Results, signals and digests appear here after the first run." actions={<NewScheduleButton />} />
       <Card>
           <CardHeader>
             <CardTitle>Get started</CardTitle>
@@ -148,11 +148,11 @@ export default function Dashboard() {
         actions={
           <>
             <Button variant="outline" asChild>
-              <Link to="/signals">
-                View signals <ArrowRight />
+              <Link to="/schedules">
+                Open Research <ArrowRight />
               </Link>
             </Button>
-            <NewRunDialog />
+            <NewScheduleButton />
           </>
         }
       />
@@ -198,13 +198,6 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle>Top priority actions</CardTitle>
             <CardDescription>Strongest #1 action across all PAMs · {latest.id}</CardDescription>
-            <CardAction>
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/digest">
-                  Digest <ArrowRight />
-                </Link>
-              </Button>
-            </CardAction>
           </CardHeader>
           <CardContent className="-mx-2 space-y-0.5">
             {d.topPriority.length === 0 && <p className="px-2 text-sm text-muted-foreground">No signals in this cycle.</p>}

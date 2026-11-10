@@ -50,16 +50,6 @@ class PamQueryIn(sch.In):
     sort: SortIn | None = None
 
 
-class SignalQueryIn(sch.In):
-    run_id: str
-    page: int = Field(0, ge=0)
-    page_size: int = Field(50, ge=1, le=200)
-    status: str | None = None
-    category: str | None = None
-    pam_id: str | None = None
-    search: str | None = None
-
-
 class ReassignIn(sch.In):
     company_ids: list[str] = Field(min_length=1, max_length=10_000)
     to_pam_id: str
@@ -142,18 +132,6 @@ def resend_digest(run_id: str, pam_id: str, actor: str = Depends(current_actor))
         for nid in ids:
             notifications.resend(uow, nid, actor)
     return {"requeued": len(ids)}
-
-
-@router.post("/signals/query")
-def query_signals(body: SignalQueryIn) -> dict[str, Any]:
-    with unit_of_work() as uow:
-        return rm.query_signals(uow, _dump(body))
-
-
-@router.get("/digest")
-def digest(run_id: str = Query(alias="runId"), pam_id: str = Query(alias="pamId")) -> dict[str, Any] | None:
-    with unit_of_work() as uow:
-        return rm.digest(uow, run_id, pam_id)
 
 
 @router.get("/run-summaries/{run_id}/live")

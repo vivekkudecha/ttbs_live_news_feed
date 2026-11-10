@@ -8,7 +8,7 @@ import { useMemo } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import type { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
-import { Download, FileSpreadsheet, FolderOpen, History, Loader2, RotateCcw, Zap } from "lucide-react"
+import { CalendarClock, Download, FileSpreadsheet, FolderOpen, Loader2, RotateCcw } from "lucide-react"
 import { EmptyState } from "@/components/common/EmptyState"
 import { PageHeader } from "@/components/common/PageHeader"
 import { StatusBadge } from "@/components/common/StatusBadge"
@@ -195,8 +195,7 @@ export default function Imports() {
                 </Button>
               ) : (
                 <Button size="sm" variant="ghost" onClick={() => setOpen(d.id)}>
-                  {d.status !== "completed" ? <FolderOpen /> : d.runs ? <History /> : <Zap />}{" "}
-                  {d.status !== "completed" ? "Open" : d.runs ? "Run again" : "Research"}
+                  {d.status !== "completed" ? <FolderOpen /> : <CalendarClock />} {d.status !== "completed" ? "Open" : "Schedule"}
                 </Button>
               )}
               {d.hasFile && (

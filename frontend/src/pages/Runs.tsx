@@ -1,8 +1,8 @@
 /**
- * Research runs (formerly "Jobs" + "Research runs"): one list and one detail page per run.
+ * Research runs: the runs table shown on each schedule's page (RunsTable), and one detail page per run.
  *
- * List: queue health, status tabs with counts, search, rich rows with inline Cancel / Retry.
- * Detail: header actions, a progress hero (live rate + ETA), key numbers, and tabs: Overview (live
+ * Table: status tabs with counts, search, rich rows with inline Cancel / Retry (queue health strip exported too).
+ * Detail: header actions, a progress hero (live rate + ETA), and tabs: Overview (live
  * grid + run timeline), Results (one board for logos, PAMs, digests and logo timelines), Events and
  * the audit trail. The tab lives in the URL.
  */
@@ -12,9 +12,7 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-r
 import { toast } from "sonner"
 import {
   Ban,
-  BellRing,
   CalendarClock,
-  DatabaseZap,
   Clock,
   FileSpreadsheet,
   Gauge,
@@ -27,11 +25,9 @@ import {
   Sparkles,
   TriangleAlert,
   Users,
-  Zap,
 } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { EmptyState } from "@/components/common/EmptyState"
-import { StatCard } from "@/components/common/StatCard"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { LiveRunPanel } from "@/components/live/LiveRunPanel"
 import { ReassignDialog } from "@/components/companies/ReassignDialog"
@@ -39,12 +35,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DataTableColumnHeader } from "@/components/data-table/DataTableColumnHeader"
 import { SmartTable } from "@/components/data-table/SmartTable"
 import { useServerTable } from "@/components/data-table/useSmartTable"
+import { SearchBox } from "@/components/data-table/SearchBox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { backend, errorMessage } from "@/api/http"
 import {
@@ -58,11 +54,10 @@ import { useDebounced } from "@/lib/use-debounced"
 import { durationMin, fmtDate, fmtDateTime, pct, fmtRelative } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Job, JobPage } from "@/api/types"
-import { NewRunDialog } from "@/components/runs/NewRunDialog"
 import { AuditTab, EventsTab, TimelineTab } from "@/components/runs/RunInsights"
 import { RunBoard } from "@/components/runs/board/RunBoard"
 import { useLogoDrawer } from "@/components/logo/logo-drawer-context"
-import { Page, StatGrid } from "@/components/common/layout"
+import { Page } from "@/components/common/layout"
 import { LiveDot } from "@/components/common/LiveDot"
 
 const n = (x: number) => x.toLocaleString("en-IN")
@@ -88,15 +83,6 @@ function TriggerBadge({ trigger }: { trigger: Job["trigger"] }) {
     <Badge variant="outline" className="gap-1 font-normal">
       <t.icon className="size-3" /> {t.label}
     </Badge>
-  )
-}
-
-function SearchBox({ value, onChange, placeholder, label }: { value: string; onChange: (v: string) => void; placeholder: string; label: string }) {
-  return (
-    <div className="relative w-full sm:w-72">
-      <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input aria-label={label} placeholder={placeholder} className="h-9 pl-8" value={value} onChange={(e) => onChange(e.target.value)} />
-    </div>
   )
 }
 
@@ -143,7 +129,7 @@ function RunActions({ job, size = "default" }: { job: Job; size?: "sm" | "defaul
 // List
 // ---------------------------------------------------------------------------------------------
 
-function QueueStrip() {
+export function QueueStrip() {
   const q = useQueues()
   if (!q.data) return <Skeleton className="mb-6 h-14" />
   const { broker, db } = q.data
@@ -306,7 +292,11 @@ function runColumns(): ColumnDef<Job, unknown>[] {
   ]
 }
 
-export function RunsList() {
+/**
+ * One schedule's runs (`schedule` = its id, or "none" for runs no schedule started): status tabs,
+ * search, column filters and paging, polling while any run is active. Used on each schedule's page.
+ */
+export function RunsTable({ schedule, emptyState }: { schedule: string; emptyState: ReactNode }) {
   const navigate = useNavigate()
   const [urlParams, setUrlParams] = useSearchParams()
   const group = (urlParams.get("group") as Group | null) ?? "all"
@@ -316,8 +306,8 @@ export function RunsList() {
   const state = useServerTable<Job, JobPage>({
     id: "runs",
     columns,
-    queryKey: ["jobs", { group, q }],
-    fetcher: (t) => backend.listJobs({ ...t, status: group === "all" ? undefined : group, q: q || undefined }),
+    queryKey: ["jobs", { schedule, group, q }],
+    fetcher: (t) => backend.listJobs({ ...t, schedule, status: group === "all" ? undefined : group, q: q || undefined }),
     defaultSort: { id: "id", desc: true },
     defaultHidden: ["trigger"],
     getRowId: (j) => j.id,
@@ -343,23 +333,8 @@ export function RunsList() {
     ["attention", "Needs attention"],
   ]
 
+  if (nothingYet) return <>{emptyState}</>
   return (
-    <Page>
-      <PageHeader
-        title="Research runs"
-        description="Every run researches one upload: its logos, for the PAMs it maps them to. Results arrive logo by logo, and each PAM's digest goes out as soon as their logos are done."
-        actions={<NewRunDialog />}
-      />
-      <QueueStrip />
-
-      {nothingYet ? (
-        <EmptyState icon={Sparkles} title="No research runs yet">
-          <p>Each run starts from an upload: the Excel/CSV of logos and their PAMs for that run.</p>
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <NewRunDialog label="Upload & run" />
-          </div>
-        </EmptyState>
-      ) : (
         <SmartTable
           state={state}
           onRowClick={(j) => navigate(`/runs/${j.id}`)}
@@ -389,8 +364,6 @@ export function RunsList() {
             </EmptyState>
           }
         />
-      )}
-    </Page>
   )
 }
 
@@ -508,8 +481,8 @@ export function RunDetail() {
     return (
       <EmptyState icon={TriangleAlert} title="Run not available">
         <p>{errorMessage(job.error)}</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate("/runs")}>
-          Back to all runs
+        <Button variant="outline" className="mt-4" onClick={() => navigate("/schedules")}>
+          Back to Research
         </Button>
       </EmptyState>
     )
@@ -523,7 +496,6 @@ export function RunDetail() {
     )
 
   const s = summary.data
-  const digestsTotal = j.notifications.sent + j.notifications.pending + j.notifications.failed + j.notifications.skipped
 
   return (
     <Page>
@@ -544,18 +516,11 @@ export function RunDetail() {
             {j.provider} {j.model}
           </>
         }
-        back={{ to: "/runs", label: "All research runs" }}
+        back={{ to: `/schedules/${j.scheduleId ?? "unscheduled"}`, label: "Back to its schedule" }}
         actions={<RunActions job={j} />}
       />
 
       <ProgressHero j={j} rate={s?.ratePerSec} />
-
-      <StatGrid>
-        <StatCard icon={Zap} tone="info" label="Signals" value={n(j.withSignal)} hint={`${pct(j.withSignal, Math.max(j.done, 1))}% of ${n(j.done)} researched`} />
-        <StatCard icon={Ban} tone={j.failed ? "warning" : undefined} label="Failed" value={n(j.failed)} hint={j.failed ? "after automatic retries" : "none so far"} />
-        <StatCard icon={BellRing} tone="success" label="Digests sent" value={`${n(j.notifications.sent)}/${n(digestsTotal)}`} hint={`${n(j.notifications.pending)} pending · ${n(j.notifications.failed)} failed${s ? ` · ${n(s.pamJobsTotal)} PAMs` : ""}`} />
-        <StatCard icon={DatabaseZap} tone="primary" label="From cache" value={n(j.cacheHits)} hint="fresh answers reused from an earlier run" />
-      </StatGrid>
 
       <Tabs value={tab} onValueChange={(v) => setParams(v === fallback ? {} : { tab: v }, { replace: true })}>
         <TabsList className="h-auto flex-wrap">
@@ -595,8 +560,8 @@ export function RunDetail() {
   )
 }
 
-/** Old /jobs and /jobs/:id links land on the merged runs pages. */
+/** Old /jobs, /jobs/:id and /runs links land in Research (runs live under their schedule). */
 export function JobsRedirect() {
   const { id } = useParams()
-  return <Navigate to={id ? `/runs/${id}` : "/runs"} replace />
+  return <Navigate to={id ? `/runs/${id}` : "/schedules"} replace />
 }

@@ -283,7 +283,7 @@ export default function Pams() {
             <Input
               aria-label="Search PAMs"
               placeholder="Search name, email or segment"
-              className="h-9 pl-9 pr-8"
+              className="pl-9 pr-8"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value)
@@ -312,7 +312,7 @@ export default function Pams() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-9 text-muted-foreground"
+                className="text-muted-foreground"
                 onClick={() => {
                   setSegments([])
                   setStatus(["active"])
@@ -327,7 +327,7 @@ export default function Pams() {
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {page && <DataTableCompactPager table={table} totalRows={page.total} />}
             <DataTableViewOptions table={table} />
-            <Button variant="outline" className="h-9" onClick={() => toast.success(`Export of ${(page?.total ?? 0).toLocaleString("en-IN")} PAMs started`, { description: "Generated on the server and emailed as a link." })}>
+            <Button variant="outline" onClick={() => toast.success(`Export of ${(page?.total ?? 0).toLocaleString("en-IN")} PAMs started`, { description: "Generated on the server and emailed as a link." })}>
               <Download /> Export
             </Button>
           </div>

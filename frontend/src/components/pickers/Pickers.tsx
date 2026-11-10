@@ -139,7 +139,7 @@ export function PamMultiFilter({ value, onChange, title = "PAM" }: { value: stri
       loading={results.isFetching}
       placeholder="Search PAMs"
       trigger={
-        <Button variant="outline" size="sm" className="h-9 border-dashed font-normal">
+        <Button variant="outline" className="font-normal">
           <PlusCircle className="opacity-60" />
           {title}
           {value.length > 0 && (

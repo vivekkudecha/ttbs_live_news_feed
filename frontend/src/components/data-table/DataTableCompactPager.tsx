@@ -14,10 +14,10 @@ export function DataTableCompactPager<T>({ table, totalRows }: { table: Table<T>
         {f(from)}–{f(to)} of {f(totalRows)}
       </span>
       <div className="flex items-center gap-1">
-        <Button variant="outline" size="icon-sm" className="size-9" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} aria-label="Previous page">
+        <Button variant="outline" size="icon" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} aria-label="Previous page">
           <ChevronLeft />
         </Button>
-        <Button variant="outline" size="icon-sm" className="size-9" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} aria-label="Next page">
+        <Button variant="outline" size="icon" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} aria-label="Next page">
           <ChevronRight />
         </Button>
       </div>

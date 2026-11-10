@@ -132,7 +132,7 @@ def test_metrics_endpoint(client):
     imp = upload(client).json()
     research(client, imp["id"], [])
     body = client.get("/metrics").text
-    assert 'ttbs_http_requests_total{method="POST",route="/api/v1/runs",status="201"}' in body
+    assert 'ttbs_http_requests_total{method="POST",route="/api/v1/imports",status="201"}' in body
     assert "ttbs_runs_active 0.0" in body and "ttbs_research_attempts_total" in body
 
 

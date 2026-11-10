@@ -13,7 +13,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
-import { AlertTriangle, CheckCircle2, ChevronDown, Download, FileSpreadsheet, Loader2, Pencil, RotateCcw, Table2, UploadCloud, XCircle, Zap } from "lucide-react"
+import { AlertTriangle, CalendarClock, CheckCircle2, ChevronDown, Download, FileSpreadsheet, Loader2, Pencil, RotateCcw, Table2, UploadCloud, XCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -531,7 +531,7 @@ function Saved({ d, onUse, onDone }: { d: Dataset; onUse?: (importId: string) =>
         <TabsList>
           {!onUse && (
             <TabsTrigger value="research">
-              <Zap /> Research this upload
+              <CalendarClock /> Schedule research
             </TabsTrigger>
           )}
           <TabsTrigger value="data">
@@ -540,7 +540,7 @@ function Saved({ d, onUse, onDone }: { d: Dataset; onUse?: (importId: string) =>
         </TabsList>
         {!onUse && (
           <TabsContent value="research" className="mt-4">
-            <ResearchPlan importId={d.id} label={d.label} companies={companies} previousRuns={d.runs ?? 0} lastRunAt={d.lastRunAt} onDone={onDone} />
+            <ResearchPlan importId={d.id} label={d.label} previousRuns={d.runs ?? 0} lastRunAt={d.lastRunAt} onDone={onDone} />
           </TabsContent>
         )}
         <TabsContent value="data" className="mt-4">

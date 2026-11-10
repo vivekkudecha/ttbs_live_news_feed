@@ -185,10 +185,10 @@ function OutboxTab() {
           <>
             <div className="relative min-w-56 sm:w-72">
               <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search recipient…" className="h-9 pl-8" value={q} onChange={(e) => setQ(e.target.value)} />
+              <Input placeholder="Search recipient…" className="pl-8" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
             <Select value={channel} onValueChange={setChannel}>
-              <SelectTrigger className="h-9 w-40">
+              <SelectTrigger className="w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -444,7 +444,7 @@ function DeadLetterTab() {
           pageSizes={[25, 50, 100]}
           actions={
             status === "open" && (
-              <Button size="sm" className="h-9" disabled={picked.length === 0 || requeue.isPending} onClick={() => doRequeue(picked, () => state.table.resetRowSelection())}>
+              <Button disabled={picked.length === 0 || requeue.isPending} onClick={() => doRequeue(picked, () => state.table.resetRowSelection())}>
                 {requeue.isPending ? <Loader2 className="animate-spin" /> : <RotateCcw />} Requeue {picked.length > 0 && num(picked.length)}
               </Button>
             )

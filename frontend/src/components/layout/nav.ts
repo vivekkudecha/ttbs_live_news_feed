@@ -1,5 +1,4 @@
 import {
-  Activity,
   CalendarClock,
   BarChart3,
   Building2,
@@ -8,12 +7,10 @@ import {
   FileText,
   Inbox,
   LayoutDashboard,
-  MailCheck,
   PlugZap,
   ScrollText,
   ShieldCheck,
   Users,
-  Zap,
   type LucideIcon,
 } from "lucide-react"
 import type { ModuleKey, User } from "@/api/types"
@@ -26,6 +23,8 @@ export interface NavItem {
   /** Shown only to users with at least "view" on this module (admins see everything). */
   module?: ModuleKey
   adminOnly?: boolean
+  /** Other path prefixes that count as this item (e.g. a run's page is part of Research). */
+  also?: string[]
 }
 
 export interface NavGroup {
@@ -41,10 +40,7 @@ export const navGroups: NavGroup[] = [
   {
     label: "Signals",
     items: [
-      { to: "/signals", label: "Signals feed", icon: Zap, module: "signals" },
-      { to: "/digest", label: "PAM digest preview", icon: MailCheck, module: "signals" },
-      { to: "/runs", label: "Research runs", icon: Activity, module: "runs" },
-      { to: "/schedules", label: "Schedules", icon: CalendarClock, module: "runs" },
+      { to: "/schedules", label: "Research", icon: CalendarClock, module: "runs", also: ["/runs/"] },
       { to: "/outbox", label: "Delivery outbox", icon: Inbox, module: "runs" },
     ],
   },

@@ -19,18 +19,6 @@ class In(BaseModel):
 Channel = Literal["email", "whatsapp"]
 
 
-class RunCreate(In):
-    """A run always researches one saved upload: pass importId (or scopeKey "import:<id>")."""
-
-    import_id: int | None = Field(default=None, gt=0)
-    scope_key: str | None = None
-    label: str | None = Field(default=None, max_length=300)
-    template_id: str = "t1"
-    run_at: datetime | None = None
-    channels: list[Channel] = Field(default_factory=lambda: ["email", "whatsapp"])
-    budget_cap: float | None = Field(default=None, gt=0)
-
-
 # --- Serializers ------------------------------------------------------------------------------
 
 

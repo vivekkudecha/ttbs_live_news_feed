@@ -11,7 +11,7 @@
  * Mounted once by <LogoDrawerProvider> (AppShell); the open logo is in the URL.
  */
 import { useCallback, useMemo, useState, type ReactNode } from "react"
-import { Link, useNavigate, useSearchParams } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 import {
   AlertTriangle,
@@ -726,14 +726,10 @@ function DetailsTab({ d }: { d: CompanyDetail }) {
 
 function Footer({ t, runId, companyId, onReassign }: { t?: LogoTimeline; runId?: string; companyId: string | null; onReassign: (id: string) => void }) {
   const { user } = useSession()
-  const navigate = useNavigate()
   const retry = useBoardRetry(runId ?? "")
   if (!companyId) return null
   return (
     <div className="flex flex-wrap items-center gap-2 border-t bg-card px-6 py-3">
-      <Button variant="outline" size="sm" onClick={() => navigate("/signals")}>
-        <Zap /> Signals feed
-      </Button>
       {can(user, "companies", "manage") && (
         <Button variant="outline" size="sm" onClick={() => onReassign(companyId)}>
           <UserRound /> Reassign PAM

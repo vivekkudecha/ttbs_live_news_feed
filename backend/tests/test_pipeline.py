@@ -176,14 +176,12 @@ def test_cache_fails_open_when_redis_down(client, monkeypatch):
     assert client.get("/api/v1/health").json()["redis"].startswith("error")
 
 
-def test_runs_require_an_upload_and_bad_body(client):
-    for body in ({"scopeKey": "region:West"}, {"scopeKey": "all"}, {}):
-        r = client.post("/api/v1/runs", json=body)
-        assert r.status_code == 422 and r.json()["error"]["code"] == "upload_required", body
-    r = client.post("/api/v1/runs", json={"importId": 999})
+def test_runs_only_start_from_schedules(client):
+    """There is no endpoint to start a run directly: research is started by a schedule."""
+    imp = upload(client).json()
+    assert client.post("/api/v1/runs", json={"importId": int(imp["id"])}).status_code == 405
+    r = research(client, 999)
     assert r.status_code == 422 and r.json()["error"]["code"] == "upload_required"
-    r = client.post("/api/v1/runs", json={"importId": 1, "bogus": 1})
-    assert r.status_code == 422 and r.json()["error"]["details"][0]["field"] == "bogus"
 
 
 def test_cors_preflight_allows_frontend(client):

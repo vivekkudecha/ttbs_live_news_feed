@@ -479,20 +479,6 @@ export interface SignalRow extends ResearchResult {
   priority?: { rank: number; whyNow: string; action: string }
 }
 
-export interface SignalQuery {
-  runId: string
-  page: number
-  pageSize: number
-  status?: ResearchStatus | "all"
-  category?: string
-  pamId?: string
-  search?: string
-}
-
-export interface SignalPage extends Page<SignalRow> {
-  counts: { signal: number; no_signal: number; failed: number; pending: number; all: number }
-}
-
 export interface PamJobRow extends PamJob {
   pamName: string
 }
@@ -516,13 +502,6 @@ export interface DashboardSummary {
   nextRun: { id: string; label: string; scheduledFor: string; companies: number; importId: string | null } | null
   monthSpend: number
   monthBudget: number
-}
-
-export interface DigestData {
-  run: Run
-  pam: PamOption
-  rows: SignalRow[]
-  job: PamJob | null
 }
 
 /** Live research stream (polled from /run-summaries/{id}/live). */

@@ -4,7 +4,6 @@ import { CategoryBadge } from "@/components/common/SignalCard"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { Skeleton } from "@/components/ui/skeleton"
 import { LiveGrid, LiveLegend } from "./LiveGrid"
 import { useLiveRun } from "./useLiveRun"
 import { cn } from "@/lib/utils"
@@ -37,7 +36,15 @@ export function LiveRunPanel({ runId, finishedAt, onOpenCompany }: { runId: stri
     return () => clearInterval(t)
   }, [])
 
-  if (!live) return <Skeleton className="h-[28rem]" />
+  if (!live)
+    return (
+      <Card>
+        <CardContent className="flex items-center gap-3 py-10 text-sm text-muted-foreground">
+          <LiveDot />
+          Waiting for a worker to start this run. Progress appears here, logo by logo, as soon as it does.
+        </CardContent>
+      </Card>
+    )
 
   const running = live.status === "running"
   const remaining = live.total - live.done

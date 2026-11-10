@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useState } from "react"
-import { NavLink, useNavigate } from "react-router-dom"
+import { NavLink, useNavigate, useLocation } from "react-router-dom"
 import { motion } from "motion/react"
 import { useTheme } from "next-themes"
 import { KeyRound, LogOut, Menu, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Sun } from "lucide-react"
@@ -64,6 +64,8 @@ function useRail() {
 }
 
 function NavItem({ item, rail, onNavigate, layoutGroup }: { item: NavItemDef; rail: boolean; onNavigate?: () => void; layoutGroup: string }) {
+  const { pathname } = useLocation()
+  const also = !!item.also?.some((p) => pathname.startsWith(p))
   const link = (
     <NavLink
       to={item.to}
@@ -77,14 +79,14 @@ function NavItem({ item, rail, onNavigate, layoutGroup }: { item: NavItemDef; ra
           "group/nav relative flex items-center gap-3 rounded-lg px-3 py-2 text-[0.9375rem] text-sidebar-foreground transition-colors duration-200 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
           "short:py-1 tiny:py-[3px] tiny:text-sm",
           rail && "justify-center px-0",
-          isActive && "font-medium text-sidebar-accent-foreground",
+          (isActive || also) && "font-medium text-sidebar-accent-foreground",
         )
       }
     >
       {({ isActive }) => (
         <>
           {/* One shared highlight that glides to the active item. */}
-          {isActive && (
+          {(isActive || also) && (
             <motion.span
               layoutId={`nav-active-${layoutGroup}`}
               className="absolute inset-0 rounded-lg bg-sidebar-accent before:absolute before:inset-y-2 before:left-0 before:w-1 before:rounded-full before:bg-brand-gradient"
@@ -224,7 +226,7 @@ function Shell() {
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-9 gap-2 px-1.5">
+                <Button variant="ghost" className="gap-2 px-1.5">
                   <Avatar className="size-7">
                     <AvatarFallback className="bg-brand-gradient text-xs font-semibold text-white">{initials(user!.name)}</AvatarFallback>
                   </Avatar>

@@ -2,12 +2,13 @@ import { useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import { Repeat } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { DEFAULT_RULE, useCreateSchedule, useUpdateSchedule, type Schedule, type ScheduleInput } from "@/api/schedules"
+import { DEFAULT_RULE, useUpdateSchedule, type Schedule, type ScheduleInput } from "@/api/schedules"
 import { errorMessage } from "@/api/http"
 import { fmtDateTime } from "@/lib/format"
-import { ScheduleForm } from "./ScheduleForm"
+import { ScheduleWizard } from "./ScheduleWizard"
+import { useSaveNewSchedule } from "./useSaveNewSchedule"
 
-const BLANK: ScheduleInput = { ...DEFAULT_RULE, name: "", target: "latest", channels: ["email", "whatsapp"] }
+const BLANK: ScheduleInput = { ...DEFAULT_RULE, name: "", target: "upload", channels: ["email", "whatsapp"] }
 
 const inputOf = (s: Schedule): ScheduleInput => ({
   name: s.name,
@@ -37,15 +38,13 @@ export function ScheduleDialog({
   const [own, setOwn] = useState(false)
   const open = controlled ?? own
   const setOpen = onOpenChange ?? setOwn
-  const create = useCreateSchedule()
   const update = useUpdateSchedule()
+  const creator = useSaveNewSchedule(() => setOpen(false))
 
-  const save = async (v: ScheduleInput) => {
+  const saveEdit = async (v: ScheduleInput) => {
     try {
-      const s = schedule ? await update.mutateAsync({ id: schedule.id, ...v }) : await create.mutateAsync(v)
-      toast.success(schedule ? "Schedule updated" : `Schedule “${s.name}” created`, {
-        description: s.nextRunAt ? `${s.summary}. Next run ${fmtDateTime(s.nextRunAt)}.` : s.summary,
-      })
+      const s = await update.mutateAsync({ id: schedule!.id, ...v })
+      toast.success("Schedule updated", { description: s.nextRunAt ? `${s.summary}. Next run ${fmtDateTime(s.nextRunAt)}.` : s.summary })
       setOpen(false)
     } catch (e) {
       toast.error("Could not save the schedule", { description: errorMessage(e) })
@@ -55,22 +54,24 @@ export function ScheduleDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader className="flex-row items-start gap-3 text-left">
+      <DialogContent className="flex h-[min(46rem,92svh)] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
+        <div className="h-1 shrink-0 bg-brand-gradient" />
+        <DialogHeader className="shrink-0 flex-row items-start gap-3 px-6 pb-4 pt-5 text-left">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-gradient text-white shadow-md shadow-brand/25">
             <Repeat className="size-5" />
           </span>
           <div className="space-y-1">
             <DialogTitle>{schedule ? "Edit schedule" : "New schedule"}</DialogTitle>
-            <DialogDescription>Research runs on its own at the times below. Each run appears in Research runs like any other.</DialogDescription>
+            <DialogDescription>Research runs on its own at the times below. Each run appears under this schedule in Research.</DialogDescription>
           </div>
         </DialogHeader>
         {open && (
-          <ScheduleForm
+          <ScheduleWizard
             initial={schedule ? inputOf(schedule) : BLANK}
             submitLabel={schedule ? "Save changes" : "Create schedule"}
-            pending={create.isPending || update.isPending}
-            onSubmit={save}
+            pending={update.isPending || creator.pending}
+            offerStartNow={!schedule}
+            onSubmit={(v, startNow) => (schedule ? saveEdit(v) : creator.save(v, startNow))}
           />
         )}
       </DialogContent>

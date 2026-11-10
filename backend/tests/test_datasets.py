@@ -10,7 +10,7 @@ from app.db.models import Company, DatasetCompany, ImportBatch
 from app.db.session import unit_of_work
 from app.services import imports, maintenance
 from app.worker import tasks
-from tests.conftest import GOOD_ROWS, upload
+from tests.conftest import GOOD_ROWS, research, upload
 
 MORE = [["Tata Elxsi", "IT", "Enterprise", "", "Rohan Das", "rohan@ttbs.example", "9830033003"]]
 
@@ -158,9 +158,9 @@ def test_rename_and_scope_options_use_dataset_labels(client):
     labels = [(o["key"], o["label"].split(" · ")[0], o["count"], o["runs"]) for o in opts]
     assert labels == [(f"import:{int(ds['id']) + 1}", "Dec adds", 1, 0), (f"import:{ds['id']}", "November logos", 3, 0)]
     # A run on a dataset covers exactly its members, and is labelled by upload + run number.
-    run = client.post("/api/v1/runs", json={"scopeKey": f"import:{ds['id']}", "channels": []}).json()
+    run = research(client, ds["id"], []).json()
     assert run["companies"] == 3 and run["label"] == "November logos · run 1" and run["trigger"] == "upload"
-    again = client.post("/api/v1/runs", json={"importId": int(ds["id"]), "channels": []}).json()
+    again = research(client, ds["id"], []).json()
     assert again["label"] == "November logos · run 2" and again["trigger"] == "rerun"
     assert client.get("/api/v1/scopes").json()[1]["runs"] == 2
 

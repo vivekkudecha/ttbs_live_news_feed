@@ -120,6 +120,31 @@ def upload(client, rows=GOOD_ROWS, name="mapping.xlsx", headers=HEADERS, label="
     return client.post("/api/v1/imports", files={"file": (name, xlsx(rows, headers), "application/octet-stream")}, data=data)
 
 
-def research(client, dataset_id, channels=("email", "whatsapp"), **extra):
-    """Start research on a dataset (what the "Research now" step in the upload dialog does)."""
-    return client.post("/api/v1/runs", json={"scopeKey": f"import:{dataset_id}", "channels": list(channels), **extra})
+class Result:
+    """The parts of an HTTP response the tests read (status + JSON body, errors in the API envelope)."""
+
+    def __init__(self, status_code: int, body: dict):
+        self.status_code, self._body = status_code, body
+
+    def json(self) -> dict:
+        return self._body
+
+
+def research(client, dataset_id, channels=("email", "whatsapp"), runAt=None, actor="tester"):
+    """Start a research run on a dataset through the service schedules fire (runs.create_run).
+    There is no HTTP endpoint for this: in the app every run starts from a schedule. `runAt` (ISO)
+    creates a one-time "scheduled" run, which only runs from before schedules still are."""
+    from datetime import datetime
+
+    from app.api.schemas import run_out
+    from app.core.errors import AppError
+    from app.db.session import unit_of_work
+    from app.services import runs
+
+    at = datetime.fromisoformat(runAt) if runAt else None
+    try:
+        with unit_of_work() as uow:
+            body = run_out(runs.create_run(uow, import_id=int(dataset_id), actor=actor, run_at=at, channels=list(channels)))
+    except AppError as e:
+        return Result(e.status_code, {"error": {"code": e.code, "message": e.message, "details": e.details}})
+    return Result(201, body)

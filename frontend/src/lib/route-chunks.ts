@@ -4,8 +4,6 @@
  * clicks (the page transition never waits on the network). import() is cached by the browser.
  */
 export const routeChunks = {
-  signals: () => import("@/pages/Signals"),
-  digest: () => import("@/pages/Digest"),
   runs: () => import("@/pages/Runs"),
   schedules: () => import("@/pages/Schedules"),
   companies: () => import("@/pages/Companies"),

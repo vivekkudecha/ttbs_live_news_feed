@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import func, or_, select
 
 from app.api import schemas as sch
 from app.core.config import get_settings
@@ -325,7 +325,7 @@ def pam_jobs_view(jobs: list[dict[str, Any]], page: int, size: int, search: str 
     return _page(rows, page, size)
 
 
-# --- Signals & digest ----------------------------------------------------------------------------
+# --- Signal priority -----------------------------------------------------------------------------
 
 
 def _ranks(uow: UnitOfWork, run: Run) -> dict[int, int]:
@@ -342,73 +342,6 @@ def _ranks(uow: UnitOfWork, run: Run) -> dict[int, int]:
         for i, (_, _, rid) in enumerate(sorted(items), start=1):
             ranks[rid] = i
     return ranks
-
-
-def _signal_row(r: ResearchResult, company: Company, pam_name: str | None, rank: int | None) -> dict[str, Any]:
-    row = result_ui(r) | {"companyName": company.name, "industry": company.industry or "", "pamName": pam_name or "Unassigned"}
-    row["priority"] = {"rank": rank, "whyNow": plain(r.key_signals), "action": plain(r.outreach)} if rank else None
-    return row
-
-
-def _weight_expr():
-    return case((ResearchResult.status != RES_SIGNAL, 0), else_=case(CAT_WEIGHT, value=ResearchResult.category, else_=0))
-
-
-def query_signals(uow: UnitOfWork, q: dict[str, Any]) -> dict[str, Any]:
-    counts = {"signal": 0, "no_signal": 0, "failed": 0, "pending": 0, "all": 0}
-    run = uow.session.get(Run, _int(q.get("runId")) or 0)
-    page, size = int(q.get("page") or 0), int(q.get("pageSize") or 50)
-    if run is None:
-        return {"rows": [], "total": 0, "page": page, "pageSize": size, "counts": counts}
-    conds = [*in_run(run)]
-    if q.get("pamId"):
-        conds.append(ResearchResult.pam_id == (_int(q["pamId"]) or 0))
-    for t in _tokens(q.get("search")):
-        conds.append(or_(Company.name.ilike(f"%{t}%"), Company.industry.ilike(f"%{t}%")))
-    if q.get("category") and q["category"] != "all":
-        conds += [ResearchResult.status == RES_SIGNAL, ResearchResult.category == q["category"]]
-
-    for status, n in uow.session.execute(
-        select(ResearchResult.status, func.count(ResearchResult.id))
-        .join(Company, Company.id == ResearchResult.company_id).where(*conds).group_by(ResearchResult.status)
-    ):
-        counts[_ui_status(status)] += n
-        counts["all"] += n
-    st = q.get("status")
-    if st and st != "all":
-        conds.append(ResearchResult.status.in_(["pending", "running"] if st == "pending" else [st]))
-    total = sum(v for k, v in counts.items() if k != "all") if not st or st == "all" else counts.get(st, 0)
-
-    rows = uow.session.execute(
-        select(ResearchResult, Company, Pam.name)
-        .join(Company, Company.id == ResearchResult.company_id)
-        .outerjoin(Pam, Pam.id == ResearchResult.pam_id)
-        .where(*conds)
-        .order_by(_weight_expr().desc(), Company.name, ResearchResult.id)
-        .limit(size).offset(page * size)
-    ).all()
-    ranks = _ranks(uow, run) if any(r.status == RES_SIGNAL for r, _, _ in rows) else {}
-    return {"rows": [_signal_row(r, c, pn, ranks.get(r.id)) for r, c, pn in rows], "total": total, "page": page, "pageSize": size, "counts": counts}
-
-
-def digest(uow: UnitOfWork, run_id: str, pam_id: str) -> dict[str, Any] | None:
-    run = uow.session.get(Run, _int(run_id) or 0)
-    pam = uow.session.get(Pam, _int(pam_id) or 0)
-    if run is None or pam is None:
-        return None
-    ranks = _ranks(uow, run)
-    rows = [
-        _signal_row(r, c, pam.name, ranks.get(r.id))
-        for r, c in uow.session.execute(
-            select(ResearchResult, Company).join(Company, Company.id == ResearchResult.company_id)
-            .where(*in_run(run), ResearchResult.pam_id == pam.id)
-        )
-    ]
-    rows.sort(key=lambda x: ((x["priority"] or {}).get("rank") or 999, x["companyName"].lower()))
-    aggs, notes = _aggs(uow, [run.id]), _notes(uow, [run.id])
-    a = aggs[run.id].get(pam.id)
-    return {"run": run_summaries(uow, [run])[0], "pam": pam_options(uow, [pam])[0], "rows": rows,
-            "job": _job(run, pam.id, a, notes[run.id]) if a else None}
 
 
 # --- Dashboard ------------------------------------------------------------------------------------

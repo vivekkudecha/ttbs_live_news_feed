@@ -43,7 +43,7 @@ def test_protected_routes_need_a_session():
         for path in ("/api/v1/dashboard", "/api/v1/runs", "/api/v1/audit", "/api/v1/users", "/api/v1/auth/me", "/api/v1/settings/llm"):
             r = c.get(path)
             assert r.status_code == 401 and r.json()["error"]["code"] == "session_expired", path
-        assert c.post("/api/v1/runs", json={}).status_code == 401
+        assert c.post("/api/v1/schedules", json={}).status_code == 401
         # The retired identity header grants nothing.
         assert c.get("/api/v1/dashboard", headers={"X-Actor": "admin"}).status_code == 401
 
@@ -172,7 +172,7 @@ def test_member_gets_only_granted_modules(client):
         assert denied.status_code == 403 and denied.json()["error"]["code"] == "forbidden"  # view-only
         for path in ("/api/v1/audit", "/api/v1/imports", "/api/v1/settings/llm", "/api/v1/finops", "/api/v1/users"):
             assert c.get(path).status_code == 403, path
-        assert c.post("/api/v1/signals/query", json={}).status_code == 403  # read-POST still needs the module
+        assert c.post("/api/v1/companies/query", json={}).status_code == 403  # read-POST still needs the module
 
 
 def test_admin_user_lifecycle(client):

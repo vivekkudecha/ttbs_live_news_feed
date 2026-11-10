@@ -15,7 +15,7 @@ export function DataTableViewOptions<T>({ table }: { table: Table<T> }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-9 font-normal">
+        <Button variant="outline" className="font-normal">
           <Settings2 className="opacity-60" /> View
         </Button>
       </DropdownMenuTrigger>

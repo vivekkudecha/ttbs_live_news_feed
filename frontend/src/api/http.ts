@@ -152,9 +152,8 @@ export const backend = {
 
   // Runs (jobs). Every run researches one saved upload: its logos, for the PAMs it maps them to.
   scopes: () => request<ScopeOption[]>("GET", "/scopes"),
-  startRun: (v: { importId: string; label?: string; templateId?: string; runAt?: string; channels?: DeliveryChannel[]; budgetCap?: number }) =>
-    request<Job>("POST", "/runs", { ...v, importId: Number(v.importId) }),
-  listJobs: (q: TableQ & { status?: string; q?: string }) => request<JobPage>("GET", `/runs${qs({ ...tq(q), status: q.status, q: q.q })}`),
+  listJobs: (q: TableQ & { status?: string; q?: string; schedule?: string }) =>
+    request<JobPage>("GET", `/runs${qs({ ...tq(q), status: q.status, q: q.q, schedule: q.schedule })}`),
   getJob: (id: string) => request<Job>("GET", `/runs/${id}`),
   jobResults: (id: string, q: TableQ & { status?: string; q?: string }) =>
     request<JobResultPage>("GET", `/runs/${id}/results${qs({ ...tq(q), status: q.status, q: q.q })}`),

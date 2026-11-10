@@ -23,7 +23,6 @@ def test_empty_database_pages(client):
     assert client.post("/api/v1/pams/query", json={"page": 0, "pageSize": 50}).json()["total"] == 0
     f = client.get("/api/v1/finops").json()
     assert f["totals"]["total"] == 0 and f["budget"]["monthSpend"] == 0 and f["byRun"] == []
-    assert client.post("/api/v1/signals/query", json={"runId": "999", "page": 0, "pageSize": 20}).json()["total"] == 0
 
 
 def test_dashboard_runs_signals_digest(client):
@@ -44,18 +43,6 @@ def test_dashboard_runs_signals_digest(client):
     assert runs[0]["pamJobsTotal"] == 2 and runs[0]["pamJobsDone"] == 2 and runs[0]["whatsappEligible"] == 2
     jobs = client.get(f"/api/v1/run-summaries/{run_id}/pam-jobs?pageSize=10").json()
     assert jobs["total"] == 2 and {j["email"] for j in jobs["rows"]} == {"sent"}
-
-    s = client.post("/api/v1/signals/query", json={"runId": run_id, "page": 0, "pageSize": 20}).json()
-    assert s["counts"]["signal"] == 3 and s["counts"]["all"] == 3 and s["total"] == 3
-    assert all(r["priority"]["rank"] >= 1 and r["offerings"] for r in s["rows"])
-    only = client.post("/api/v1/signals/query", json={"runId": run_id, "page": 0, "pageSize": 20, "pamId": aarav, "search": "pine"}).json()
-    assert [r["companyName"] for r in only["rows"]] == ["Pine Labs Pvt Ltd"]
-    none = client.post("/api/v1/signals/query", json={"runId": run_id, "page": 0, "pageSize": 20, "status": "failed"}).json()
-    assert none["total"] == 0 and none["counts"]["signal"] == 3
-
-    dg = client.get(f"/api/v1/digest?runId={run_id}&pamId={aarav}").json()
-    assert dg["pam"]["email"] == "aarav@ttbs.example" and len(dg["rows"]) == 2 and dg["job"]["status"] == "completed"
-    assert [r["priority"]["rank"] for r in dg["rows"]] == [1, 2]
 
 
 def test_companies_query_detail_and_reassign(client):

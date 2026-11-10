@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { Link, Navigate, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 import {
   getCoreRowModel,
@@ -10,7 +10,7 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table"
-import { AlertTriangle, Building2, CircleDashed, CircleOff, Copy, Download,  Upload, MoreHorizontal, PanelRightOpen, Play, Search, Sparkles, Trash2, UserRound, X, Zap } from "lucide-react"
+import { AlertTriangle, Building2, CircleDashed, CircleOff, Copy, Download,  Upload, MoreHorizontal, PanelRightOpen, Search, Sparkles, Trash2, UserRound, X } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { EmptyState } from "@/components/common/EmptyState"
 import { StatusBadge } from "@/components/common/StatusBadge"
@@ -179,7 +179,6 @@ function CoverageStrip({ counts, value, onChange }: { counts: Record<string, num
 }
 
 export function CompaniesList() {
-  const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const drawer = useLogoDrawer()
   const openId = drawer.current?.companyId ?? null
@@ -374,9 +373,6 @@ export function CompaniesList() {
                   <DropdownMenuItem onClick={() => openDrawer(c.id)}>
                     <PanelRightOpen /> View timeline
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/signals")}>
-                    <Zap /> Open signals feed
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => copy(c.name)}>
                     <Copy /> Copy company name
                   </DropdownMenuItem>
@@ -385,9 +381,6 @@ export function CompaniesList() {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => setReassignIds([c.id])}>
                         <UserRound /> Reassign PAM…
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toast.success(`Research queued for ${c.name}`)}>
-                        <Play /> Research now
                       </DropdownMenuItem>
                     </>
                   )}
@@ -463,7 +456,7 @@ export function CompaniesList() {
           <Input
             aria-label="Search companies"
             placeholder="Search company or PAM"
-            className="h-9 border-transparent bg-muted/60 pl-9 pr-8 focus-visible:bg-card"
+            className="border-transparent bg-muted/60 pl-9 pr-8 focus-visible:bg-card"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value)
@@ -484,7 +477,7 @@ export function CompaniesList() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-9 text-muted-foreground"
+              className="text-muted-foreground"
               onClick={() => {
                 setSegments([])
                 setPamIds([])
@@ -500,11 +493,11 @@ export function CompaniesList() {
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {page && <DataTableCompactPager table={table} totalRows={page.total} />}
           <DataTableViewOptions table={table} />
-          <Button variant="outline" className="h-9" onClick={() => toast.success(`Export of ${(page?.total ?? 0).toLocaleString("en-IN")} companies started`, { description: "Large exports are generated on the server and emailed as a link." })}>
+          <Button variant="outline" onClick={() => toast.success(`Export of ${(page?.total ?? 0).toLocaleString("en-IN")} companies started`, { description: "Large exports are generated on the server and emailed as a link." })}>
             <Download /> Export
           </Button>
           {(
-            <Button variant="outline" className="h-9" asChild>
+            <Button variant="outline" asChild>
               <Link to="/imports">
                 <Upload /> Import
               </Link>
@@ -526,9 +519,6 @@ export function CompaniesList() {
           </span>
           <Button variant="ghost" size="sm" className="text-background hover:bg-background/15 hover:text-background" onClick={() => setReassignIds(selectedIds)}>
             <UserRound /> Reassign PAM
-          </Button>
-          <Button variant="ghost" size="sm" className="text-background hover:bg-background/15 hover:text-background" onClick={() => toast.success(`Research queued for ${selectedIds.length} companies`)}>
-            <Play /> Research now
           </Button>
           <Button variant="ghost" size="sm" className="text-background hover:bg-background/15 hover:text-background" onClick={() => toast.success(`Exported ${selectedIds.length} companies`)}>
             <Download /> Export

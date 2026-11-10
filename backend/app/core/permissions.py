@@ -26,7 +26,7 @@ class Module:
 
 MODULES: tuple[Module, ...] = (
     Module("dashboard", "Dashboard", "Overview of the latest run and signals."),
-    Module("signals", "Signals & digests", "Signals feed and PAM digest preview."),
+    Module("signals", "Signals", "Signals feed."),
     Module("runs", "Research runs", "Start, cancel and retry runs; resend digests; run details."),
     Module("companies", "Companies (Logos)", "Browse companies and reassign them between PAMs."),
     Module("pams", "PAMs", "Browse PAMs, rebalance and deactivate them."),
@@ -68,7 +68,6 @@ PREFIXES: tuple[tuple[str, str], ...] = (
     (f"{P}/users", ADMIN),
     (f"{P}/dashboard", "dashboard"),
     (f"{P}/signals", "signals"),
-    (f"{P}/digest", "signals"),
     (f"{P}/run-summaries", "runs"),
     (f"{P}/runs", "runs"),
     (f"{P}/schedules", "runs"),
@@ -89,7 +88,6 @@ PREFIXES: tuple[tuple[str, str], ...] = (
 
 # POST endpoints that only read (complex filters in the body).
 READ_POSTS = frozenset({
-    f"{P}/signals/query",
     f"{P}/companies/query",
     f"{P}/pams/query",
     f"{P}/settings/llm/{{provider}}/models",

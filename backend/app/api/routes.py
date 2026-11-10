@@ -294,16 +294,6 @@ def _note_counts(uow, run_ids: list[int]) -> dict[int, dict[str, int]]:
     return out
 
 
-@router.post("/runs", status_code=201)
-def create_run(body: sch.RunCreate, actor: str = Depends(current_actor)) -> dict[str, Any]:
-    with unit_of_work() as uow:
-        run = runs.create_run(
-            uow, scope_key=body.scope_key, import_id=body.import_id, actor=actor, label=body.label, run_at=body.run_at,
-            channels=list(body.channels), template_id=body.template_id, budget_cap=body.budget_cap,
-        )
-        return sch.run_out(run)
-
-
 # Status groups for the runs list tabs ("status" also accepts a single raw status).
 RUN_GROUPS: dict[str, tuple[str, ...]] = {
     "active": RUN_ACTIVE,
@@ -314,15 +304,17 @@ RUN_GROUPS: dict[str, tuple[str, ...]] = {
 
 @router.get("/runs")
 def list_runs(pg: tuple[int, int] = Depends(_page), status: str | None = None, q: str | None = None,
-              lst: Listing = Depends(listing)) -> dict[str, Any]:
+              schedule: str | None = None, lst: Listing = Depends(listing)) -> dict[str, Any]:
     """Runs, newest first. `status` = active | finished | attention | a raw status; `q` searches the
-    label. `groups` carries the count per group (for tab badges) under the same search."""
+    label; `schedule` = a schedule id, or "none" for runs no schedule started. `groups` carries the
+    count per group (for tab badges) under the same search and schedule."""
     page, size = pg
     search = (q or "").strip()[:100]
+    by_schedule = [Run.schedule_id.is_(None)] if schedule == "none" else [Run.schedule_id == int(schedule)] if (schedule or "").isdigit() else []
 
     def load():
         with unit_of_work() as uow:
-            conds = ([Run.label.ilike(f"%{search}%")] if search else []) + conditions(spec.RUNS, lst)
+            conds = ([Run.label.ilike(f"%{search}%")] if search else []) + by_schedule + conditions(spec.RUNS, lst)
             statuses = RUN_GROUPS.get(status or "", (status,) if status else None)
             where = conds + ([Run.status.in_(statuses)] if statuses else [])
             order = ordering(spec.RUNS, lst, [], Run.id.desc() if not lst.sort else Run.id)
@@ -335,7 +327,7 @@ def list_runs(pg: tuple[int, int] = Depends(_page), status: str | None = None, q
 
     s = get_settings()
     ttl = lambda v: s.cache_ttl_job_running if any(r["status"] in RUN_ACTIVE for r in v["rows"]) or v["groups"]["active"] else s.cache_ttl_lists  # noqa: E731
-    return cache.cached("runs", f"list:{status}:{search.lower()}:{page}:{size}:{lst.key()}", ttl, load)
+    return cache.cached("runs", f"list:{status}:{schedule}:{search.lower()}:{page}:{size}:{lst.key()}", ttl, load)
 
 
 @router.get("/runs/{run_id}")

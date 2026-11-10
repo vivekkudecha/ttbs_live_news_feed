@@ -1,4 +1,4 @@
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "./client"
 import { backend } from "./http"
 import type {
@@ -14,7 +14,6 @@ import type {
   EmailTemplateInput,
   ResearchPromptInput,
   PamQuery,
-  SignalQuery,
   UserInput,
   UserPatch,
 } from "./types"
@@ -46,20 +45,7 @@ export const usePamPage = (q: PamQuery) => useQuery({ queryKey: ["pams", q], que
 // ---- Runs & signals ---------------------------------------------------------------------
 export const useRuns = () => useQuery({ queryKey: ["runs"], queryFn: () => api.listRuns(), refetchInterval: 5_000 })
 export const useRun = (id: string) => useQuery({ queryKey: ["run", id], queryFn: () => api.getRun(id), refetchInterval: (q) => (q.state.data?.status === "running" ? 2_000 : false) })
-export const usePamJobs = (runId: string, q: Parameters<typeof api.pamJobs>[1]) =>
-  useQuery({ queryKey: ["pamJobs", runId, q], queryFn: () => api.pamJobs(runId, q), enabled: !!runId, ...paged })
-export const useSignalsInfinite = (q: Omit<SignalQuery, "page">) =>
-  useInfiniteQuery({
-    queryKey: ["signals", q],
-    queryFn: ({ pageParam }) => api.querySignals({ ...q, page: pageParam }),
-    initialPageParam: 0,
-    getNextPageParam: (last) => ((last.page + 1) * last.pageSize < last.total ? last.page + 1 : undefined),
-    enabled: !!q.runId,
-    placeholderData: keepPreviousData,
-  })
 export const useDashboard = (pamId?: string) => useQuery({ queryKey: ["dashboard", pamId], queryFn: () => api.dashboard(pamId), refetchInterval: 10_000 })
-export const useDigest = (runId: string, pamId: string) =>
-  useQuery({ queryKey: ["digest", runId, pamId], queryFn: () => api.digest(runId, pamId), enabled: !!runId && !!pamId, ...paged })
 export const useScopeOptions = () =>
   useQuery({ queryKey: ["scopes"], queryFn: () => backend.scopes(), staleTime: 10_000 })
 
@@ -104,15 +90,6 @@ export const useDeactivatePam = () => {
 export const useReassign = () => {
   const inv = useInvalidate([["companies"], ["company"], ["pams"], ["pamSearch"], ["audit"]])
   return useMutation({ mutationFn: (v: { companyIds: string[]; toPamId: string; actor: string }) => api.reassignCompanies(v.companyIds, v.toPamId), onSuccess: inv })
-}
-/** Start (or schedule) a run of one saved upload. Omit `label` for "<upload> · run N". */
-export const useStartRun = () => {
-  const inv = useInvalidate([["runs"], ["jobs"], ["scopes"], ["datasets"], ["audit"], ["finops"]])
-  return useMutation({
-    mutationFn: (v: { importId: string; label?: string; templateId?: string; runAt?: string; channels?: DeliveryChannel[] }): Promise<{ id: string }> =>
-      backend.startRun(v),
-    onSuccess: inv,
-  })
 }
 export const useResend = () => {
   const inv = useInvalidate([["pamJobs"], ["run"], ["dashboard"], ["audit"]])

@@ -57,7 +57,6 @@ export function SmartTable<T>({
               <Button
                 variant="outline"
                 size="icon"
-                className="size-9"
                 aria-label={density === "compact" ? "Comfortable rows" : "Compact rows"}
                 onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")}
               >

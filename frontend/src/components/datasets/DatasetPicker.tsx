@@ -29,7 +29,7 @@ export function UploadPicker({
   const uploads = (scopes.data ?? []).filter((s) => s.key.startsWith("import:"))
 
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-1 gap-2">
       <Label>{label}</Label>
       <Select
         value={value ? `import:${value}` : undefined}

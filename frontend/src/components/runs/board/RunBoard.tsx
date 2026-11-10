@@ -359,11 +359,11 @@ export function RunBoard({
 
   return (
     <div className="min-w-0 space-y-3">
-      {/* Row 1: search + status tabs */}
+      {/* One toolbar row: search · status · filters · (right) view controls. Wraps only on narrow screens. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full sm:w-80">
+        <div className="relative w-full sm:w-60 2xl:w-80">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input aria-label="Search logos or PAMs" placeholder="Search logos or PAMs…" className="h-9 pl-8 pr-8" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input aria-label="Search logos or PAMs" placeholder="Search logos or PAMs…" className="pl-8 pr-8" value={search} onChange={(e) => setSearch(e.target.value)} />
           {search && (
             <button
               type="button"
@@ -390,10 +390,6 @@ export function RunBoard({
             })}
           </TabsList>
         </Tabs>
-      </div>
-
-      {/* Row 2: filters (left) + view controls (right) */}
-      <div className="flex flex-wrap items-center gap-2">
         <DataTableFacetedFilter
           title="PAM"
           options={(fa?.pams ?? []).map((p) => ({ value: p.value, label: p.label ?? p.value }))}
@@ -420,11 +416,11 @@ export function RunBoard({
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <Tabs value={url.view} onValueChange={(v) => url.setView(v as "pam" | "logo")}>
             <TabsList>
-              <TabsTrigger value="pam" className="gap-1.5">
-                <Layers className="size-3.5" /> By PAM
+              <TabsTrigger value="pam" className="gap-1.5" aria-label="Group by PAM" title="Group by PAM">
+                <Layers className="size-3.5" /> <span className="hidden 2xl:inline">By PAM</span>
               </TabsTrigger>
-              <TabsTrigger value="logo" className="gap-1.5">
-                <List className="size-3.5" /> All logos
+              <TabsTrigger value="logo" className="gap-1.5" aria-label="All logos" title="All logos">
+                <List className="size-3.5" /> <span className="hidden 2xl:inline">All logos</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -434,7 +430,6 @@ export function RunBoard({
                 <Button
                   variant="outline"
                   size="icon"
-                  className="size-9"
                   disabled={!groupRows.length}
                   aria-label={allOpen ? "Collapse all PAMs" : "Expand all PAMs on this page"}
                   onClick={() => setExpanded(allOpen ? {} : Object.fromEntries(groupRows.map((g) => [pamKey(g), expanded[pamKey(g)] ?? SUB_PAGE])))}
@@ -447,7 +442,7 @@ export function RunBoard({
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" className="size-9" disabled={exporting || !total} onClick={exportAll} aria-label="Export matching logos as CSV">
+              <Button variant="outline" size="icon" disabled={exporting || !total} onClick={exportAll} aria-label="Export matching logos as CSV">
                 {exporting ? <Loader2 className="animate-spin" /> : <Download />}
               </Button>
             </TooltipTrigger>
@@ -459,7 +454,6 @@ export function RunBoard({
               <Button
                 variant="outline"
                 size="icon"
-                className="size-9"
                 aria-label={density === "compact" ? "Comfortable rows" : "Compact rows"}
                 onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")}
               >
