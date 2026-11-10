@@ -251,5 +251,8 @@ def remove(provider: str, actor: str) -> None:
             return
         audit.record(uow, "llm.config.remove", "llm_provider", row.id,
                      {"provider": provider, "model": row.model, "key_hint": row.key_hint, "was_active": row.active}, actor=actor)
-        uow.session.delete(row)
+        from app.services import soft_delete  # archived, never hard-deleted
+
+        soft_delete.archive(uow, LlmProviderConfig, LlmProviderConfig.id == row.id, actor=actor, reason="provider removed",
+                            record_audit=False)
         uow.after_commit(lambda: cache.bump("llm"))

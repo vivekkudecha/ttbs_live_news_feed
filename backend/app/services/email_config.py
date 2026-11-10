@@ -375,7 +375,9 @@ def remove(actor: str) -> None:
         if row is None:
             return
         audit.record(uow, "email.config.remove", "email_config", row.id, {"before": _snapshot(row)}, actor=actor)
-        uow.session.delete(row)
+        from app.services import soft_delete  # archived, never hard-deleted
+
+        soft_delete.archive(uow, EmailConfig, EmailConfig.id == row.id, actor=actor, reason="email settings removed", record_audit=False)
         _changed(uow)
     graph.clear_token_cache()
 

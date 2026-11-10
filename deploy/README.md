@@ -45,3 +45,5 @@ change it at first sign-in.
 
 Security controls and how to verify them: [docs/security.md](../docs/security.md).
 Caching: [docs/caching-policy.md](../docs/caching-policy.md).
+Monthly partitions, soft delete, indexes and MySQL sizing (read before deploying migration 0011:
+it rebuilds the high-volume tables once): [docs/data-partitioning.md](../docs/data-partitioning.md).

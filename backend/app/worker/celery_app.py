@@ -41,6 +41,8 @@ celery_app.conf.update(
         "dispatcher-tick": {"task": "maintenance.tick", "schedule": float(settings.dispatcher_interval_s)},
         # Email quota dispatcher: hands out as many pending emails as the sending limits allow.
         "email-dispatch": {"task": "notify.dispatch_email", "schedule": float(settings.email_dispatch_interval_s)},
+        # Monthly partitions: create this/next month ahead of use, drop emptied old months.
+        "partitions": {"task": "maintenance.partitions", "schedule": float(settings.partition_maintenance_interval_s)},
     },
     timezone="UTC",
 )

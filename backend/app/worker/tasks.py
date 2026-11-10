@@ -180,3 +180,19 @@ def analyze_import(import_id: int) -> str:
 @celery_app.task(name="maintenance.tick")
 def tick() -> dict:
     return maintenance.tick()
+
+
+@celery_app.task(name="maintenance.partitions")
+def maintain_partitions() -> dict:
+    """Monthly partitions: create this and next month's (and any month a new run is scheduled in),
+    drop old months that were emptied by soft deletes. No-op off MySQL."""
+    from app.db import partitions
+
+    return partitions.maintain()
+
+
+@celery_app.task(name="maintenance.ensure_partitions")
+def ensure_partitions(*month_keys: int) -> list[str]:
+    from app.db import partitions
+
+    return partitions.ensure_months(*month_keys)

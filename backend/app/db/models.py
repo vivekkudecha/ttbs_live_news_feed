@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Column,
     Date,
     DateTime,
     Float,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Table,
     Text,
     UniqueConstraint,
     func,
@@ -23,7 +25,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.db import partitions as part
 from app.db.base import Base, BigId, TimestampMixin
+
+# Monthly partition key (YYYYMM). Filled by context-sensitive defaults (app/db/partitions.py).
+PART_DOC = "monthly partition key, YYYYMM (see app/db/partitions.py)"
 
 # --- Status vocabularies (kept as strings: readable in SQL, no enum migrations) ------------
 IMPORT_PREVIEWED, IMPORT_COMMITTED, IMPORT_FAILED = "previewed", "committed", "failed"  # previewed/committed: legacy
@@ -218,20 +224,27 @@ class Run(TimestampMixin, Base):
     cache_hits: Mapped[int] = mapped_column(Integer, default=0)
     cost: Mapped[float] = mapped_column(Float, default=0.0)
     error: Mapped[str | None] = mapped_column(Text)
+    # Month of `scheduled_for`: every job, notification and retry of this run lives in this month's partition.
+    part_month: Mapped[int] = mapped_column(Integer, default=part.default_for_run, doc=PART_DOC)
 
 
 class ResearchResult(TimestampMixin, Base):
     __tablename__ = "research_results"
+    # MySQL: RANGE-partitioned by part_month (`nov__2026__job`); every unique key carries part_month,
+    # and foreign keys are not allowed on partitioned tables (integrity is kept by the services).
     __table_args__ = (
-        UniqueConstraint("run_id", "company_id", name="uq_research_results_run_company"),
-        Index("ix_research_results_run_status", "run_id", "status"),
-        Index("ix_research_results_run_pam", "run_id", "pam_id"),
+        UniqueConstraint("run_id", "company_id", "part_month", name="uq_research_results_run_company"),
+        Index("ix_research_results_run_pam_status", "run_id", "pam_id", "status"),
+        Index("ix_research_results_run_status_fin", "run_id", "status", "finished_at"),
+        Index("ix_research_results_company_status", "company_id", "status"),
+        Index("ix_research_results_status_enq", "status", "enqueued_at"),
     )
 
     id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"))
-    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"))
-    pam_id: Mapped[int | None] = mapped_column(ForeignKey("pams.id"))  # owner at run time
+    run_id: Mapped[int] = mapped_column(BigId)
+    company_id: Mapped[int] = mapped_column(BigId)
+    pam_id: Mapped[int | None] = mapped_column(BigId)  # owner at run time
+    part_month: Mapped[int] = mapped_column(Integer, default=part.default_by_run, doc=PART_DOC)
     status: Mapped[str] = mapped_column(String(20), default=RES_PENDING)
     category: Mapped[str | None] = mapped_column(String(40))
     key_signals: Mapped[str | None] = mapped_column(Text)
@@ -250,7 +263,7 @@ class ResearchResult(TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    company: Mapped[Company] = relationship(lazy="joined")
+    company: Mapped[Company] = relationship(lazy="joined", primaryjoin="foreign(ResearchResult.company_id) == Company.id")
 
 
 class Notification(TimestampMixin, Base):
@@ -258,13 +271,14 @@ class Notification(TimestampMixin, Base):
 
     __tablename__ = "notifications"
     __table_args__ = (
-        UniqueConstraint("run_id", "pam_id", "channel", name="uq_notifications_run_pam_channel"),
+        UniqueConstraint("run_id", "pam_id", "channel", "part_month", name="uq_notifications_run_pam_channel"),
         Index("ix_notifications_status_next", "status", "next_attempt_at"),
     )
 
     id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), index=True)
-    pam_id: Mapped[int] = mapped_column(ForeignKey("pams.id"))
+    run_id: Mapped[int] = mapped_column(BigId)  # leads the unique key, which serves run lookups
+    pam_id: Mapped[int] = mapped_column(BigId)
+    part_month: Mapped[int] = mapped_column(Integer, default=part.default_by_run, doc=PART_DOC)
     channel: Mapped[str] = mapped_column(String(20))
     recipient: Mapped[str | None] = mapped_column(String(320))
     status: Mapped[str] = mapped_column(String(20), default=NOTE_PENDING)
@@ -283,16 +297,18 @@ class Notification(TimestampMixin, Base):
     reserved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     quota_key: Mapped[int | None] = mapped_column(BigId)
 
-    pam: Mapped[Pam] = relationship(lazy="joined")
+    pam: Mapped[Pam] = relationship(lazy="joined", primaryjoin="foreign(Notification.pam_id) == Pam.id")
 
 
 class NotificationAttempt(Base):
     """One row per delivery attempt (audit trail: what was tried, when, and what the provider said)."""
 
     __tablename__ = "notification_attempts"
+    __table_args__ = (Index("ix_notification_attempts_note", "notification_id", "id"),)
 
     id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
-    notification_id: Mapped[int] = mapped_column(ForeignKey("notifications.id", ondelete="CASCADE"), index=True)
+    notification_id: Mapped[int] = mapped_column(BigId)
+    part_month: Mapped[int] = mapped_column(Integer, default=part.default_by_notification, doc=PART_DOC)
     attempt: Mapped[int] = mapped_column(Integer)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
@@ -313,10 +329,14 @@ class DeadLetter(Base):
     audit with a snapshot of what was being sent; an operator can requeue it or discard it with a note."""
 
     __tablename__ = "dead_letters"
-    __table_args__ = (Index("ix_dead_letters_status_created", "status", "created_at"),)
+    __table_args__ = (
+        Index("ix_dead_letters_status_created", "status", "created_at"),
+        Index("ix_dead_letters_notification_id", "notification_id"),
+    )
 
     id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
-    notification_id: Mapped[int] = mapped_column(ForeignKey("notifications.id", ondelete="CASCADE"), index=True)
+    notification_id: Mapped[int] = mapped_column(BigId)
+    part_month: Mapped[int] = mapped_column(Integer, default=part.default_by_notification, doc=PART_DOC)
     run_id: Mapped[int | None] = mapped_column(Integer)
     pam_id: Mapped[int | None] = mapped_column(Integer)
     channel: Mapped[str] = mapped_column(String(20))
@@ -454,23 +474,41 @@ class AuditLog(Base):
     so any edit or deletion breaks the chain (`GET /audit/verify`)."""
 
     __tablename__ = "audit_log"
-    __table_args__ = (Index("ix_audit_log_entity", "entity_type", "entity_id"),)
+    __table_args__ = (
+        Index("ix_audit_log_entity", "entity_type", "entity_id"),
+        Index("ix_audit_log_action_id", "action", "id"),
+        Index("ix_audit_log_run_id_id", "run_id", "id"),
+    )
 
     id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     actor: Mapped[str] = mapped_column(String(100))
-    action: Mapped[str] = mapped_column(String(80), index=True)
+    action: Mapped[str] = mapped_column(String(80))
     entity_type: Mapped[str] = mapped_column(String(40))
     entity_id: Mapped[str | None] = mapped_column(String(64))
     detail: Mapped[dict[str, Any]] = mapped_column(default=dict)
     # Correlation: every entry about a run or one of its notifications carries the run id, so a
     # run's complete audit trail is one indexed query. Covered by the hash when set.
-    run_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    run_id: Mapped[int | None] = mapped_column(Integer)
     request_id: Mapped[str | None] = mapped_column(String(64))
     ip: Mapped[str | None] = mapped_column(String(64))
     user_agent: Mapped[str | None] = mapped_column(String(300))
     prev_hash: Mapped[str] = mapped_column(String(64))
-    hash: Mapped[str] = mapped_column(String(64), unique=True)
+    # Not unique-indexed: a 64-char random unique key is the costliest index on the busiest table, and
+    # the chain itself (each hash covers the previous one) is the integrity check (`verify_chain`).
+    hash: Mapped[str] = mapped_column(String(64))
+    part_month: Mapped[int] = mapped_column(Integer, default=part.default_by_ts, doc=PART_DOC)
+
+
+class AuditChainHead(Base):
+    """The newest audit row's id and hash (single row, id=1), read and moved under the audit chain
+    lock. Appending never has to find the last row of a partitioned table."""
+
+    __tablename__ = "audit_chain_head"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    last_id: Mapped[int] = mapped_column(BigInteger, default=0)
+    last_hash: Mapped[str] = mapped_column(String(64))
 
 
 class ProcessEvent(Base):
@@ -481,12 +519,12 @@ class ProcessEvent(Base):
     __tablename__ = "process_events"
     __table_args__ = (
         Index("ix_process_events_run_ts", "run_id", "ts"),
-        Index("ix_process_events_kind_ts", "kind", "ts"),
+        Index("ix_process_events_kind_ts_status", "kind", "ts", "status"),
         Index("ix_process_events_import_ts", "import_id", "ts"),
     )
 
     id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
-    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))  # time ranges prune by part_month
     kind: Mapped[str] = mapped_column(String(60))  # "research.attempt", "notify.attempt", "run.start", …
     status: Mapped[str] = mapped_column(String(20), default="ok")  # ok | retry | error | skipped | info
     message: Mapped[str | None] = mapped_column(String(500))
@@ -506,6 +544,7 @@ class ProcessEvent(Base):
     request_id: Mapped[str | None] = mapped_column(String(64))
     trace_id: Mapped[str | None] = mapped_column(String(32))
     attrs: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    part_month: Mapped[int] = mapped_column(Integer, default=part.default_by_ts, doc=PART_DOC)
 
 
 COST_LLM, COST_MESSAGING = "llm", "messaging"
@@ -518,10 +557,9 @@ class CostEntry(Base):
 
     __tablename__ = "cost_ledger"
     __table_args__ = (
-        Index("ix_cost_ledger_ts", "ts"),
-        Index("ix_cost_ledger_run", "run_id"),
+        Index("ix_cost_ledger_ts_category", "ts", "category"),
+        Index("ix_cost_ledger_run_pam", "run_id", "pam_id"),
         Index("ix_cost_ledger_import", "import_id"),
-        Index("ix_cost_ledger_pam", "pam_id"),
     )
 
     id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
@@ -543,6 +581,18 @@ class CostEntry(Base):
     cached: Mapped[bool] = mapped_column(Boolean, default=False)
     saved: Mapped[float] = mapped_column(Float, default=0.0)  # USD avoided (cache hits)
     outcome: Mapped[str | None] = mapped_column(String(20))  # signal | no_signal | failed | sent
+    part_month: Mapped[int] = mapped_column(Integer, default=part.default_by_ts, doc=PART_DOC)
+
+
+class CompanySignalSummary(Base):
+    """Per-company roll-up of research history, kept current as each result completes, so company
+    lists sorted by signals never aggregate the (partitioned, ever-growing) results table."""
+
+    __tablename__ = "company_signal_summary"
+
+    company_id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=False)
+    signals: Mapped[int] = mapped_column(Integer, default=0)
+    last_signal_date: Mapped[date | None] = mapped_column(Date)  # window_end of the newest run with a signal
 
 
 # --- Identity & access ------------------------------------------------------------------------
@@ -605,3 +655,33 @@ class PasswordHistory(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+# --- Archive ("deleted") tables -------------------------------------------------------------------
+# Nothing is hard-deleted: services/soft_delete.archive() moves rows into `<table>_deleted`, a copy of
+# the table's columns plus who/when/why. The archives of partitioned tables are partitioned the same
+# way (`nov__2026__job_deleted`). `archive_id` is the archive's own key, so a row id that is archived
+# twice (e.g. the single email_config row, deleted, re-created, deleted again) never collides.
+# audit_log has no archive: audit rows are never removed (the hash chain would break).
+
+ARCHIVED = (
+    ResearchResult, Notification, NotificationAttempt, DeadLetter, ProcessEvent, CostEntry,
+    DatasetCompany, EmailTemplate, EmailTemplateVersion, LlmProviderConfig, EmailConfig,
+)
+
+
+def _archive_table(model: type[Base]) -> Table:
+    src = model.__table__
+    cols = [Column("archive_id", BigId, primary_key=True, autoincrement=True)]
+    for c in src.columns:
+        cols.append(Column(c.name, c.type, nullable=c.name != "part_month"))  # part_month: the archive's partition key
+    cols += [
+        Column("deleted_at", DateTime(timezone=True), nullable=False),
+        Column("deleted_by", String(100), nullable=False),
+        Column("delete_reason", String(300)),
+    ]
+    name = f"{src.name}_deleted"
+    return Table(name, Base.metadata, *cols, Index(f"ix_{name}_id", "id"), Index(f"ix_{name}_deleted_at", "deleted_at"))
+
+
+ARCHIVE_TABLES: dict[str, Table] = {m.__table__.name: _archive_table(m) for m in ARCHIVED}

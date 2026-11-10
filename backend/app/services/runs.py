@@ -49,7 +49,7 @@ from app.db.models import (
     Run,
 )
 from app.db.session import UnitOfWork
-from app.services import audit, finops, research_prompts, telemetry
+from app.services import audit, company_stats, finops, research_prompts, telemetry
 
 log = logging.getLogger(__name__)
 EST_COST_PER_COMPANY = 0.0125
@@ -197,6 +197,10 @@ def create_run(
     )
     uow.session.add(run)
     uow.session.flush()
+    # The scheduled month's partitions must exist before the run's first job is written (registered
+    # before the start is enqueued, so it runs first after the commit; p_future catches any race).
+    month = run.part_month
+    uow.after_commit(lambda: ensure_partition(month))
     audit.record(
         uow, "run.queue" if starts_now else "run.schedule", "run", run.id,
         {"label": run.label, "upload_id": import_id, "upload": batch.label, "trigger": trigger, "companies": count,
@@ -215,6 +219,16 @@ def create_run(
         _enqueue_start(uow, run.id)
     log.info("run created", extra={"run_id": run.id, "status": run.status, "companies": count, "import_id": import_id})
     return run
+
+
+def ensure_partition(month: int) -> None:
+    """Create the month's partitions now; never fails the request (the beat task retries)."""
+    from app.db import partitions
+
+    try:
+        partitions.ensure_months(month)
+    except Exception:  # noqa: BLE001
+        log.warning("could not create monthly partitions; the maintenance task will retry", extra={"month": month}, exc_info=True)
 
 
 def _enqueue_start(uow: UnitOfWork, run_id: int) -> None:
@@ -258,8 +272,8 @@ def start(uow: UnitOfWork, run_id: int) -> bool:
     members = [(cid, pid, up) for cid, pid, up in s.execute(_members(import_id)) if pid is not None]
     s.bulk_insert_mappings(
         ResearchResult,
-        [{"run_id": run_id, "company_id": cid, "pam_id": pid, "status": RES_PENDING, "enqueued_at": now, "sources": []}
-         for cid, pid, _ in members],
+        [{"run_id": run_id, "company_id": cid, "pam_id": pid, "status": RES_PENDING, "enqueued_at": now, "sources": [],
+          "part_month": run.part_month} for cid, pid, _ in members],
     )
     run.total = len(members)
     pams = len({pid for _, pid, _ in members})
@@ -276,9 +290,9 @@ def start(uow: UnitOfWork, run_id: int) -> bool:
         + (f"; {rerouted} logos go to their current owner (uploaded PAM is inactive)" if rerouted else ""),
         companies=run.total, pams=pams, rerouted=rerouted,
     )
-    ids = list(s.scalars(select(ResearchResult.id).where(ResearchResult.run_id == run_id)))
+    ids = list(s.scalars(select(ResearchResult.id).where(ResearchResult.run_id == run_id, ResearchResult.part_month == run.part_month)))
     _enqueue_research(uow, ids)
-    uow.after_commit(lambda: cache.bump("runs"))
+    uow.after_commit(lambda: cache.bump("runs", f"run:{run_id}"))
     return True
 
 
@@ -345,6 +359,8 @@ def complete_result(uow: UnitOfWork, result_id: int, values: dict[str, Any], *, 
         )
     )
     s.refresh(run)
+    if status == RES_SIGNAL:
+        company_stats.record_signal(uow, res.company_id, run.window_end)
     if res.pam_id is not None:
         maybe_queue_pam_digest(uow, run, res.pam_id)
     if run.done >= run.total:
@@ -402,20 +418,17 @@ def maybe_queue_pam_digest(uow: UnitOfWork, run: Run, pam_id: int) -> list[int]:
     """When a PAM's last company in this run is done, write one outbox row per channel.
     Every row (queued or skipped) is audited and recorded as a telemetry event."""
     s = uow.session
+    in_run = (ResearchResult.run_id == run.id, ResearchResult.part_month == run.part_month)  # one partition
     open_count = s.scalar(
-        select(func.count(ResearchResult.id)).where(
-            ResearchResult.run_id == run.id, ResearchResult.pam_id == pam_id, ResearchResult.status.not_in(RES_TERMINAL)
-        )
+        select(func.count(ResearchResult.id)).where(*in_run, ResearchResult.pam_id == pam_id, ResearchResult.status.not_in(RES_TERMINAL))
     )
     if open_count:
         return []
     pam = s.get(Pam, pam_id)
     signals = s.scalars(
-        select(ResearchResult).where(
-            ResearchResult.run_id == run.id, ResearchResult.pam_id == pam_id, ResearchResult.status == RES_SIGNAL
-        ).order_by(ResearchResult.id)
+        select(ResearchResult).where(*in_run, ResearchResult.pam_id == pam_id, ResearchResult.status == RES_SIGNAL).order_by(ResearchResult.id)
     ).all()
-    total = s.scalar(select(func.count(ResearchResult.id)).where(ResearchResult.run_id == run.id, ResearchResult.pam_id == pam_id))
+    total = s.scalar(select(func.count(ResearchResult.id)).where(*in_run, ResearchResult.pam_id == pam_id))
     payload = build_digest(run, pam, signals, total or 0)
     from app.services import email_config  # delivery policy is set in the UI
 
@@ -529,13 +542,14 @@ def retry_failed(uow: UnitOfWork, run_id: int, actor: str) -> int:
     run = get_run(uow, run_id)
     if run.status in (RUN_SCHEDULED, RUN_QUEUED, RUN_RUNNING):
         raise Conflict("Run is still in progress")
-    failed_ids = list(s.scalars(select(ResearchResult.id).where(ResearchResult.run_id == run_id, ResearchResult.status == RES_FAILED)))
+    failed_ids = list(s.scalars(select(ResearchResult.id).where(ResearchResult.run_id == run_id, ResearchResult.part_month == run.part_month,
+                                                                ResearchResult.status == RES_FAILED)))
     if not failed_ids:
         raise Conflict("Run has no failed companies to retry")
     now = utcnow()
     s.execute(
         update(ResearchResult)
-        .where(ResearchResult.id.in_(failed_ids))
+        .where(ResearchResult.id.in_(failed_ids), ResearchResult.part_month == run.part_month)
         .values(status=RES_PENDING, attempts=0, error=None, enqueued_at=now, finished_at=None)
     )
     s.execute(

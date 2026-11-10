@@ -267,7 +267,11 @@ def delete_template(template_id: int, actor: str) -> None:
         if t.active:
             raise Conflict("The active template cannot be deleted; activate another one first")
         audit.record(uow, "email.template.delete", "email_template", t.id, {"name": t.name, "version": t.version}, actor=actor)
-        uow.session.delete(t)
+        from app.services import soft_delete  # archived, never hard-deleted (versions first: they reference the template)
+
+        soft_delete.archive(uow, EmailTemplateVersion, EmailTemplateVersion.template_id == t.id, actor=actor,
+                            reason=f"template {t.id} deleted", record_audit=False)
+        soft_delete.archive(uow, EmailTemplate, EmailTemplate.id == t.id, actor=actor, reason="template deleted", record_audit=False)
         uow.after_commit(lambda: cache.bump("email"))
 
 

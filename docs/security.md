@@ -130,8 +130,9 @@ for i in $(seq 8); do curl -s -o /dev/null -w '%{http_code} ' -X POST \
 2. Fill `.env.prod` from `.env.example` (the `[prod]` notes), then `./deploy.sh prod up`: unique `SECRETS_KEY`, `REDIS_PASSWORD`,
    `ADMIN_INITIAL_PASSWORD`; then sign in once, change the password, and delete
    `ADMIN_INITIAL_PASSWORD` from the file.
-3. External database: a dedicated least-privilege user, TLS to the DB if it is on another host,
-   backups.
+3. External database: a dedicated least-privilege user (grants in
+   [data-partitioning.md](data-partitioning.md#deploying-migration-0011)), TLS to the DB if it is on
+   another host, backups.
 4. Run an image scan (e.g. `trivy image ttbs-backend:prod`) and `npm audit` / `pip-audit` in CI.
 5. Ship container logs somewhere central. The audit log is in the DB; gateway access logs are on
    stdout.

@@ -19,6 +19,7 @@ from app.core import metrics
 from app.core.config import get_settings
 from app.core.errors import ValidationFailed
 from app.core.timeutil import as_utc, utcnow
+from app.db import partitions
 from app.db.models import (
     COST_LLM,
     COST_MESSAGING,
@@ -44,7 +45,7 @@ def avg_paid_cost(uow: UnitOfWork, provider: str, model: str) -> float:
     v = uow.session.scalar(
         select(func.avg(CostEntry.cost)).where(
             CostEntry.category == COST_LLM, CostEntry.provider == provider, CostEntry.model == model,
-            CostEntry.cached.is_(False), CostEntry.cost > 0, CostEntry.ts >= utcnow() - timedelta(days=30),
+            CostEntry.cached.is_(False), CostEntry.cost > 0, *_in_range(utcnow() - timedelta(days=30), None),
         )
     )
     return float(v) if v else EST_COST_PER_COMPANY
@@ -105,9 +106,19 @@ def month_start(now: datetime) -> datetime:
     return local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
+def _in_range(lo: datetime | None, hi: datetime | None) -> list[Any]:
+    """[lo, hi) on the ledger timestamp, plus the matching monthly partitions (pruning)."""
+    conds = partitions.range_months(CostEntry.part_month, lo, hi)
+    if lo is not None:
+        conds.append(CostEntry.ts >= lo)
+    if hi is not None:
+        conds.append(CostEntry.ts < hi)
+    return conds
+
+
 def month_spend(uow: UnitOfWork) -> float:
     start = month_start(utcnow()).astimezone(UTC)  # bounds are compared in UTC (SQLite keeps no zone)
-    return float(uow.session.scalar(select(func.coalesce(func.sum(CostEntry.cost), 0.0)).where(CostEntry.ts >= start)) or 0.0)
+    return float(uow.session.scalar(select(func.coalesce(func.sum(CostEntry.cost), 0.0)).where(*_in_range(start, None))) or 0.0)
 
 
 def check_budget(uow: UnitOfWork, estimate: float) -> dict[str, Any]:
@@ -181,7 +192,7 @@ def _row(llm, msg, calls, hits, saved, tin, tout, signals, messages) -> dict[str
 def _breakdown(uow: UnitOfWork, lo: datetime, hi: datetime, key, limit: int = 50) -> list[tuple[Any, dict[str, Any]]]:
     total_cost = func.sum(CostEntry.cost)
     rows = uow.session.execute(
-        select(key, *_sums()).where(CostEntry.ts >= lo, CostEntry.ts < hi, key.is_not(None))
+        select(key, *_sums()).where(*_in_range(lo, hi), key.is_not(None))
         .group_by(key).order_by(total_cost.desc()).limit(limit)
     ).all()
     return [(r[0], _row(*r[1:])) for r in rows]
@@ -191,12 +202,12 @@ def report(uow: UnitOfWork, start: str | None, end: str | None) -> dict[str, Any
     s = get_settings()
     lo, hi, d1, d2 = parse_range(start, end)
     sess = uow.session
-    totals = _row(*sess.execute(select(*_sums()).where(CostEntry.ts >= lo, CostEntry.ts < hi)).one())
+    totals = _row(*sess.execute(select(*_sums()).where(*_in_range(lo, hi))).one())
 
     # Failed research: what it cost and how many logos it hit (wasted spend).
     failed_cost, failed_n = sess.execute(
         select(func.coalesce(func.sum(CostEntry.cost), 0.0), func.count(CostEntry.id))
-        .where(CostEntry.ts >= lo, CostEntry.ts < hi, CostEntry.category == COST_LLM, CostEntry.outcome == RES_FAILED)
+        .where(*_in_range(lo, hi), CostEntry.category == COST_LLM, CostEntry.outcome == RES_FAILED)
     ).one()
     totals["failedCost"], totals["failedCalls"] = round(float(failed_cost or 0), 4), int(failed_n or 0)
 
@@ -204,7 +215,7 @@ def report(uow: UnitOfWork, start: str | None, end: str | None) -> dict[str, Any
     tz = ZoneInfo(s.timezone)
     daily: dict[str, dict[str, float]] = defaultdict(lambda: {"llm": 0.0, "messaging": 0.0, "saved": 0.0})
     for ts, cat, cost, saved in sess.execute(
-        select(CostEntry.ts, CostEntry.category, CostEntry.cost, CostEntry.saved).where(CostEntry.ts >= lo, CostEntry.ts < hi)
+        select(CostEntry.ts, CostEntry.category, CostEntry.cost, CostEntry.saved).where(*_in_range(lo, hi))
     ):
         d = daily[as_utc(ts).astimezone(tz).date().isoformat()]
         d["llm" if cat == COST_LLM else "messaging"] += cost or 0
@@ -227,7 +238,7 @@ def report(uow: UnitOfWork, start: str | None, end: str | None) -> dict[str, Any
 
     model_rows = sess.execute(
         select(CostEntry.category, CostEntry.provider, CostEntry.model, *_sums())
-        .where(CostEntry.ts >= lo, CostEntry.ts < hi)
+        .where(*_in_range(lo, hi))
         .group_by(CostEntry.category, CostEntry.provider, CostEntry.model).order_by(func.sum(CostEntry.cost).desc())
     ).all()
 
@@ -281,7 +292,7 @@ def ledger_csv(uow: UnitOfWork, start: str | None, end: str | None) -> str:
         select(CostEntry, Run.label, ImportBatch.label, Pam.name, Company.name)
         .outerjoin(Run, Run.id == CostEntry.run_id).outerjoin(ImportBatch, ImportBatch.id == CostEntry.import_id)
         .outerjoin(Pam, Pam.id == CostEntry.pam_id).outerjoin(Company, Company.id == CostEntry.company_id)
-        .where(CostEntry.ts >= lo, CostEntry.ts < hi).order_by(CostEntry.id)
+        .where(*_in_range(lo, hi)).order_by(CostEntry.id)
     )
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -295,12 +306,15 @@ def ledger_csv(uow: UnitOfWork, start: str | None, end: str | None) -> str:
     return buf.getvalue()
 
 
-def run_costs(uow: UnitOfWork, run_id: int) -> dict[str, Any]:
+def run_costs(uow: UnitOfWork, run_id: int, run_started: datetime | None = None) -> dict[str, Any]:
     """Per-run cost card: totals plus the split by PAM for this run."""
     sess = uow.session
-    totals = _row(*sess.execute(select(*_sums()).where(CostEntry.run_id == run_id)).one())
+    in_run = [CostEntry.run_id == run_id]
+    if run_started is not None:  # nothing is billed to a run before it existed: skip older partitions
+        in_run.append(partitions.since_month(CostEntry.part_month, run_started))
+    totals = _row(*sess.execute(select(*_sums()).where(*in_run)).one())
     rows = sess.execute(
-        select(CostEntry.pam_id, *_sums()).where(CostEntry.run_id == run_id, CostEntry.pam_id.is_not(None))
+        select(CostEntry.pam_id, *_sums()).where(*in_run, CostEntry.pam_id.is_not(None))
         .group_by(CostEntry.pam_id).order_by(func.sum(CostEntry.cost).desc()).limit(200)
     ).all()
     pams = {p.id: p.name for p in sess.scalars(select(Pam).where(Pam.id.in_([r[0] for r in rows])))} if rows else {}

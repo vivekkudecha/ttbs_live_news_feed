@@ -123,6 +123,13 @@ class Settings(BaseSettings):
     cache_ttl_job_running: int = 2
     cache_ttl_job_finished: int = 300
     cache_ttl_lists: int = 15
+    # Shared (all users) in-process tier in front of Redis: decoded datasets, bounded by entries.
+    cache_local_entries: int = 256
+    cache_local_ttl_s: int = 5  # upper bound for the local tier; the namespace version is checked every read
+    cache_compress_over_bytes: int = 32_768
+
+    # --- Monthly partitions (MySQL) --------------------------------------------------------
+    partition_maintenance_interval_s: int = 21_600  # 6 h: create next month early, drop emptied months
 
     # --- FinOps (all amounts USD) ----------------------------------------------------------
     monthly_budget_usd: float = 500.0

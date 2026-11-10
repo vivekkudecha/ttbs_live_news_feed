@@ -38,12 +38,38 @@ Server data is held in memory only while the tab is open, never in `localStorage
 | Telemetry, FinOps | n/a | polled every 10-30 s |
 | Module catalogue, password policy | until reload | static per deployment |
 
-## 3. Server-side cache (Redis, `app/core/cache.py`)
+## 3. Server-side cache (centralized, `app/core/cache.py`)
 
-A read-through cache in front of expensive queries. It **fails open** (if Redis is down the API
-computes the answer, so an outage slows things down but never breaks them) and is invalidated by
-**namespace versions** (`bump(ns)` makes all old keys unreachable at once; they then expire by
-TTL). It holds no per-user data: access is checked before the cache is read.
+A read-through cache in front of expensive queries. It is **centralized**: one copy of each
+dataset serves every user.
+
+**How it behaves**
+- **Fails open:** if Redis is down, the API computes the answer. An outage slows things down but
+  never breaks them.
+- **Namespace versions:** `bump(ns)` makes all old keys unreachable at once; they then expire by TTL.
+- **No per-user data:** a key never contains a user id, role or permission. Access is checked
+  before the cache is read.
+
+**Base dataset + runtime filter.** Routes cache a *base dataset* once and apply the request's
+search, filters, facets, sort, paging and the user's row scope (`app/api/scope.py`) in memory on
+that shared copy. Ten users with ten different filters cost one query, not ten. The cached
+datasets are:
+- the company table (`companies-base`) and the PAM table (`pams-base`);
+- a run's per-PAM jobs (`run:{id}` / `pam-jobs`);
+- the dashboard of the latest run, for all PAMs at once (the `pamId` filter is applied per request);
+- the outstanding-work counts used by `/queues` and the Prometheus gauges.
+
+**Two tiers, one truth**
+- **L1:** decoded values in each API process (bounded LRU, `CACHE_LOCAL_ENTRIES`, at most
+  `CACHE_LOCAL_TTL_S` seconds), so a busy page does not re-download and re-parse a multi-MB dataset
+  on every request.
+- **L2:** Redis, shared by all processes. Values over `CACHE_COMPRESS_OVER_BYTES` are
+  zlib-compressed.
+- **Consistency:** both tiers are keyed by the namespace version, which is read from Redis on every
+  call. A `bump()` anywhere therefore invalidates L1 everywhere on the next read.
+
+**Single-flight.** On a miss, one caller computes the value (Redis `SET NX` lock) while the others
+wait up to 2 s for its result. A cold page opened by 50 users runs its query once.
 
 | Namespace | TTL (env var) | Default |
 |---|---|---|
@@ -52,9 +78,13 @@ TTL). It holds no per-user data: access is checked before the cache is read.
 | Lists (runs, uploads, companies & PAMs tables) | `CACHE_TTL_LISTS` | 15 s |
 | LLM model lists per provider + key fingerprint | `LLM_MODELS_CACHE_S` | 3600 s |
 
-Company and PAM table pages are cached per query (filters, sort, page) under the `accounts`
-namespace; their keys embed the `imports` and `runs` namespace versions, so an upload, a row edit,
-research progress or a reassignment (`bump("accounts")`) invalidates them.
+The company and PAM base datasets live in the `accounts` namespace. Their keys embed the `imports`
+and `runs` namespace versions, so any of these invalidates them:
+- an upload or a row edit (`imports`);
+- research progress (`runs`);
+- a reassignment (`bump("accounts")`).
+
+The dashboard dataset lives in `runs` and embeds the `imports` and `accounts` versions.
 
 Research results are re-used (not re-bought) within `RESEARCH_WINDOW_DAYS` (default 10): that
 is a business rule stored in the database, not a cache, and it is recorded in the cost ledger

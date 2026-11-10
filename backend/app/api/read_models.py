@@ -123,12 +123,23 @@ class Agg:
     failed: int = 0
 
 
+def _run_months(uow: UnitOfWork, run_ids: list[int]) -> list[int]:
+    """The monthly partitions these runs' jobs live in (lets MySQL prune every other month)."""
+    return sorted(set(uow.session.scalars(select(Run.part_month).where(Run.id.in_(run_ids)))))
+
+
+def in_run(run: Run, model: Any = ResearchResult) -> tuple:
+    """Conditions selecting one run's rows of a run-partitioned table: a single partition."""
+    return (model.run_id == run.id, model.part_month == run.part_month)
+
+
 def _aggs(uow: UnitOfWork, run_ids: list[int]) -> dict[int, dict[int, Agg]]:
     out: dict[int, dict[int, Agg]] = defaultdict(lambda: defaultdict(Agg))
     if not run_ids:
         return out
     q = (select(ResearchResult.run_id, ResearchResult.pam_id, ResearchResult.status, func.count(ResearchResult.id))
-         .where(ResearchResult.run_id.in_(run_ids), ResearchResult.pam_id.is_not(None))
+         .where(ResearchResult.run_id.in_(run_ids), ResearchResult.part_month.in_(_run_months(uow, run_ids)),
+                ResearchResult.pam_id.is_not(None))
          .group_by(ResearchResult.run_id, ResearchResult.pam_id, ResearchResult.status))
     for run_id, pam_id, status, n in uow.session.execute(q):
         a = out[run_id][pam_id]
@@ -146,7 +157,8 @@ def _notes(uow: UnitOfWork, run_ids: list[int]) -> dict[int, dict[tuple[int, str
     out: dict[int, dict[tuple[int, str], str]] = defaultdict(dict)
     if run_ids:
         for run_id, pam_id, channel, status in uow.session.execute(
-            select(Notification.run_id, Notification.pam_id, Notification.channel, Notification.status).where(Notification.run_id.in_(run_ids))
+            select(Notification.run_id, Notification.pam_id, Notification.channel, Notification.status)
+            .where(Notification.run_id.in_(run_ids), Notification.part_month.in_(_run_months(uow, run_ids)))
         ):
             out[run_id][(pam_id, channel)] = status
     return out
@@ -184,7 +196,7 @@ def _rate(uow: UnitOfWork, run: Run) -> float | None:
     if run.status != RUN_RUNNING:
         return None
     since = utcnow() - timedelta(seconds=30)
-    n = uow.session.scalar(select(func.count(ResearchResult.id)).where(ResearchResult.run_id == run.id, ResearchResult.finished_at >= since)) or 0
+    n = uow.session.scalar(select(func.count(ResearchResult.id)).where(*in_run(run), ResearchResult.finished_at >= since)) or 0
     return round(n / 30, 1)
 
 
@@ -285,10 +297,14 @@ def _match_pam_job(j: dict[str, Any], filters: dict[str, Any]) -> bool:
 
 
 def pam_jobs(uow: UnitOfWork, run_id: str, page: int, size: int, search: str | None, flt: str | None, lst: Any = None) -> dict[str, Any]:
-    run = _get_run(uow, run_id)
+    return pam_jobs_view(_jobs_with_names(uow, _get_run(uow, run_id)), page, size, search, flt, lst)
+
+
+def pam_jobs_view(jobs: list[dict[str, Any]], page: int, size: int, search: str | None, flt: str | None, lst: Any = None) -> dict[str, Any]:
+    """Filter/sort/page a run's per-PAM jobs (the shared, cached list; never mutated here)."""
     toks = _tokens(search)
     rows = []
-    for j in _jobs_with_names(uow, run):
+    for j in jobs:
         if toks and not all(t in j["_hay"] for t in toks):
             continue
         finished = j["done"] >= j["total"]
@@ -312,13 +328,13 @@ def pam_jobs(uow: UnitOfWork, run_id: str, page: int, size: int, search: str | N
 # --- Signals & digest ----------------------------------------------------------------------------
 
 
-def _ranks(uow: UnitOfWork, run_id: int) -> dict[int, int]:
+def _ranks(uow: UnitOfWork, run: Run) -> dict[int, int]:
     """Priority rank of each signal within its PAM (1 = act first): category weight, then name."""
     by_pam: dict[int, list[tuple[int, str, int]]] = defaultdict(list)
     for rid, pam_id, cat, name in uow.session.execute(
         select(ResearchResult.id, ResearchResult.pam_id, ResearchResult.category, Company.name)
         .join(Company, Company.id == ResearchResult.company_id)
-        .where(ResearchResult.run_id == run_id, ResearchResult.status == RES_SIGNAL)
+        .where(*in_run(run), ResearchResult.status == RES_SIGNAL)
     ):
         by_pam[pam_id or 0].append((-CAT_WEIGHT.get(cat or "", 0), name.lower(), rid))
     ranks = {}
@@ -344,7 +360,7 @@ def query_signals(uow: UnitOfWork, q: dict[str, Any]) -> dict[str, Any]:
     page, size = int(q.get("page") or 0), int(q.get("pageSize") or 50)
     if run is None:
         return {"rows": [], "total": 0, "page": page, "pageSize": size, "counts": counts}
-    conds = [ResearchResult.run_id == run.id]
+    conds = [*in_run(run)]
     if q.get("pamId"):
         conds.append(ResearchResult.pam_id == (_int(q["pamId"]) or 0))
     for t in _tokens(q.get("search")):
@@ -371,7 +387,7 @@ def query_signals(uow: UnitOfWork, q: dict[str, Any]) -> dict[str, Any]:
         .order_by(_weight_expr().desc(), Company.name, ResearchResult.id)
         .limit(size).offset(page * size)
     ).all()
-    ranks = _ranks(uow, run.id) if any(r.status == RES_SIGNAL for r, _, _ in rows) else {}
+    ranks = _ranks(uow, run) if any(r.status == RES_SIGNAL for r, _, _ in rows) else {}
     return {"rows": [_signal_row(r, c, pn, ranks.get(r.id)) for r, c, pn in rows], "total": total, "page": page, "pageSize": size, "counts": counts}
 
 
@@ -380,12 +396,12 @@ def digest(uow: UnitOfWork, run_id: str, pam_id: str) -> dict[str, Any] | None:
     pam = uow.session.get(Pam, _int(pam_id) or 0)
     if run is None or pam is None:
         return None
-    ranks = _ranks(uow, run.id)
+    ranks = _ranks(uow, run)
     rows = [
         _signal_row(r, c, pam.name, ranks.get(r.id))
         for r, c in uow.session.execute(
             select(ResearchResult, Company).join(Company, Company.id == ResearchResult.company_id)
-            .where(ResearchResult.run_id == run.id, ResearchResult.pam_id == pam.id)
+            .where(*in_run(run), ResearchResult.pam_id == pam.id)
         )
     ]
     rows.sort(key=lambda x: ((x["priority"] or {}).get("rank") or 999, x["companyName"].lower()))
@@ -413,44 +429,62 @@ def _next_run(uow: UnitOfWork) -> dict[str, Any] | None:
             "importId": str(r.import_id) if r.import_id else None}
 
 
-def dashboard(uow: UnitOfWork, pam_id: str | None) -> dict[str, Any]:
-    pid = _int(pam_id) if pam_id else None
-    company_q = select(func.count(Company.id)).where(Company.active.is_(True))
-    if pid:
-        company_q = company_q.where(Company.pam_id == pid)
-    base = {
-        "logos": uow.session.scalar(company_q) or 0,
-        "activePams": uow.session.scalar(select(func.count(Pam.id)).where(Pam.active.is_(True))) or 0,
+def dashboard_base(uow: UnitOfWork) -> dict[str, Any]:
+    """Everything the dashboard shows, for every PAM at once (JSON-shaped, cached once for all users);
+    `dashboard_view` narrows it to one PAM at request time."""
+    s = uow.session
+    by_pam = {str(pid or 0): n for pid, n in s.execute(
+        select(Company.pam_id, func.count(Company.id)).where(Company.active.is_(True)).group_by(Company.pam_id))}
+    base: dict[str, Any] = {
+        "logosAll": sum(by_pam.values()), "logosByPam": by_pam,
+        "activePams": s.scalar(select(func.count(Pam.id)).where(Pam.active.is_(True))) or 0,
         "recentRuns": list_runs(uow, 4),
         "nextRun": _next_run(uow),
         "monthSpend": round(finops_svc.month_spend(uow), 2),
         "monthBudget": get_settings().monthly_budget_usd,
+        "latestRun": None,
     }
-    run = _latest_finished(uow) or uow.session.scalars(select(Run).order_by(Run.id.desc()).limit(1)).first()
+    run = _latest_finished(uow) or s.scalars(select(Run).order_by(Run.id.desc()).limit(1)).first()
     if run is None:
-        return base | {"latestRun": None, "scoped": 0, "signals": 0, "emailSent": 0, "emailTotal": 0, "whatsappSent": 0, "whatsappTotal": 0,
-                       "topPriority": [], "byCategory": [], "deliveryAttention": []}
-
-    summary = run_summaries(uow, [run])[0]
-    conds = [ResearchResult.run_id == run.id] + ([ResearchResult.pam_id == pid] if pid else [])
-    rows = uow.session.execute(
+        return base
+    scoped: Counter[str] = Counter()
+    signals = []
+    for rid, pid, status, cat, why, act, cid, cname, pname in s.execute(
         select(ResearchResult.id, ResearchResult.pam_id, ResearchResult.status, ResearchResult.category, ResearchResult.key_signals,
                ResearchResult.outreach, Company.id, Company.name, Pam.name)
-        .join(Company, Company.id == ResearchResult.company_id).outerjoin(Pam, Pam.id == ResearchResult.pam_id).where(*conds)
-    ).all()
-    signals = [r for r in rows if r[2] == RES_SIGNAL]
-    ranks = _ranks(uow, run.id) if signals else {}
-    candidates = signals if pid else [r for r in signals if ranks.get(r[0]) == 1]
-    if pid:
-        candidates.sort(key=lambda r: (ranks.get(r[0], 999), r[7].lower()))
-    else:
-        candidates.sort(key=lambda r: (-CAT_WEIGHT.get(r[3] or "", 0), r[7].lower()))
-    top = [{"runId": str(run.id), "pamId": str(r[1] or ""), "companyId": str(r[6]), "rank": ranks.get(r[0], 1), "whyNow": plain(r[4]),
-            "action": plain(r[5]), "companyName": r[7], "category": r[3], "pamName": r[8] or "Unassigned"} for r in candidates[:6]]
+        .join(Company, Company.id == ResearchResult.company_id).outerjoin(Pam, Pam.id == ResearchResult.pam_id).where(*in_run(run))
+    ):
+        scoped[str(pid or 0)] += 1
+        if status == RES_SIGNAL:
+            signals.append({"id": rid, "pamId": pid, "category": cat, "whyNow": plain(why), "action": plain(act), "companyId": cid,
+                            "companyName": cname, "pamName": pname})
+    ranks = _ranks(uow, run) if signals else {}
+    for x in signals:
+        x["rank"] = ranks.get(x["id"])
+    jobs = [{k: v for k, v in j.items() if k != "_hay"} for j in _jobs_with_names(uow, run)]
+    return base | {"latestRun": run_summaries(uow, [run])[0], "runId": run.id, "scopedByPam": dict(scoped),
+                   "scopedAll": sum(scoped.values()), "signalRows": signals, "jobs": jobs}
 
-    jobs = _jobs_with_names(uow, run)
-    for j in jobs:
-        j.pop("_hay", None)
+
+def dashboard_view(base: dict[str, Any], pam_id: str | None) -> dict[str, Any]:
+    """Apply the PAM filter to the shared dashboard dataset (never mutates `base`)."""
+    pid = _int(pam_id) if pam_id else None
+    out = {k: base[k] for k in ("activePams", "recentRuns", "nextRun", "monthSpend", "monthBudget")}
+    out["logos"] = base["logosByPam"].get(str(pid), 0) if pid else base["logosAll"]
+    summary = base.get("latestRun")
+    if summary is None:
+        return out | {"latestRun": None, "scoped": 0, "signals": 0, "emailSent": 0, "emailTotal": 0, "whatsappSent": 0, "whatsappTotal": 0,
+                      "topPriority": [], "byCategory": [], "deliveryAttention": []}
+    signals = [x for x in base["signalRows"] if not pid or x["pamId"] == pid]
+    candidates = signals if pid else [x for x in signals if x["rank"] == 1]
+    if pid:
+        candidates = sorted(candidates, key=lambda x: (x["rank"] or 999, x["companyName"].lower()))
+    else:
+        candidates = sorted(candidates, key=lambda x: (-CAT_WEIGHT.get(x["category"] or "", 0), x["companyName"].lower()))
+    top = [{"runId": str(base["runId"]), "pamId": str(x["pamId"] or ""), "companyId": str(x["companyId"]), "rank": x["rank"] or 1,
+            "whyNow": x["whyNow"], "action": x["action"], "companyName": x["companyName"], "category": x["category"],
+            "pamName": x["pamName"] or "Unassigned"} for x in candidates[:6]]
+    jobs = base["jobs"]
     if pid:
         mine = [j for j in jobs if j["pamId"] == str(pid)]
         attention = mine
@@ -460,15 +494,19 @@ def dashboard(uow: UnitOfWork, pam_id: str | None) -> dict[str, Any]:
         attention = sorted([j for j in jobs if _attention(j)], key=lambda j: (j["email"] != "failed", j["pamName"].lower()))[:6]
         email = (summary["emailSent"], summary["pamJobsTotal"])
         wa = (summary["whatsappSent"], summary["whatsappEligible"])
-    return base | {
+    return out | {
         "latestRun": summary,
-        "scoped": len(rows),
+        "scoped": base["scopedByPam"].get(str(pid), 0) if pid else base["scopedAll"],
         "signals": len(signals),
         "emailSent": email[0], "emailTotal": email[1], "whatsappSent": wa[0], "whatsappTotal": wa[1],
         "topPriority": top,
-        "byCategory": [{"category": c, "count": n} for c, n in Counter(r[3] or "Other" for r in signals).most_common()],
+        "byCategory": [{"category": c, "count": n} for c, n in Counter(x["category"] or "Other" for x in signals).most_common()],
         "deliveryAttention": attention,
     }
+
+
+def dashboard(uow: UnitOfWork, pam_id: str | None) -> dict[str, Any]:
+    return dashboard_view(dashboard_base(uow), pam_id)
 
 
 # --- Companies ------------------------------------------------------------------------------------
@@ -482,11 +520,11 @@ def pam_options(uow: UnitOfWork, pams: list[Pam]) -> list[dict[str, Any]]:
 
 
 def _signal_stats(uow: UnitOfWork, company_ids: list[int] | None = None) -> dict[int, tuple[int, date | None]]:
-    q = (select(ResearchResult.company_id, func.count(ResearchResult.id), func.max(Run.window_end))
-         .join(Run, Run.id == ResearchResult.run_id).where(ResearchResult.status == RES_SIGNAL).group_by(ResearchResult.company_id))
-    if company_ids is not None:
-        q = q.where(ResearchResult.company_id.in_(company_ids))
-    return {cid: (n, last) for cid, n, last in uow.session.execute(q)}
+    """Signals per company and the newest signal's window end, from the incremental roll-up
+    (company_signal_summary), never an aggregate over every partition of research_results."""
+    from app.services import company_stats
+
+    return company_stats.stats(uow, company_ids)
 
 
 def _cycles(uow: UnitOfWork, company_ids: list[int]) -> dict[int, list[dict[str, str]]]:
@@ -505,7 +543,7 @@ def _latest_map(uow: UnitOfWork) -> dict[int, tuple[str, str | None]]:
     if run is None:
         return {}
     return {cid: (_ui_status(st), cat) for cid, st, cat in uow.session.execute(
-        select(ResearchResult.company_id, ResearchResult.status, ResearchResult.category).where(ResearchResult.run_id == run.id))}
+        select(ResearchResult.company_id, ResearchResult.status, ResearchResult.category).where(*in_run(run)))}
 
 
 def _company_rows(rows: list[tuple], latest: dict, stats: dict, cycles: dict) -> list[dict[str, Any]]:
@@ -519,57 +557,86 @@ def _company_rows(rows: list[tuple], latest: dict, stats: dict, cycles: dict) ->
     return out
 
 
-def query_companies(uow: UnitOfWork, q: dict[str, Any]) -> dict[str, Any]:
+# Base row layout (JSON list, shared by every user): see company_base().
+_C_ID, _C_NAME, _C_IND, _C_SEG, _C_PAM, _C_PAMNAME, _C_PAMMAIL, _C_ST, _C_CAT, _C_N, _C_LAST = range(11)
+
+
+def company_base(uow: UnitOfWork) -> dict[str, Any]:
+    """Every active company with its PAM, latest status and signal roll-up (one row each, JSON-shaped).
+    Cached once for all users; `companies_view` filters, sorts and pages it per request."""
+    latest = _latest_map(uow)
+    stats = _signal_stats(uow)
+    rows = []
+    for cid, name, industry, segment, pam_id, pam_name, pam_email in uow.session.execute(
+        select(Company.id, Company.name, Company.industry, Company.segment, Company.pam_id, Pam.name, Pam.email)
+        .outerjoin(Pam, Pam.id == Company.pam_id).where(Company.active.is_(True))
+    ):
+        st, cat = latest.get(cid, ("none", None))
+        n, last = stats.get(cid, (0, None))
+        rows.append([cid, name, industry, segment, pam_id, pam_name, pam_email, st, cat, n, last.isoformat() if last else None])
+    return {"rows": rows}
+
+
+def companies_view(base: dict[str, Any], q: dict[str, Any], cycles_for) -> dict[str, Any]:
+    """Filters, facets, sort and page over the shared company dataset. `cycles_for(ids)` loads the
+    research history of the returned page only. Never mutates `base`."""
     t0 = datetime.now(UTC)
-    stmt = (select(Company.id, Company.name, Company.industry, Company.segment, Company.pam_id, Pam.name, Pam.email)
-            .outerjoin(Pam, Pam.id == Company.pam_id).where(Company.active.is_(True)))
-    if q.get("scopePamId"):
-        stmt = stmt.where(Company.pam_id == (_int(q["scopePamId"]) or 0))
+    scope = _int(q["scopePamId"]) or 0 if q.get("scopePamId") else None
     pam_set = {_int(x) for x in q.get("pamIds") or []} or None
     segments = set(q.get("segments") or []) or None
     latest_set = set(q.get("latest") or []) or None
     toks = _tokens(q.get("search"))
-    latest = _latest_map(uow)
-
     facets: dict[str, dict[str, int]] = {"segment": {}, "latest": {}}
     hits = []
-    for cid, name, industry, segment, pam_id, pam_name, pam_email in uow.session.execute(stmt):
+    for r in base["rows"]:
+        if scope is not None and r[_C_PAM] != scope:
+            continue
         if toks:
-            hay = f"{name} {industry or ''} {pam_name or ''} {pam_email or ''}".lower()
+            hay = f"{r[_C_NAME]} {r[_C_IND] or ''} {r[_C_PAMNAME] or ''} {r[_C_PAMMAIL] or ''}".lower()
             if not all(t in hay for t in toks):
                 continue
-        if pam_set and pam_id not in pam_set:
+        if pam_set and r[_C_PAM] not in pam_set:
             continue
-        lst = latest.get(cid, ("none", None))[0]
-        seg_key = segment or "Unspecified"
+        seg_key = r[_C_SEG] or "Unspecified"
         m_s = not segments or seg_key in segments
-        m_l = not latest_set or lst in latest_set
+        m_l = not latest_set or r[_C_ST] in latest_set
         if m_l:
             facets["segment"][seg_key] = facets["segment"].get(seg_key, 0) + 1
         if m_s:
-            facets["latest"][lst] = facets["latest"].get(lst, 0) + 1
+            facets["latest"][r[_C_ST]] = facets["latest"].get(r[_C_ST], 0) + 1
         if m_s and m_l:
-            hits.append((cid, name, industry, segment, pam_id, pam_name))
+            hits.append(r)
 
     sort = q.get("sort") or {"id": "name", "desc": False}
     desc = bool(sort.get("desc"))
     if sort.get("id") in ("signals", "lastSignal"):
-        stats_all = _signal_stats(uow)
-        idx = 0 if sort["id"] == "signals" else 1
-        hits.sort(key=lambda h: h[1].lower())
-        hits.sort(key=lambda h: (stats_all.get(h[0], (0, None))[idx] or (0 if idx == 0 else date.min)), reverse=desc)
+        hits.sort(key=lambda h: h[_C_NAME].lower())
+        if sort["id"] == "signals":
+            hits.sort(key=lambda h: h[_C_N] or 0, reverse=desc)
+        else:
+            hits.sort(key=lambda h: h[_C_LAST] or "", reverse=desc)  # ISO dates sort as strings
     elif sort.get("id") == "pam":
-        hits.sort(key=lambda h: ((h[5] or "~").lower(), h[1].lower()), reverse=desc)
+        hits.sort(key=lambda h: ((h[_C_PAMNAME] or "~").lower(), h[_C_NAME].lower()), reverse=desc)
     elif sort.get("id") == "segment":
-        hits.sort(key=lambda h: ((h[3] or "~").lower(), h[1].lower()), reverse=desc)
+        hits.sort(key=lambda h: ((h[_C_SEG] or "~").lower(), h[_C_NAME].lower()), reverse=desc)
     else:
-        hits.sort(key=lambda h: h[1].lower(), reverse=desc)
+        hits.sort(key=lambda h: h[_C_NAME].lower(), reverse=desc)
 
     pg = _page(hits, int(q.get("page") or 0), int(q.get("pageSize") or 50))
-    ids = [h[0] for h in pg["rows"]]
-    pg["rows"] = _company_rows(pg["rows"], latest, _signal_stats(uow, ids), _cycles(uow, ids))
+    cycles = cycles_for([h[_C_ID] for h in pg["rows"]]) if pg["rows"] else {}
+    pg["rows"] = [
+        {"id": str(h[_C_ID]), "name": h[_C_NAME], "industry": h[_C_IND] or "", "segment": h[_C_SEG],
+         "pamId": str(h[_C_PAM]) if h[_C_PAM] else None, "pamName": h[_C_PAMNAME] or "Unassigned", "latestStatus": h[_C_ST],
+         "latestCategory": h[_C_CAT] if h[_C_ST] == "signal" else None, "signals": h[_C_N], "lastSignal": h[_C_LAST],
+         "cycles": cycles.get(h[_C_ID], [])}
+        for h in pg["rows"]
+    ]
     took = (datetime.now(UTC) - t0).total_seconds() * 1000
     return pg | {"facets": facets, "tookMs": round(took, 1)}
+
+
+def query_companies(uow: UnitOfWork, q: dict[str, Any]) -> dict[str, Any]:
+    return companies_view(company_base(uow), q, lambda ids: _cycles(uow, ids))
 
 
 def search_companies(uow: UnitOfWork, q: str, limit: int) -> list[dict[str, Any]]:
@@ -616,20 +683,25 @@ def _pam_card(p: Pam, loads: dict[int, int], segments: dict[int, str | None], ca
             "capacity": cap, "notifyEmail": p.notify_email, "notifyWhatsapp": p.notify_whatsapp, "load": loads.get(p.id, 0)}
 
 
-def query_pams(uow: UnitOfWork, q: dict[str, Any]) -> dict[str, Any]:
-    t0 = datetime.now(UTC)
+def pam_base(uow: UnitOfWork) -> dict[str, Any]:
+    """Every PAM as a card (JSON-shaped), cached once for all users; `pams_view` filters per request."""
     loads, segments = accounts.pam_profiles(uow)
     cap = get_settings().pam_default_capacity
+    cards = [_pam_card(p, loads, segments, cap) for p in uow.session.scalars(select(Pam))]
+    return {"cards": cards, "activeTotal": sum(1 for c in cards if c["active"])}
+
+
+def pams_view(base: dict[str, Any], q: dict[str, Any]) -> dict[str, Any]:
+    t0 = datetime.now(UTC)
     toks = _tokens(q.get("search"))
     seg_f = set(q.get("segments") or []) or None
     st_f = set(q.get("status") or []) or None
     facets: dict[str, dict[str, int]] = {"segment": {}, "status": {}}
-    hits, active_total = [], 0
-    for p in uow.session.scalars(select(Pam)):
-        st = "active" if p.active else "inactive"
-        active_total += p.active
-        seg = segments.get(p.id) or "Unspecified"
-        if toks and not all(t in f"{p.name} {p.email} {seg}".lower() for t in toks):
+    hits = []
+    for c in base["cards"]:
+        st = "active" if c["active"] else "inactive"
+        seg = c["segment"] or "Unspecified"
+        if toks and not all(t in f"{c['name']} {c['email']} {seg}".lower() for t in toks):
             continue
         m_s, m_t = not seg_f or seg in seg_f, not st_f or st in st_f
         if m_t:
@@ -637,21 +709,24 @@ def query_pams(uow: UnitOfWork, q: dict[str, Any]) -> dict[str, Any]:
         if m_s:
             facets["status"][st] = facets["status"].get(st, 0) + 1
         if m_s and m_t:
-            hits.append(p)
+            hits.append(c)
     sort = q.get("sort") or {"id": "name", "desc": False}
     desc = bool(sort.get("desc"))
-    hits.sort(key=lambda p: p.name.lower())
+    hits.sort(key=lambda c: c["name"].lower())
     if sort.get("id") == "load":
-        hits.sort(key=lambda p: loads.get(p.id, 0), reverse=desc)
+        hits.sort(key=lambda c: c["load"], reverse=desc)
     elif sort.get("id") == "segment":
-        hits.sort(key=lambda p: segments.get(p.id) or "~", reverse=desc)
+        hits.sort(key=lambda c: c["segment"] or "~", reverse=desc)
     elif sort.get("id") == "status":
-        hits.sort(key=lambda p: not p.active, reverse=desc)
+        hits.sort(key=lambda c: not c["active"], reverse=desc)
     elif desc:
         hits.reverse()
     pg = _page(hits, int(q.get("page") or 0), int(q.get("pageSize") or 50))
-    pg["rows"] = [_pam_card(p, loads, segments, cap) for p in pg["rows"]]
-    return pg | {"facets": facets, "activeTotal": active_total, "tookMs": round((datetime.now(UTC) - t0).total_seconds() * 1000, 1)}
+    return pg | {"facets": facets, "activeTotal": base["activeTotal"], "tookMs": round((datetime.now(UTC) - t0).total_seconds() * 1000, 1)}
+
+
+def query_pams(uow: UnitOfWork, q: dict[str, Any]) -> dict[str, Any]:
+    return pams_view(pam_base(uow), q)
 
 
 def search_pams(uow: UnitOfWork, q: str, limit: int, active_only: bool, exclude_id: str | None) -> list[dict[str, Any]]:
@@ -739,7 +814,7 @@ def live_snapshot(uow: UnitOfWork, run_id: str) -> dict[str, Any]:
     rows = uow.session.execute(
         select(ResearchResult.company_id, Company.name, Pam.name, ResearchResult.status)
         .join(Company, Company.id == ResearchResult.company_id).outerjoin(Pam, Pam.id == ResearchResult.pam_id)
-        .where(ResearchResult.run_id == run.id).order_by(Pam.name, Company.name, ResearchResult.id)
+        .where(*in_run(run)).order_by(Pam.name, Company.name, ResearchResult.id)
     ).all()
     statuses = [CODE.get(st, 0) for *_, st in rows]
     aggs = _aggs(uow, [run.id])[run.id]
@@ -761,7 +836,7 @@ def live_changes(uow: UnitOfWork, run_id: str, since: datetime | None) -> dict[s
         {"companyId": str(cid), "s": CODE.get(st, 0), "category": cat if st == RES_SIGNAL else None, "at": int(_aware(fin).timestamp() * 1000)}
         for cid, st, cat, fin in uow.session.execute(
             select(ResearchResult.company_id, ResearchResult.status, ResearchResult.category, ResearchResult.finished_at)
-            .where(ResearchResult.run_id == run.id, ResearchResult.finished_at > since - timedelta(seconds=2), ResearchResult.status.in_(RES_TERMINAL))
+            .where(*in_run(run), ResearchResult.finished_at > since - timedelta(seconds=2), ResearchResult.status.in_(RES_TERMINAL))
             .order_by(ResearchResult.finished_at)
         )
     ]

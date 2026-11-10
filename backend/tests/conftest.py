@@ -38,6 +38,10 @@ def env(tmp_path, monkeypatch):
     for fn in (get_settings, db_session.get_engine, db_session.get_sessionmaker):
         fn.cache_clear()
     providers.clear_cache()
+    cache.local.clear()  # the in-process cache tier outlives a test; ids restart in every fresh database
+    from app.db import partitions
+
+    partitions.clear_cache()
     from app.db import models  # noqa: F401
 
     Base.metadata.create_all(db_session.get_engine())

@@ -1,5 +1,9 @@
 """Audit trail. `record()` writes inside the caller's transaction, so the audit row commits or
-rolls back together with the change it describes."""
+rolls back together with the change it describes.
+
+The table is partitioned by month (`nov__2026__audit`), but the hash chain is one chain across all
+months: `audit_chain_head` holds the newest id/hash, so appending is O(1) whatever the partition
+count, and `verify_chain` walks every partition in id order."""
 
 import hashlib
 import json
@@ -9,7 +13,7 @@ from sqlalchemy import select
 
 from app.core.context import actor_var, client_ip_var, request_id_var, user_agent_var
 from app.core.timeutil import utcnow
-from app.db.models import AuditLog
+from app.db.models import AuditChainHead, AuditLog
 from app.db.session import LOCK_AUDIT_CHAIN, UnitOfWork
 
 GENESIS = "0" * 64
@@ -48,7 +52,8 @@ def record(
     so GET /runs/{id}/audit returns the run's full trail."""
     uow.advisory_lock(LOCK_AUDIT_CHAIN)  # serialise the chain across concurrent writers
     s = uow.session
-    prev = s.execute(select(AuditLog.hash).order_by(AuditLog.id.desc()).limit(1)).scalar() or GENESIS
+    head = _head(uow)
+    prev = head.last_hash
     entry = AuditLog(
         ts=utcnow().replace(microsecond=0),
         actor=actor or actor_var.get() or "system",
@@ -65,7 +70,22 @@ def record(
     entry.hash = _digest(prev, _content(entry))
     s.add(entry)
     s.flush()
+    head.last_id, head.last_hash = entry.id, entry.hash
+    s.flush()
     return entry
+
+
+def _head(uow: UnitOfWork) -> AuditChainHead:
+    """The chain head row (created on first use from the newest audit row, so an existing chain
+    continues). The caller holds LOCK_AUDIT_CHAIN. One chain spans every monthly partition."""
+    s = uow.session
+    head = s.get(AuditChainHead, 1, populate_existing=True)
+    if head is None:
+        last = s.execute(select(AuditLog.id, AuditLog.hash).order_by(AuditLog.id.desc()).limit(1)).first()
+        head = AuditChainHead(id=1, last_id=last[0] if last else 0, last_hash=last[1] if last else GENESIS)
+        s.add(head)
+        s.flush()
+    return head
 
 
 def verify_chain(uow: UnitOfWork, batch: int = 5000) -> dict[str, Any]:

@@ -31,10 +31,6 @@ log = logging.getLogger("ttbs.http")
 def _state_gauges() -> bytes:
     """Point-in-time pipeline state, computed per scrape from the database and the broker."""
     import redis
-    from sqlalchemy import func, select
-
-    from app.db.models import NOTE_PENDING, RES_PENDING, RES_RUNNING, RUN_ACTIVE, Notification, ResearchResult, Run
-    from app.db.session import unit_of_work
 
     reg = CollectorRegistry()
     g_runs = Gauge("ttbs_runs_active", "Runs scheduled, queued or running", registry=reg)
@@ -42,12 +38,14 @@ def _state_gauges() -> bytes:
     g_notes = Gauge("ttbs_notifications_pending", "Digests waiting to be delivered", registry=reg)
     g_queue = Gauge("ttbs_queue_depth", "Messages waiting in the broker", ["queue"], registry=reg)
     try:
-        with unit_of_work() as uow:
-            s = uow.session
-            g_runs.set(s.scalar(select(func.count(Run.id)).where(Run.status.in_(RUN_ACTIVE))) or 0)
-            g_res.labels("pending").set(s.scalar(select(func.count(ResearchResult.id)).where(ResearchResult.status == RES_PENDING)) or 0)
-            g_res.labels("running").set(s.scalar(select(func.count(ResearchResult.id)).where(ResearchResult.status == RES_RUNNING)) or 0)
-            g_notes.set(s.scalar(select(func.count(Notification.id)).where(Notification.status == NOTE_PENDING)) or 0)
+        from app.api.routes import QUEUE_COUNTS_TTL_S, outstanding_work
+        from app.core import cache
+
+        db = cache.shared("queues", "db", QUEUE_COUNTS_TTL_S, outstanding_work)
+        g_runs.set(db["runsActive"])
+        g_res.labels("pending").set(db["researchPending"])
+        g_res.labels("running").set(db["researchRunning"])
+        g_notes.set(db["notificationsPending"])
     except Exception:  # noqa: BLE001 - a scrape must not fail because the DB blinked
         log.warning("metrics: database gauges unavailable", exc_info=True)
     try:

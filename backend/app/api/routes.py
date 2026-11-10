@@ -356,8 +356,8 @@ def run_results(run_id: int, pg: tuple[int, int] = Depends(_page), status: str |
     status `pending` also covers companies being researched right now."""
     page, size = pg
     with unit_of_work() as uow:
-        runs.get_run(uow, run_id)
-        conds = [ResearchResult.run_id == run_id]
+        run = runs.get_run(uow, run_id)
+        conds = [ResearchResult.run_id == run_id, ResearchResult.part_month == run.part_month]  # one partition
         if status:
             conds.append(ResearchResult.status.in_([RES_PENDING, RES_RUNNING] if status == RES_PENDING else [status]))
         base = select(ResearchResult).join(Company, Company.id == ResearchResult.company_id)
@@ -371,7 +371,8 @@ def run_results(run_id: int, pg: tuple[int, int] = Depends(_page), status: str |
         rows = uow.session.scalars(base.where(*conds).order_by(*order).limit(size).offset(page * size))
         cq = cq.where(*conds)
         counts = dict(uow.session.execute(
-            select(ResearchResult.status, func.count()).where(ResearchResult.run_id == run_id).group_by(ResearchResult.status)
+            select(ResearchResult.status, func.count())
+            .where(ResearchResult.run_id == run_id, ResearchResult.part_month == run.part_month).group_by(ResearchResult.status)
         ).all())
         return {"rows": [sch.result_out(r) for r in rows], "total": uow.session.scalar(cq) or 0, "page": page,
                 "pageSize": size, "counts": counts}
@@ -395,7 +396,7 @@ def run_timeline(run_id: int) -> dict[str, Any]:
     failures, skips), and per-minute research throughput."""
     with unit_of_work() as uow:
         run = runs.get_run(uow, run_id)
-        return telemetry.run_timeline(uow, run.id, run.import_id)
+        return telemetry.run_timeline(uow, run.id, run.import_id, run_started=run.created_at)
 
 
 @router.get("/runs/{run_id}/events")
@@ -406,9 +407,9 @@ def run_events(
     """Every process event of a run (one per research attempt, delivery attempt, …), newest first."""
     page, size = pg
     with unit_of_work() as uow:
-        runs.get_run(uow, run_id)
+        run = runs.get_run(uow, run_id)
         return telemetry.query(uow, page=page, size=size, kind=kind, status=status, run_id=run_id, company_id=company_id,
-                               where=conditions(spec.EVENTS, lst),
+                               run_started=run.created_at, where=conditions(spec.EVENTS, lst),
                                order=ordering(spec.EVENTS, lst, [], ProcessEvent.id) if lst.sort else None)
 
 
@@ -417,16 +418,16 @@ def run_audit(run_id: int, pg: tuple[int, int] = Depends(_page), lst: Listing = 
     """The run's audit trail (hash-chained rows tagged with this run), oldest first."""
     page, size = pg
     with unit_of_work() as uow:
-        runs.get_run(uow, run_id)
+        run = runs.get_run(uow, run_id)
         return telemetry.run_audit(uow, run_id, page, size, where=conditions(spec.AUDIT, lst),
-                                   order=ordering(spec.AUDIT, lst, [], AuditLog.id) if lst.sort else None)
+                                   order=ordering(spec.AUDIT, lst, [], AuditLog.id) if lst.sort else None, run_started=run.created_at)
 
 
 @router.get("/runs/{run_id}/costs")
 def run_costs(run_id: int) -> dict[str, Any]:
     with unit_of_work() as uow:
-        runs.get_run(uow, run_id)
-        return finops.run_costs(uow, run_id)
+        run = runs.get_run(uow, run_id)
+        return finops.run_costs(uow, run_id, run_started=run.created_at)
 
 
 # --- Telemetry ---------------------------------------------------------------------------------
@@ -441,6 +442,18 @@ def telemetry_summary(hours: int = Query(24, ge=1, le=24 * 31)) -> dict[str, Any
     return cache.cached("telemetry", f"summary:{hours}", 10, load)
 
 
+@router.get("/telemetry/partitions")
+def telemetry_partitions() -> dict[str, Any]:
+    """Monthly partitions of the high-volume tables (`nov__2026__job`, …) with approximate rows and
+    size (information_schema estimates; no table scans). Empty off MySQL."""
+    from app.db import partitions
+
+    return {"partitions": partitions.overview()}
+
+
+DEFAULT_EVENT_HOURS = 24 * 7
+
+
 @router.get("/telemetry/events")
 def telemetry_events(
     pg: tuple[int, int] = Depends(_page), kind: str | None = None, status: str | None = None,
@@ -453,6 +466,8 @@ def telemetry_events(
     from app.core.timeutil import utcnow
 
     page, size = pg
+    if hours is None and run_id is None and import_id is None:
+        hours = DEFAULT_EVENT_HOURS  # an unbounded scan over every month of logs is never what the page needs
     with unit_of_work() as uow:
         return telemetry.query(uow, page=page, size=size, kind=kind, status=status, run_id=run_id, import_id=import_id,
                                since=utcnow() - timedelta(hours=hours) if hours else None,
@@ -496,15 +511,23 @@ def queues() -> dict[str, Any]:
             depth[q] = int(r.llen(q))
     except redis.RedisError:
         depth = {q: None for q in ("research", "notify", "maintenance")}
+    return {"broker": depth, "db": cache.shared("queues", "db", QUEUE_COUNTS_TTL_S, outstanding_work)}
+
+
+QUEUE_COUNTS_TTL_S = 5
+
+
+def outstanding_work() -> dict[str, int]:
+    """Outstanding work from the database (index-only counts on (status, enqueued_at)); shared by
+    /queues and the Prometheus gauges through the cache, so polling never multiplies the scans."""
     with unit_of_work() as uow:
         s = uow.session
-        db = {
+        return {
             "runsActive": s.scalar(select(func.count(Run.id)).where(Run.status.in_(RUN_ACTIVE))) or 0,
             "researchPending": s.scalar(select(func.count(ResearchResult.id)).where(ResearchResult.status == RES_PENDING)) or 0,
             "researchRunning": s.scalar(select(func.count(ResearchResult.id)).where(ResearchResult.status == RES_RUNNING)) or 0,
             "notificationsPending": s.scalar(select(func.count(Notification.id)).where(Notification.status == NOTE_PENDING)) or 0,
         }
-    return {"broker": depth, "db": db}
 
 
 # --- Research AI settings (provider + key + model; one active at a time) -----------------------
@@ -568,15 +591,15 @@ def list_audit(
 ) -> dict[str, Any]:
     page, size = pg
     with unit_of_work() as uow:
-        extra = conditions(spec.AUDIT, lst)
-        q = select(AuditLog).where(*extra)
-        cq = select(func.count(AuditLog.id)).where(*extra)
+        conds = list(conditions(spec.AUDIT, lst))
         for col, val in ((AuditLog.action, action), (AuditLog.entity_type, entity_type), (AuditLog.entity_id, entity_id)):
             if val:
-                q, cq = q.where(col == val), cq.where(col == val)
-        rows = uow.session.scalars(q.order_by(*ordering(spec.AUDIT, lst, [], AuditLog.id.desc() if not lst.sort else AuditLog.id))
+                conds.append(col == val)
+        rows = uow.session.scalars(select(AuditLog).where(*conds)
+                                   .order_by(*ordering(spec.AUDIT, lst, [], AuditLog.id.desc() if not lst.sort else AuditLog.id))
                                    .limit(size).offset(page * size))
-        return {"rows": [sch.audit_out(a) for a in rows], "total": uow.session.scalar(cq) or 0, "page": page, "pageSize": size}
+        total, capped = telemetry.capped_count(uow, AuditLog.id, conds)  # never a full count(*) over every month
+        return {"rows": [sch.audit_out(a) for a in rows], "total": total, "totalCapped": capped, "page": page, "pageSize": size}
 
 
 @router.get("/audit/verify")

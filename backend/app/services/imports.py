@@ -33,7 +33,7 @@ from typing import Any
 
 from email_validator import EmailNotValidError, validate_email
 from openpyxl import load_workbook
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import func, insert, select, update
 
 from app.core import cache, metrics
 from app.core.config import get_settings
@@ -917,7 +917,10 @@ def delete_rows(uow: UnitOfWork, batch_id: int, company_ids: list[int], actor: s
     """Remove companies from a dataset. A company in no other dataset stops being tracked."""
     b = get_dataset(uow, batch_id)
     ids = sorted(set(company_ids))
-    removed = uow.session.execute(delete(DatasetCompany).where(DatasetCompany.import_id == b.id, DatasetCompany.company_id.in_(ids))).rowcount or 0
+    from app.services import soft_delete
+
+    removed = soft_delete.archive(uow, DatasetCompany, DatasetCompany.import_id == b.id, DatasetCompany.company_id.in_(ids),
+                                  actor=actor, reason=f"removed from dataset {b.id}", record_audit=False)
     still = set(uow.session.scalars(select(DatasetCompany.company_id).where(DatasetCompany.company_id.in_(ids))))
     orphans = [i for i in ids if i not in still]
     deactivated = 0

@@ -293,13 +293,13 @@ def _digest_payload(run_id: int, pam_id: int) -> dict[str, Any]:
         run, pam = s.get(Run, run_id), s.get(Pam, pam_id)
         if run is None or pam is None:
             raise NotFound("Run or PAM not found")
-        note = s.scalars(select(Notification).where(Notification.run_id == run_id, Notification.pam_id == pam_id,
-                                                    Notification.channel == "email")).first()
+        note = s.scalars(select(Notification).where(Notification.run_id == run_id, Notification.part_month == run.part_month,
+                                                    Notification.pam_id == pam_id, Notification.channel == "email")).first()
         if note is not None and (note.payload or {}).get("items") is not None:
             return dict(note.payload)
-        signals = list(s.scalars(select(ResearchResult).where(ResearchResult.run_id == run_id, ResearchResult.pam_id == pam_id,
-                                                              ResearchResult.status == RES_SIGNAL).order_by(ResearchResult.id)))
-        total = s.scalar(select(func.count(ResearchResult.id)).where(ResearchResult.run_id == run_id, ResearchResult.pam_id == pam_id)) or 0
+        in_run = (ResearchResult.run_id == run_id, ResearchResult.part_month == run.part_month, ResearchResult.pam_id == pam_id)
+        signals = list(s.scalars(select(ResearchResult).where(*in_run, ResearchResult.status == RES_SIGNAL).order_by(ResearchResult.id)))
+        total = s.scalar(select(func.count(ResearchResult.id)).where(*in_run)) or 0
         return runs.build_digest(run, pam, signals, total)
 
 

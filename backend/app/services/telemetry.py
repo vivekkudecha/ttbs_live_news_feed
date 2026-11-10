@@ -17,6 +17,7 @@ from app.core.config import get_settings
 from app.core.context import actor_var, request_id_var
 from app.core.timeutil import as_utc, utcnow
 from app.core.tracing import current_trace_id
+from app.db import partitions
 from app.db.models import AuditLog, ProcessEvent
 from app.db.session import UnitOfWork, unit_of_work
 
@@ -72,12 +73,27 @@ def _s(v: int | None) -> str | None:
     return None if v is None else str(v)
 
 
+COUNT_CAP = 10_000  # list totals stop counting here (a full count(*) over months of logs is the slowest query)
+
+
+def capped_count(uow: UnitOfWork, id_col: Any, conds: list[Any], cap: int | None = None) -> tuple[int, bool]:
+    """(count, capped): counts at most cap+1 matching rows."""
+    cap = cap or COUNT_CAP
+    sub = select(id_col).where(*conds).limit(cap + 1).subquery()
+    n = uow.session.scalar(select(func.count()).select_from(sub)) or 0
+    return min(n, cap), n > cap
+
+
 def query(uow: UnitOfWork, *, page: int, size: int, kind: str | None = None, status: str | None = None,
           run_id: int | None = None, import_id: int | None = None, company_id: int | None = None,
           since: datetime | None = None, until: datetime | None = None, newest_first: bool = True,
-          where: Any = (), order: Any = None) -> dict[str, Any]:
-    """`where` / `order`: extra conditions and ORDER BY from a table request (api/listing.py)."""
+          where: Any = (), order: Any = None, run_started: datetime | None = None) -> dict[str, Any]:
+    """`where` / `order`: extra conditions and ORDER BY from a table request (api/listing.py).
+    `run_started`: the run's creation time, so partitions older than the run are skipped."""
     conds = list(where)
+    conds += partitions.range_months(ProcessEvent.part_month, since, until)
+    if run_started is not None:
+        conds.append(partitions.since_month(ProcessEvent.part_month, run_started))
     if kind:
         conds.append(ProcessEvent.kind.like(f"{kind}%") if kind.endswith(".") else ProcessEvent.kind == kind)
     for col, val in ((ProcessEvent.status, status), (ProcessEvent.run_id, run_id), (ProcessEvent.import_id, import_id),
@@ -90,8 +106,8 @@ def query(uow: UnitOfWork, *, page: int, size: int, kind: str | None = None, sta
         conds.append(ProcessEvent.ts < until)
     order = order or [ProcessEvent.id.desc() if newest_first else ProcessEvent.id.asc()]
     rows = uow.session.scalars(select(ProcessEvent).where(*conds).order_by(*order).limit(size).offset(page * size))
-    total = uow.session.scalar(select(func.count(ProcessEvent.id)).where(*conds)) or 0
-    return {"rows": [event_out(e) for e in rows], "total": total, "page": page, "pageSize": size}
+    total, capped = capped_count(uow, ProcessEvent.id, conds)
+    return {"rows": [event_out(e) for e in rows], "total": total, "totalCapped": capped, "page": page, "pageSize": size}
 
 
 # Steps shown on a run's timeline: lifecycle + per-PAM delivery + anything that went wrong.
@@ -99,9 +115,10 @@ def query(uow: UnitOfWork, *, page: int, size: int, kind: str | None = None, sta
 _TIMELINE_KINDS = ("dataset.", "run.", "notify.", "sweeper.")
 
 
-def run_timeline(uow: UnitOfWork, run_id: int, import_id: int | None) -> dict[str, Any]:
+def run_timeline(uow: UnitOfWork, run_id: int, import_id: int | None, run_started: datetime | None = None) -> dict[str, Any]:
     s = uow.session
-    lifecycle_conds = [ProcessEvent.run_id == run_id]
+    after_run = partitions.since_month(ProcessEvent.part_month, run_started)
+    lifecycle_conds = [ProcessEvent.run_id == run_id, after_run]
     milestone = [ProcessEvent.kind.like(f"{k}%") for k in _TIMELINE_KINDS]
     problems = and_(ProcessEvent.kind.like("research.%"), ProcessEvent.status.in_((RETRY, ERROR, SKIPPED)))
     from sqlalchemy import or_
@@ -120,7 +137,7 @@ def run_timeline(uow: UnitOfWork, run_id: int, import_id: int | None) -> dict[st
     buckets: dict[str, dict[str, int]] = defaultdict(lambda: {"ok": 0, "error": 0, "retry": 0, "cached": 0})
     for ts, status, cached in s.execute(
         select(ProcessEvent.ts, ProcessEvent.status, ProcessEvent.attrs["cached"])
-        .where(ProcessEvent.run_id == run_id, ProcessEvent.kind == "research.attempt")
+        .where(ProcessEvent.run_id == run_id, after_run, ProcessEvent.kind == "research.attempt")
     ):
         b = buckets[as_utc(ts).strftime("%Y-%m-%dT%H:%M:00Z")]
         b[status if status in b else "ok"] += 1
@@ -135,7 +152,7 @@ def run_timeline(uow: UnitOfWork, run_id: int, import_id: int | None) -> dict[st
             func.sum(case((ProcessEvent.status == ERROR, 1), else_=0)),
             func.avg(case((ProcessEvent.status == OK, ProcessEvent.duration_ms))),
             func.max(ProcessEvent.duration_ms),
-        ).where(ProcessEvent.run_id == run_id, ProcessEvent.kind == "research.attempt")
+        ).where(ProcessEvent.run_id == run_id, after_run, ProcessEvent.kind == "research.attempt")
     ).one()
     return {
         "events": events,
@@ -145,18 +162,22 @@ def run_timeline(uow: UnitOfWork, run_id: int, import_id: int | None) -> dict[st
     }
 
 
-def run_audit(uow: UnitOfWork, run_id: int, page: int, size: int, where: Any = (), order: Any = None) -> dict[str, Any]:
+def run_audit(uow: UnitOfWork, run_id: int, page: int, size: int, where: Any = (), order: Any = None,
+              run_started: datetime | None = None) -> dict[str, Any]:
     from app.api.schemas import audit_out
 
     conds = [AuditLog.run_id == run_id, *where]
+    if run_started is not None:
+        conds.append(partitions.since_month(AuditLog.part_month, run_started))
     rows = uow.session.scalars(select(AuditLog).where(*conds).order_by(*(order or [AuditLog.id])).limit(size).offset(page * size))
-    total = uow.session.scalar(select(func.count(AuditLog.id)).where(*conds)) or 0
-    return {"rows": [audit_out(a) for a in rows], "total": total, "page": page, "pageSize": size}
+    total, capped = capped_count(uow, AuditLog.id, conds)
+    return {"rows": [audit_out(a) for a in rows], "total": total, "totalCapped": capped, "page": page, "pageSize": size}
 
 
 def summary(uow: UnitOfWork, hours: int) -> dict[str, Any]:
     """Telemetry page header: event volume, error rate, research latency percentiles, by kind."""
     since = utcnow() - timedelta(hours=hours)
+    recent = partitions.range_months(ProcessEvent.part_month, since, None)  # only the months in the window
     s = uow.session
     by_kind = [
         {"kind": k, "total": t, "ok": int(o or 0), "retry": int(r or 0), "error": int(e or 0), "skipped": int(sk or 0),
@@ -169,12 +190,12 @@ def summary(uow: UnitOfWork, hours: int) -> dict[str, Any]:
                 func.sum(case((ProcessEvent.status == ERROR, 1), else_=0)),
                 func.sum(case((ProcessEvent.status == SKIPPED, 1), else_=0)),
                 func.avg(ProcessEvent.duration_ms),
-            ).where(ProcessEvent.ts >= since).group_by(ProcessEvent.kind).order_by(func.count(ProcessEvent.id).desc())
+            ).where(*recent, ProcessEvent.ts >= since).group_by(ProcessEvent.kind).order_by(func.count(ProcessEvent.id).desc())
         )
     ]
     lat = sorted(d for (d,) in s.execute(
         select(ProcessEvent.duration_ms).where(
-            ProcessEvent.ts >= since, ProcessEvent.kind == "research.attempt", ProcessEvent.status == OK,
+            *recent, ProcessEvent.ts >= since, ProcessEvent.kind == "research.attempt", ProcessEvent.status == OK,
             ProcessEvent.duration_ms.is_not(None), ProcessEvent.duration_ms > 0,
         ).order_by(ProcessEvent.id.desc()).limit(20000)
     ))
@@ -184,7 +205,7 @@ def summary(uow: UnitOfWork, hours: int) -> dict[str, Any]:
 
     # Hourly volume for the chart.
     hourly: dict[str, dict[str, int]] = defaultdict(lambda: {"ok": 0, "problem": 0})
-    for ts, status in s.execute(select(ProcessEvent.ts, ProcessEvent.status).where(ProcessEvent.ts >= since)):
+    for ts, status in s.execute(select(ProcessEvent.ts, ProcessEvent.status).where(*recent, ProcessEvent.ts >= since)):
         h = hourly[as_utc(ts).strftime("%Y-%m-%dT%H:00:00Z")]
         h["problem" if status in (RETRY, ERROR) else "ok"] += 1
     total = sum(k["total"] for k in by_kind)
