@@ -6,7 +6,7 @@ import { fmtDateTime } from "@/lib/format"
 
 /**
  * Create a schedule and, if asked, start its first run right away (then open that run live).
- * Otherwise land on the Schedules page. Every research run starts this way.
+ * Otherwise open the new schedule's page. Every research run starts this way.
  */
 export function useSaveNewSchedule(onDone?: () => void) {
   const navigate = useNavigate()
@@ -23,7 +23,7 @@ export function useSaveNewSchedule(onDone?: () => void) {
     onDone?.()
     if (!startNow) {
       toast.success(`Schedule “${s.name}” created`, { description: `${s.summary}. First run ${fmtDateTime(s.nextRunAt)}.` })
-      return navigate("/schedules")
+      return navigate(`/schedules/${s.id}`)
     }
     try {
       const run = await runNow.mutateAsync(s.id)
@@ -31,7 +31,7 @@ export function useSaveNewSchedule(onDone?: () => void) {
       navigate(`/runs/${run.id}?tab=live`)
     } catch (e) {
       toast.error("Schedule created, but its first run could not start", { description: errorMessage(e) })
-      navigate("/schedules")
+      navigate(`/schedules/${s.id}`)
     }
   }
 

@@ -73,6 +73,15 @@ def get_schedule(schedule_id: int) -> dict[str, Any]:
         return schedules.detail(uow, schedule_id)
 
 
+@router.get("/schedules/{schedule_ref}/stats")
+def schedule_stats(schedule_ref: str) -> dict[str, Any]:
+    """Dashboard numbers for one schedule's runs; `unscheduled` = runs no schedule started."""
+    if schedule_ref != "unscheduled" and not schedule_ref.isdigit():
+        raise ValidationFailed("Unknown schedule")
+    with unit_of_work() as uow:
+        return schedules.stats(uow, None if schedule_ref == "unscheduled" else int(schedule_ref))
+
+
 @router.post("/schedules", status_code=201)
 def create_schedule(body: ScheduleIn, actor: str = Depends(current_actor)) -> dict[str, Any]:
     data = body.model_dump(exclude={"target", "import_id"})

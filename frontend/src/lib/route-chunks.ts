@@ -6,6 +6,7 @@
 export const routeChunks = {
   runs: () => import("@/pages/Runs"),
   schedules: () => import("@/pages/Schedules"),
+  scheduleEditor: () => import("@/pages/ScheduleEditor"),
   companies: () => import("@/pages/Companies"),
   pams: () => import("@/pages/Pams"),
   imports: () => import("@/pages/Imports"),

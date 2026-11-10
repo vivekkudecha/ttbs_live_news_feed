@@ -1,6 +1,7 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
-import { MoreHorizontal, Pause, Pencil, Play, Trash2, Zap } from "lucide-react"
+import { Loader2, MoreHorizontal, Pause, Pencil, Play, Trash2, Zap } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,25 +16,80 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useDeleteSchedule, useRunScheduleNow, useUpdateSchedule, type Schedule } from "@/api/schedules"
 import { errorMessage } from "@/api/http"
-import { ScheduleDialog } from "./ScheduleDialog"
 
-/** Runs a mutation with a success / failure toast. */
-async function withToast(work: Promise<unknown>, ok: string, fail: string) {
-  try {
-    await work
-    toast.success(ok)
-  } catch (e) {
-    toast.error(fail, { description: errorMessage(e) })
-  }
-}
-
-/** Row menu: Run now · Edit · Pause/Resume · Delete (confirmed). Dialogs live outside the menu so they survive it closing. */
-export function ScheduleActions({ s, onDeleted }: { s: Schedule; onDeleted?: () => void }) {
+/**
+ * Run now · Edit · Pause/Resume · Delete (confirmed), as a row menu ("menu") or as visible buttons
+ * ("buttons", the schedule's own page). Run now opens the new run live; Edit opens the edit page.
+ */
+export function ScheduleActions({ s, variant = "menu", onDeleted }: { s: Schedule; variant?: "menu" | "buttons"; onDeleted?: () => void }) {
+  const navigate = useNavigate()
   const update = useUpdateSchedule()
   const runNow = useRunScheduleNow()
   const remove = useDeleteSchedule()
-  const [editing, setEditing] = useState(false)
   const [confirm, setConfirm] = useState(false)
+
+  const start = () =>
+    runNow.mutate(s.id, {
+      onSuccess: (run) => {
+        toast.success(`Run #${run.id} started`)
+        navigate(`/runs/${run.id}?tab=live`)
+      },
+      onError: (e) => toast.error("Could not start the run", { description: errorMessage(e) }),
+    })
+  const toggle = () =>
+    update.mutate(
+      { id: s.id, enabled: !s.enabled },
+      {
+        onSuccess: () => toast.success(s.enabled ? "Schedule paused" : "Schedule resumed"),
+        onError: (e) => toast.error("Could not change the schedule", { description: errorMessage(e) }),
+      },
+    )
+  const edit = () => navigate(`/schedules/${s.id}/edit`)
+  const del = () =>
+    remove.mutate(s.id, {
+      onSuccess: () => {
+        toast.success("Schedule deleted")
+        onDeleted?.()
+      },
+      onError: (e) => toast.error("Could not delete the schedule", { description: errorMessage(e) }),
+    })
+
+  const PauseIcon = s.enabled ? Pause : Play
+  const confirmDialog = (
+    <AlertDialog open={confirm} onOpenChange={setConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete “{s.name}”?</AlertDialogTitle>
+          <AlertDialogDescription>No more runs will start from this schedule. Runs it already started, and their results, are kept.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep it</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={del}>
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+
+  if (variant === "buttons")
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="brand" onClick={start} disabled={runNow.isPending}>
+          {runNow.isPending ? <Loader2 className="animate-spin" /> : <Zap />} Run now
+        </Button>
+        <Button variant="outline" onClick={edit}>
+          <Pencil /> Edit
+        </Button>
+        <Button variant="outline" onClick={toggle} disabled={update.isPending}>
+          <PauseIcon /> {s.enabled ? "Pause" : "Resume"}
+        </Button>
+        <Button variant="destructive" onClick={() => setConfirm(true)}>
+          <Trash2 /> Delete
+        </Button>
+        {confirmDialog}
+      </div>
+    )
 
   return (
     <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
@@ -44,16 +100,14 @@ export function ScheduleActions({ s, onDeleted }: { s: Schedule; onDeleted?: () 
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem disabled={runNow.isPending} onClick={() => withToast(runNow.mutateAsync(s.id), "Run started", "Could not start the run")}>
+          <DropdownMenuItem disabled={runNow.isPending} onClick={start}>
             <Zap /> Run now
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setEditing(true)}>
+          <DropdownMenuItem onClick={edit}>
             <Pencil /> Edit
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => withToast(update.mutateAsync({ id: s.id, enabled: !s.enabled }), s.enabled ? "Schedule paused" : "Schedule resumed", "Could not change the schedule")}
-          >
-            {s.enabled ? <Pause /> : <Play />} {s.enabled ? "Pause" : "Resume"}
+          <DropdownMenuItem onClick={toggle}>
+            <PauseIcon /> {s.enabled ? "Pause" : "Resume"}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={() => setConfirm(true)}>
@@ -61,22 +115,7 @@ export function ScheduleActions({ s, onDeleted }: { s: Schedule; onDeleted?: () 
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-
-      <ScheduleDialog schedule={s} open={editing} onOpenChange={setEditing} />
-      <AlertDialog open={confirm} onOpenChange={setConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete “{s.name}”?</AlertDialogTitle>
-            <AlertDialogDescription>No more runs will start from this schedule. Runs it already started, and their results, are kept.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep it</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => withToast(remove.mutateAsync(s.id).then(() => onDeleted?.()), "Schedule deleted", "Could not delete the schedule")}>
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {confirmDialog}
     </div>
   )
 }

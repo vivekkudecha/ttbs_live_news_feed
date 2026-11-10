@@ -356,5 +356,33 @@ def listing(uow: UnitOfWork) -> dict[str, Any]:
 
 def detail(uow: UnitOfWork, schedule_id: int) -> dict[str, Any]:
     s = get(uow, schedule_id)
-    return out(uow, s, uow.session.get(Run, s.last_run_id) if s.last_run_id else None)
+    upcoming = [t.isoformat() for t in Rule.of(s).upcoming(5)] if s.enabled else []
+    return out(uow, s, uow.session.get(Run, s.last_run_id) if s.last_run_id else None) | {"upcoming": upcoming}
+
+
+RECENT = 20  # runs shown in the per-run chart
+
+
+def stats(uow: UnitOfWork, schedule_id: int | None) -> dict[str, Any]:
+    """The schedule page's dashboard: totals over all its runs, runs per status, and its latest
+    runs (oldest first) for the chart. `schedule_id` None = runs no schedule started."""
+    if schedule_id is not None:
+        get(uow, schedule_id)
+    mine = Run.schedule_id == schedule_id if schedule_id is not None else Run.schedule_id.is_(None)
+    runs_, logos, signals, failed, cost, cached = uow.session.execute(
+        select(func.count(Run.id), func.sum(Run.done), func.sum(Run.with_signal), func.sum(Run.failed), func.sum(Run.cost), func.sum(Run.cache_hits))
+        .where(mine)
+    ).one()
+    by_status = dict(uow.session.execute(select(Run.status, func.count(Run.id)).where(mine).group_by(Run.status)).all())
+    recent = list(uow.session.scalars(select(Run).where(mine).order_by(Run.id.desc()).limit(RECENT)))[::-1]
+    took = [(as_utc(r.finished_at) - as_utc(r.started_at)).total_seconds() for r in recent if r.started_at and r.finished_at]
+    return {
+        "totals": {"runs": runs_ or 0, "logos": logos or 0, "signals": signals or 0, "failed": failed or 0,
+                   "cost": round(cost or 0.0, 4), "cacheHits": cached or 0,
+                   "avgDurationS": round(sum(took) / len(took)) if took else None},
+        "byStatus": by_status,
+        "recent": [{"id": str(r.id), "label": r.label, "status": r.status, "at": (as_utc(r.started_at or r.scheduled_for)).isoformat(),
+                    "logos": r.total, "done": r.done, "signals": r.with_signal, "failed": r.failed, "cost": round(r.cost, 4)}
+                   for r in recent],
+    }
 

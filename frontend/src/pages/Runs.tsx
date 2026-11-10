@@ -131,7 +131,7 @@ function RunActions({ job, size = "default" }: { job: Job; size?: "sm" | "defaul
 
 export function QueueStrip() {
   const q = useQueues()
-  if (!q.data) return <Skeleton className="mb-6 h-14" />
+  if (!q.data) return <Skeleton className="h-14" />
   const { broker, db } = q.data
   const down = broker.research === null
   const busy = db.researchPending + db.researchRunning + db.notificationsPending > 0
@@ -141,7 +141,7 @@ export function QueueStrip() {
     ["Digests waiting", db.notificationsPending],
   ]
   return (
-    <Card className="mb-6 py-0">
+    <Card className="py-0">
       <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-3 py-3.5">
         <div className="flex items-center gap-2.5">
           <LiveDot tone={down ? "danger" : busy ? "info" : "success"} pulse={busy && !down} />

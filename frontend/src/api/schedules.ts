@@ -47,6 +47,16 @@ export interface Schedule extends RepeatRule {
   createdBy: string
   /** Research runs this schedule has started. */
   runs: number
+  /** Next fire times (single-schedule reads only; empty while paused). */
+  upcoming?: string[]
+}
+
+/** The schedule page's dashboard (GET /schedules/{id|unscheduled}/stats). */
+export interface ScheduleStats {
+  totals: { runs: number; logos: number; signals: number; failed: number; cost: number; cacheHits: number; avgDurationS: number | null }
+  byStatus: Partial<Record<RunStatus, number>>
+  /** Latest runs, oldest first. */
+  recent: { id: string; label: string; status: RunStatus; at: string; logos: number; done: number; signals: number; failed: number; cost: number }[]
 }
 
 export interface ScheduleList {
@@ -62,6 +72,7 @@ const wire = (v: Partial<ScheduleInput>) => ({ ...v, importId: v.importId ? Numb
 const schedulesApi = {
   list: () => request<ScheduleList>("GET", "/schedules"),
   get: (id: string) => request<Schedule>("GET", `/schedules/${id}`),
+  stats: (ref: string) => request<ScheduleStats>("GET", `/schedules/${ref}/stats`),
   create: (v: ScheduleInput) => request<Schedule>("POST", "/schedules", wire(v)),
   update: (id: string, v: Partial<ScheduleInput>) => request<Schedule>("PATCH", `/schedules/${id}`, wire(v)),
   remove: (id: string) => request<void>("DELETE", `/schedules/${id}`),
@@ -73,6 +84,14 @@ const schedulesApi = {
 /** One schedule (its page header). Shares the "schedules" key, so every schedule change refreshes it. */
 export const useSchedule = (id: string | undefined) =>
   useQuery({ queryKey: ["schedules", "one", id], queryFn: () => schedulesApi.get(id!), enabled: !!id, refetchInterval: 30_000 })
+
+/** Dashboard numbers for a schedule (or "unscheduled"); refreshes fast while one of its runs is active. */
+export const useScheduleStats = (ref: string) =>
+  useQuery({
+    queryKey: ["schedules", "stats", ref],
+    queryFn: () => schedulesApi.stats(ref),
+    refetchInterval: (q) => (q.state.data?.recent.some((r) => ["scheduled", "queued", "running"].includes(r.status)) ? 4_000 : 30_000),
+  })
 
 export const useSchedules = () =>
   useQuery({

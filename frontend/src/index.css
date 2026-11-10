@@ -153,7 +153,7 @@
     --control-hover: #1a3247;
     --tab-track: #0d1b28;
     --ring: #4fb0e6;
-    --chart-1: #4fb0e6;
+    --chart-1: #3a9bd9; /* inside the dark lightness band (dataviz validator), ≥3:1 on the dark card */
     --chart-2: #f08a45;
     --chart-3: #3cc6c2;
     --chart-4: #e9b84a;

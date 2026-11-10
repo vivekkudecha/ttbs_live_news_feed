@@ -5,8 +5,11 @@
  *   3. Deliver & review — channels, name, a summary of exactly what will happen, and (new
  *      schedules) whether to start the first run right away
  * With `fixedUpload` (the "Repeat" option of a run started from an upload) step 1 is skipped.
+ * `mode="edit"`: every step is open and already complete; changes can be saved from any step.
  *
- * Layout: steps on top, one vertically scrolling body, actions pinned at the bottom.
+ * Layout "embedded" (inside a panel): steps on top, one scrolling body, actions at the bottom.
+ * Layout "page" (full page): the page scrolls, the actions stick to the bottom of the screen, and
+ * wide screens show a live summary beside the steps.
  */
 import { useState, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
@@ -48,6 +51,8 @@ export function ScheduleWizard({
   submitLabel = "Create schedule",
   pending,
   offerStartNow = false,
+  mode = "create",
+  layout = "embedded",
   onSubmit,
 }: {
   initial: ScheduleInput
@@ -56,8 +61,12 @@ export function ScheduleWizard({
   pending?: boolean
   /** New schedules: offer "Start the first run now" (on by default when the upload is already chosen). */
   offerStartNow?: boolean
+  mode?: "create" | "edit"
+  layout?: "embedded" | "page"
   onSubmit: (v: ScheduleInput, startNow: boolean) => void
 }) {
+  const editing = mode === "edit"
+  const page = layout === "page"
   const steps = fixedUpload ? STEPS.slice(1) : STEPS
   const [step, setStep] = useState<Step>(steps[0].key)
   const [v, setV] = useState<ScheduleInput>(initial)
@@ -75,6 +84,8 @@ export function ScheduleWizard({
   const at = steps.findIndex((s) => s.key === step)
   const last = at === steps.length - 1
   const reachable = (i: number) => steps.slice(0, i).every((s) => valid[s.key])
+  const complete = steps.every((s) => valid[s.key])
+  const submit = () => onSubmit({ ...v, name: v.name.trim() }, offerStartNow && startNow)
 
   const pickSource = (s: Source) => {
     setSource(s)
@@ -92,10 +103,11 @@ export function ScheduleWizard({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className={cn("flex flex-col", !page && "min-h-0 flex-1")}>
       <ol className="flex shrink-0 items-center gap-2 border-b px-6 py-3">
         {steps.map((s, i) => {
-          const state = i < at ? "done" : i === at ? "current" : "todo"
+          // Editing: every valid step is already done; creating: steps before the current one are.
+          const state = i === at ? "current" : (editing ? valid[s.key] : i < at) ? "done" : "todo"
           return (
             <li key={s.key} className="flex min-w-0 items-center gap-2">
               {i > 0 && <span className="h-px w-6 bg-border sm:w-10" aria-hidden="true" />}
@@ -121,7 +133,8 @@ export function ScheduleWizard({
         })}
       </ol>
 
-      <div className="min-h-0 min-w-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-6 py-5">
+      <div className={cn("min-w-0 flex-1", page ? "grid xl:grid-cols-[minmax(0,1fr)_22rem]" : "min-h-0 overflow-y-auto overflow-x-hidden")}>
+      <div className="min-w-0 space-y-5 overflow-x-hidden px-6 py-5">
         {step === "what" && (
           <>
             <ChoiceCards
@@ -163,7 +176,7 @@ export function ScheduleWizard({
               <Label htmlFor="wiz-name">Schedule name</Label>
               <Input id="wiz-name" value={v.name} maxLength={200} placeholder="e.g. Key accounts · 10-day cycle" onChange={(e) => set({ name: e.target.value })} />
             </div>
-            <Review v={v} source={source} uploadLabel={uploadLabel} />
+            <Review v={v} source={source} uploadLabel={uploadLabel} className={page ? "xl:hidden" : undefined} />
             {offerStartNow && (
               <label className="flex cursor-pointer items-center gap-3 rounded-lg border p-3">
                 <Switch checked={startNow} onCheckedChange={setStartNow} />
@@ -176,24 +189,32 @@ export function ScheduleWizard({
           </>
         )}
       </div>
+        {page && (
+          <aside className="hidden border-l bg-muted/20 px-5 py-5 xl:block">
+            <div className="sticky top-24 space-y-3">
+              <p className="eyebrow">Summary</p>
+              <Review v={v} source={source} uploadLabel={uploadLabel} stacked />
+            </div>
+          </aside>
+        )}
+      </div>
 
-      <div className="flex shrink-0 items-center gap-2 border-t bg-muted/30 px-6 py-3">
-        <span className="text-xs text-muted-foreground">
-          Step {at + 1} of {steps.length}
-        </span>
+      <div className={cn("flex shrink-0 items-center gap-2 border-t bg-muted/30 px-6 py-3", page && "sticky bottom-0 z-10 rounded-b-xl bg-card/95 backdrop-blur")}>
+        <span className="text-xs text-muted-foreground">{editing ? "Editing · changes apply from the next run" : `Step ${at + 1} of ${steps.length}`}</span>
         <div className="ml-auto flex gap-2">
           {at > 0 && (
             <Button type="button" variant="outline" onClick={() => goTo(steps[at - 1].key)}>
               <ArrowLeft /> Back
             </Button>
           )}
-          {last ? (
-            <Button type="button" variant="brand" disabled={!steps.every((s) => valid[s.key]) || pending} onClick={() => onSubmit({ ...v, name: v.name.trim() }, offerStartNow && startNow)}>
-              {pending ? <Loader2 className="animate-spin" /> : <Repeat />} {submitLabel}
-            </Button>
-          ) : (
-            <Button type="button" disabled={!valid[step]} onClick={() => goTo(steps[at + 1].key)}>
+          {!last && (
+            <Button type="button" variant={editing ? "outline" : "default"} disabled={!valid[step]} onClick={() => goTo(steps[at + 1].key)}>
               Next <ArrowRight />
+            </Button>
+          )}
+          {(last || editing) && (
+            <Button type="button" variant="brand" disabled={!complete || pending} onClick={submit}>
+              {pending ? <Loader2 className="animate-spin" /> : <Repeat />} {submitLabel}
             </Button>
           )}
         </div>
@@ -224,9 +245,10 @@ function Chosen({ label, onChange, changeLabel }: { label?: string; onChange: ()
 }
 
 /** Exactly what will happen, in plain words. */
-function Review({ v, source, uploadLabel }: { v: ScheduleInput; source: Source; uploadLabel?: string }) {
+function Review({ v, source, uploadLabel, stacked, className }: { v: ScheduleInput; source: Source; uploadLabel?: string; stacked?: boolean; className?: string }) {
   const p = useSchedulePreview(v)
   const rows: [string, ReactNode][] = [
+    ["Name", v.name.trim() || "—"],
     ["Researches", source === "latest" ? "The latest upload at each run" : uploadLabel],
     ["Repeats", p.data ? `${p.data.summary} (IST)` : "…"],
     ["First run", p.data?.upcoming[0] ? fmtDateTime(p.data.upcoming[0]) : "—"],
@@ -240,11 +262,11 @@ function Review({ v, source, uploadLabel }: { v: ScheduleInput; source: Source; 
     ],
   ]
   return (
-    <dl className="grid gap-x-6 gap-y-3 rounded-lg border bg-primary/[0.03] p-4 text-sm sm:grid-cols-2">
+    <dl className={cn("grid gap-x-6 gap-y-3 rounded-lg border bg-primary/[0.03] p-4 text-sm", !stacked && "sm:grid-cols-2", className)}>
       {rows.map(([k, val]) => (
         <div key={k} className="min-w-0">
           <dt className="eyebrow">{k}</dt>
-          <dd className="mt-1 truncate font-medium">{val}</dd>
+          <dd className={cn("mt-1 font-medium", stacked ? "break-words" : "truncate")}>{val}</dd>
         </div>
       ))}
     </dl>

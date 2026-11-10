@@ -226,3 +226,21 @@ def test_each_schedule_lists_its_own_runs(client):
     assert client.get("/api/v1/runs", params={"schedule": b["id"]}).json()["total"] == 2
     assert client.get("/api/v1/runs", params={"schedule": "none"}).json()["total"] == 1
     assert client.get("/api/v1/runs").json()["total"] == 4
+
+
+def test_schedule_dashboard_stats(client):
+    from tests.conftest import research
+
+    imp = upload(client).json()
+    s = make(client, imp["id"], channels=[]).json()
+    for _ in range(2):
+        client.post(f"/api/v1/schedules/{s['id']}/run")
+    research(client, imp["id"], [])
+
+    st = client.get(f"/api/v1/schedules/{s['id']}/stats").json()
+    assert st["totals"]["runs"] == 2 and st["totals"]["logos"] == 6 and st["byStatus"] == {"completed": 2}
+    assert [r["logos"] for r in st["recent"]] == [3, 3] and int(st["recent"][0]["id"]) < int(st["recent"][1]["id"])
+    assert client.get("/api/v1/schedules/unscheduled/stats").json()["totals"]["runs"] == 1
+    assert client.get("/api/v1/schedules/999/stats").status_code == 404
+    assert client.get("/api/v1/schedules/abc/stats").status_code == 422
+    assert len(client.get(f"/api/v1/schedules/{s['id']}").json()["upcoming"]) == 5

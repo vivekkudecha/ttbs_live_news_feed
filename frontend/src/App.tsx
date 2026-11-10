@@ -23,6 +23,7 @@ const c = routeChunks
 const RunDetail = lazy(() => c.runs().then((m) => ({ default: m.RunDetail })))
 const Research = lazy(c.schedules)
 const ScheduleDetail = lazy(() => c.schedules().then((m) => ({ default: m.ScheduleDetail })))
+const ScheduleEditor = lazy(c.scheduleEditor)
 const JobsRedirect = lazy(() => c.runs().then((m) => ({ default: m.JobsRedirect })))
 const CompaniesList = lazy(() => c.companies().then((m) => ({ default: m.CompaniesList })))
 const CompanyDetail = lazy(() => c.companies().then((m) => ({ default: m.CompanyDetail })))
@@ -126,7 +127,9 @@ export default function App() {
                   <Route path="imports" element={<Allow module="imports"><Imports /></Allow>} />
                   <Route path="templates" element={<Templates />} />
                   <Route path="schedules" element={<Allow module="runs"><Research /></Allow>} />
+                  <Route path="schedules/new" element={<Allow module="runs"><ScheduleEditor /></Allow>} />
                   <Route path="schedules/:id" element={<Allow module="runs"><ScheduleDetail /></Allow>} />
+                  <Route path="schedules/:id/edit" element={<Allow module="runs"><ScheduleEditor /></Allow>} />
                   <Route path="telemetry" element={<Allow module="telemetry"><Telemetry /></Allow>} />
                   <Route path="integrations" element={<Allow module="integrations"><Integrations /></Allow>} />
                   <Route path="costs" element={<Allow module="costs"><Costs /></Allow>} />

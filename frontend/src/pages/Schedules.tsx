@@ -5,28 +5,32 @@
  *   /schedules/unscheduled  runs from before every run came from a schedule
  * A run's own page (/runs/:id) links back to its schedule.
  */
-import { useMemo, useState, type ReactNode } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useMemo, useState } from "react"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ChevronRight, History, Loader2, Repeat, Search, TriangleAlert, Zap } from "lucide-react"
+import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts"
+import { Activity, CalendarClock, ChevronRight, History, Radio, Repeat, Search, TriangleAlert, Wallet, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { EmptyState } from "@/components/common/EmptyState"
 import { LiveDot } from "@/components/common/LiveDot"
-import { Page } from "@/components/common/layout"
+import { Page, Split, StatGrid } from "@/components/common/layout"
+import { ChartCard } from "@/components/common/ChartCard"
+import { chartTheme } from "@/components/common/chart-theme"
+import { StatCard } from "@/components/common/StatCard"
 import { PageHeader } from "@/components/common/PageHeader"
 import { SearchBox } from "@/components/data-table/SearchBox"
 import { SmartTable } from "@/components/data-table/SmartTable"
 import { useClientTable } from "@/components/data-table/useSmartTable"
 import { NewScheduleButton } from "@/components/schedules/NewScheduleButton"
 import { ScheduleActions } from "@/components/schedules/ScheduleActions"
-import { Delivery, LastRun, When } from "@/components/schedules/cells"
+import { Delivery, LastRun } from "@/components/schedules/cells"
 import { scheduleColumns } from "@/components/schedules/columns"
-import { useRunScheduleNow, useSchedule, useSchedules, useUpdateSchedule, type Schedule } from "@/api/schedules"
+import { useSchedule, useScheduleStats, useSchedules, useUpdateSchedule, type Schedule, type ScheduleStats } from "@/api/schedules"
 import { errorMessage } from "@/api/http"
-import { fmtDateTime, fmtRelative } from "@/lib/format"
+import { fmtDateTime, fmtRelative, fmtUsd, pct } from "@/lib/format"
 import { useDebounced } from "@/lib/use-debounced"
 import { cn } from "@/lib/utils"
 import { QueueStrip, RunsTable } from "./Runs"
@@ -64,6 +68,7 @@ export default function Research() {
       ) : (
         <>
           <NextUp rows={rows} />
+          <QueueStrip />
           <SchedulesTable rows={rows} loading={q.isLoading} />
           {unscheduled > 0 && <UnscheduledLink count={unscheduled} />}
         </>
@@ -200,7 +205,7 @@ export function ScheduleDetail() {
 function SchedulePage({ id }: { id: string }) {
   const navigate = useNavigate()
   const q = useSchedule(id)
-  const runNow = useRunScheduleNow()
+  const stats = useScheduleStats(id)
   const s = q.data
 
   if (q.isError)
@@ -214,14 +219,10 @@ function SchedulePage({ id }: { id: string }) {
     )
   if (!s) return <Skeleton className="h-96" />
 
-  const start = () =>
-    runNow.mutate(s.id, {
-      onSuccess: (run) => {
-        toast.success(`Run #${run.id} started`)
-        navigate(`/runs/${run.id}?tab=live`)
-      },
-      onError: (e) => toast.error("Could not start the run", { description: errorMessage(e) }),
-    })
+  const t = stats.data?.totals
+  const st = stats.data?.byStatus ?? {}
+  const attention = (st.partial ?? 0) + (st.failed ?? 0)
+  const live = [...(stats.data?.recent ?? [])].reverse().find((r) => ACTIVE_RUN.has(r.status)) // newest active run
 
   return (
     <Page>
@@ -229,50 +230,141 @@ function SchedulePage({ id }: { id: string }) {
         title={s.name}
         description={`${s.summary} IST${s.enabled ? "" : " · paused"}`}
         back={{ to: "/schedules", label: "All schedules" }}
-        actions={
-          <>
-            <Button variant="brand" onClick={start} disabled={runNow.isPending}>
-              {runNow.isPending ? <Loader2 className="animate-spin" /> : <Zap />} Run now
-            </Button>
-            <ScheduleActions s={s} onDeleted={() => navigate("/schedules")} />
-          </>
-        }
+        actions={<ScheduleActions s={s} variant="buttons" onDeleted={() => navigate("/schedules")} />}
       />
 
-      <Card className="py-0">
-        <CardContent className="grid gap-x-8 gap-y-4 py-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
-          <Fact label="Researches">{s.targetLabel}</Fact>
-          <Fact label="Delivery">
-            <Delivery channels={s.channels} />
-          </Fact>
-          <Fact label="Next run">
-            <When iso={s.nextRunAt} paused={!s.enabled} />
-          </Fact>
-          <Fact label="Last run">
-            <LastRun s={s} />
-          </Fact>
-        </CardContent>
-      </Card>
+      {live && (
+        <Link
+          to={`/runs/${live.id}?tab=live`}
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-brand-blue/25 bg-brand-blue/[0.06] px-4 py-3 text-sm transition-colors hover:bg-brand-blue/10"
+        >
+          <LiveDot />
+          <span className="font-medium">
+            Run #{live.id} is {live.status === "running" ? "researching" : "waiting for a worker"}
+          </span>
+          <span className="tabular text-muted-foreground">
+            {n(live.done)} / {n(live.logos)} logos · {n(live.signals)} signals so far
+          </span>
+          <span className="ml-auto inline-flex items-center gap-1 font-medium text-brand-blue">
+            <Radio className="size-4" /> Watch live
+          </span>
+        </Link>
+      )}
 
-      <QueueStrip />
+      <StatGrid>
+        <StatCard icon={Activity} tone="info" label="Runs" value={t ? n(t.runs) : "—"} hint={t ? `${n(st.completed ?? 0)} completed${attention ? ` · ${n(attention)} need attention` : ""}` : " "} />
+        <StatCard icon={Zap} tone="success" label="Signals found" value={t ? n(t.signals) : "—"} hint={t ? `${pct(t.signals, t.logos)}% of ${n(t.logos)} logos researched` : " "} />
+        <StatCard
+          icon={CalendarClock}
+          tone="primary"
+          label="Next run"
+          value={s.nextRunAt ? fmtRelative(s.nextRunAt) : "Paused"}
+          hint={s.nextRunAt ? fmtDateTime(s.nextRunAt) : "Resume to schedule the next run"}
+        />
+        <StatCard
+          icon={Wallet}
+          tone="warning"
+          label="Spend"
+          value={t ? fmtUsd(t.cost) : "—"}
+          hint={t ? `${n(t.cacheHits)} answers reused free${t.avgDurationS != null ? ` · ~${durationLabel(t.avgDurationS)} per run` : ""}` : " "}
+        />
+      </StatGrid>
 
-      <RunsTable
-        schedule={s.id}
-        emptyState={
-          <EmptyState icon={Repeat} title="No runs yet">
-            {s.nextRunAt ? `The first run starts ${fmtRelative(s.nextRunAt)} (${fmtDateTime(s.nextRunAt)}).` : "This schedule is paused."} Use Run now to start one right away.
-          </EmptyState>
-        }
-      />
+      <Split ratio="1.7fr 1fr">
+        <SignalsPerRun runs={stats.data?.recent} />
+        <AboutSchedule s={s} />
+      </Split>
+
+      <section className="space-y-3">
+        <h2 className="font-medium">All runs</h2>
+        <RunsTable
+          schedule={s.id}
+          emptyState={
+            <EmptyState icon={Repeat} title="No runs yet">
+              {s.nextRunAt ? `The first run starts ${fmtRelative(s.nextRunAt)} (${fmtDateTime(s.nextRunAt)}).` : "This schedule is paused."} Use Run now to start one right away.
+            </EmptyState>
+          }
+        />
+      </section>
     </Page>
   )
 }
 
-function Fact({ label, children }: { label: string; children: ReactNode }) {
+const ACTIVE_RUN = new Set(["scheduled", "queued", "running"])
+const n = (x: number) => x.toLocaleString("en-IN")
+const durationLabel = (s: number) => (s < 90 ? `${s} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`)
+
+/** One bar per run (latest 20, oldest left): how many signals it found. Logos and failures in the tooltip. */
+function SignalsPerRun({ runs }: { runs: ScheduleStats["recent"] | undefined }) {
+  const data = (runs ?? []).map((r) => ({ ...r, name: `#${r.id}` }))
   return (
-    <div className="min-w-0">
-      <p className="eyebrow">{label}</p>
-      <div className="mt-1 min-w-0 truncate font-medium">{children}</div>
-    </div>
+    <ChartCard
+      title="Signals per run"
+      description={data.length ? `Latest ${data.length} run${data.length === 1 ? "" : "s"}` : undefined}
+      label={`Signals per run: ${data.map((r) => `run ${r.id} ${r.signals}`).join(", ")}`}
+      height="h-64 3xl:h-80"
+      empty={runs && data.length === 0 ? "No runs yet." : undefined}
+    >
+      <BarChart data={data} margin={{ left: -12, right: 8, top: 8 }} barCategoryGap="28%">
+        <CartesianGrid vertical={false} {...chartTheme.grid} />
+        <XAxis dataKey="name" {...chartTheme.axis} minTickGap={12} />
+        <YAxis allowDecimals={false} {...chartTheme.axis} />
+        <Tooltip
+          {...chartTheme.tooltip}
+          labelFormatter={(_, p) => {
+            const r = p?.[0]?.payload as (typeof data)[number] | undefined
+            return r ? `Run #${r.id} · ${fmtDateTime(r.at)}` : ""
+          }}
+          formatter={(v, _name, item) => {
+            const r = item.payload as (typeof data)[number]
+            return [`${n(Number(v))} signals · ${n(r.done)}/${n(r.logos)} logos${r.failed ? ` · ${n(r.failed)} failed` : ""}`, ""]
+          }}
+          separator=""
+        />
+        <Bar dataKey="signals" fill="var(--chart-1)" radius={[4, 4, 0, 0]} maxBarSize={28} {...chartTheme.bar} />
+      </BarChart>
+    </ChartCard>
+  )
+}
+
+/** What the schedule does, and when it runs next. */
+function AboutSchedule({ s }: { s: Schedule }) {
+  const upcoming = s.upcoming ?? []
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>About this schedule</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5 text-sm">
+        <dl className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-2.5">
+          <dt className="text-muted-foreground">Researches</dt>
+          <dd className="truncate font-medium" title={s.targetLabel}>{s.targetLabel}</dd>
+          <dt className="text-muted-foreground">Repeats</dt>
+          <dd className="font-medium">{s.summary} IST</dd>
+          <dt className="text-muted-foreground">Delivery</dt>
+          <dd><Delivery channels={s.channels} /></dd>
+          <dt className="text-muted-foreground">Last run</dt>
+          <dd><LastRun s={s} /></dd>
+          <dt className="text-muted-foreground">Created by</dt>
+          <dd className="font-medium">{s.createdBy}</dd>
+        </dl>
+        <div>
+          <p className="eyebrow mb-2">Upcoming</p>
+          {upcoming.length === 0 ? (
+            <p className="text-muted-foreground">{s.enabled ? "No more runs before the end date." : "Paused: no runs scheduled."}</p>
+          ) : (
+            <ol className="space-y-1.5">
+              {upcoming.map((at, i) => (
+                <li key={at} className="flex items-center gap-2.5">
+                  <span className={cn("size-1.5 shrink-0 rounded-full", i === 0 ? "bg-brand-blue" : "bg-muted-foreground/40")} aria-hidden="true" />
+                  <span className="tabular">{fmtDateTime(at)}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">{fmtRelative(at)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
