@@ -126,10 +126,32 @@ export const useJob = (id: string) =>
   useQuery({ queryKey: ["job", id], queryFn: () => backend.getJob(id), refetchInterval: (q) => (q.state.data && ACTIVE.has(q.state.data.status) ? 2_000 : false) })
 export const useQueues = () => useQuery({ queryKey: ["queues"], queryFn: () => backend.queues(), refetchInterval: 5_000 })
 
-const useJobInvalidate = () => useInvalidate([["jobs"], ["job"], ["jobResults"], ["jobNotifications"], ["queues"]])
+const useJobInvalidate = () => useInvalidate([["jobs"], ["job"], ["jobResults"], ["jobNotifications"], ["queues"], ["board"], ["run"], ["logoTimeline"]])
 export const useCancelJob = () => useMutation({ mutationFn: (id: string) => backend.cancelJob(id), onSuccess: useJobInvalidate() })
 export const useRetryFailed = () => useMutation({ mutationFn: (id: string) => backend.retryFailed(id), onSuccess: useJobInvalidate() })
 export const useResendNotification = () => useMutation({ mutationFn: (id: string) => backend.resendNotification(id), onSuccess: useJobInvalidate() })
+
+// ---- Run results board ---------------------------------------------------------------------------
+export const useLogoTimeline = (runId: string, resultId: string | null, live: boolean) =>
+  useQuery({
+    queryKey: ["logoTimeline", runId, resultId],
+    queryFn: () => backend.logoTimeline(runId, resultId!),
+    enabled: !!runId && !!resultId,
+    placeholderData: keepPreviousData,
+    refetchInterval: live ? 4_000 : false,
+  })
+export const usePamDigest = (runId: string, pamId: string | null) =>
+  useQuery({ queryKey: ["pamDigest", runId, pamId], queryFn: () => backend.pamDigest(runId, pamId!), enabled: !!runId && !!pamId })
+export const useBoardRetry = (runId: string) =>
+  useMutation({ mutationFn: (b: { resultIds?: string[]; pamIds?: string[] }) => backend.boardRetry(runId, b), onSuccess: useJobInvalidate() })
+export const useBoardResend = (runId: string) => {
+  const inv = useJobInvalidate()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (b: { pamIds: string[]; channel?: DeliveryChannel }) => backend.boardResend(runId, b),
+    onSuccess: () => Promise.all([inv(), qc.invalidateQueries({ queryKey: ["pamDigest", runId] })]),
+  })
+}
 
 // ---- Run timeline, audit, costs; telemetry ---------------------------------------------------
 export const useRunTimeline = (id: string, live: boolean) =>

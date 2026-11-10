@@ -14,6 +14,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, CollectorRegistry, 
 
 from app.api import errors
 from app.api.auth_routes import router as auth_router
+from app.api.board_routes import router as board_router
 from app.api.deps import authorize
 from app.api.email_routes import router as email_router
 from app.api.page_routes import router as page_router
@@ -122,6 +123,7 @@ def create_app() -> FastAPI:
     app.include_router(router, dependencies=guard)
     app.include_router(page_router, dependencies=guard)
     app.include_router(email_router, dependencies=guard)
+    app.include_router(board_router, dependencies=guard)
     app.include_router(prompt_router, dependencies=guard)
     setup_tracing("api", app)
     return app

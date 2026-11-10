@@ -259,12 +259,16 @@ def resend(uow: UnitOfWork, notification_id: int, actor: str) -> Notification:
         raise Conflict("Notification is already queued")
     if note.status == NOTE_SKIPPED and not note.recipient:
         raise Conflict(f"Cannot resend: {note.last_error}")
+    from app.services import runs  # the digest is rebuilt from the run's current results (a retry may have added signals)
+
+    runs.refresh_payload(uow, note)
     _requeue(uow, note)
     audit.record(uow, "notify.resend", "notification", note.id, {"channel": note.channel, "pam_id": note.pam_id},
                  actor=actor, run_id=note.run_id)
     telemetry.event(uow, "notify.resend", telemetry.INFO, run_id=note.run_id, pam_id=note.pam_id, notification_id=note.id,
                     actor=actor, channel=note.channel, message=f"Re-queued {note.channel} digest")
-    uow.after_commit(lambda: cache.bump("outbox"))
+    run_id = note.run_id
+    uow.after_commit(lambda: cache.bump("outbox", f"run:{run_id}", "runs"))
     return note
 
 

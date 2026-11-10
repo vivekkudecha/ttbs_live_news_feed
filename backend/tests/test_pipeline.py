@@ -2,10 +2,10 @@
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.errors import ProviderError, RetryableProviderError
-from app.db.models import Notification, ResearchResult, Run
+from app.db.models import AuditLog, Notification, ResearchResult, Run
 from app.db.session import unit_of_work
 from app.research import providers
 from app.services import maintenance
@@ -205,3 +205,69 @@ def test_cors_preflight_allows_frontend(client):
         "Access-Control-Request-Headers": "x-actor",
     })
     assert r.status_code == 400
+
+
+def _signal_always(monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "fake_signal_rate", 1.0)
+
+
+def _note(pam_name: str, run_id: str, channel: str = "whatsapp") -> Notification:
+    from app.db.models import Pam
+
+    with unit_of_work() as uow:
+        pam = uow.session.scalars(select(Pam).where(Pam.name == pam_name)).one()
+        note = uow.session.scalars(select(Notification).where(Notification.run_id == int(run_id), Notification.pam_id == pam.id,
+                                                              Notification.channel == channel)).one()
+        uow.session.expunge(note)
+        return note
+
+
+def test_retry_refreshes_the_pam_digest_written_by_the_failed_pass(client, monkeypatch):
+    """A rate-limited first pass froze a 0-signal digest; after the retry finds signals the digest
+    must carry them and go out again (it used to stay at 0: the unique row made the retry a no-op)."""
+    _signal_always(monkeypatch)
+    real = providers.FakeProvider.research
+
+    def picky(self, company, ws, we, prompt=None):
+        if company.startswith("Havells"):  # Priya's only company
+            raise ProviderError("HTTP 429 rate limited, gave up")
+        return real(self, company, ws, we, prompt)
+
+    monkeypatch.setattr(providers.FakeProvider, "research", picky)
+    imp = upload(client).json()
+    run_id = research(client, imp["id"], ["whatsapp"]).json()["id"]
+    first = _note("Priya Nair", run_id)
+    assert first.status == "skipped" and first.payload["signals"] == 0
+
+    monkeypatch.setattr(providers.FakeProvider, "research", real)
+    assert client.post(f"/api/v1/runs/{run_id}/retry-failed").json() == {"requeued": 1}
+    after = _note("Priya Nair", run_id)
+    assert after.id == first.id and after.payload["signals"] == 1 and len(after.payload["items"]) == 1
+    assert after.status == "sent"  # re-queued with the new content (whatsapp sends eagerly in tests)
+    with unit_of_work() as uow:
+        refresh = uow.session.scalars(select(AuditLog).where(AuditLog.action == "notify.refresh")).one()
+        assert refresh.detail["signals_before"] == 0 and refresh.detail["signals"] == 1 and refresh.detail["action"] == "requeued"
+
+    # Aarav's digest was right the first time: the retry leaves it alone.
+    with unit_of_work() as uow:
+        assert uow.session.scalar(select(func.count(AuditLog.id)).where(AuditLog.action == "notify.refresh")) == 1
+
+    # Results by PAM: each row names its PAM and the column filters on the server.
+    rows = client.get(f"/api/v1/runs/{run_id}/results", params={"filter": '{"pamName": "priya"}'}).json()["rows"]
+    assert [r["pamName"] for r in rows] == ["Priya Nair"] and rows[0]["status"] == "signal"
+
+
+def test_resend_rebuilds_the_digest_from_current_results(client, monkeypatch):
+    _signal_always(monkeypatch)
+    imp = upload(client).json()
+    run_id = research(client, imp["id"], ["whatsapp"]).json()["id"]
+    note = _note("Aarav Mehta", run_id)
+    assert note.status == "sent" and note.payload["signals"] == 2
+    with unit_of_work() as uow:  # a stale snapshot, as left by the bug
+        n = uow.session.get(Notification, note.id)
+        n.payload = {**n.payload, "signals": 0, "items": []}
+    assert client.post(f"/api/v1/notifications/{note.id}/resend").status_code == 200
+    again = _note("Aarav Mehta", run_id)
+    assert again.payload["signals"] == 2 and len(again.payload["items"]) == 2

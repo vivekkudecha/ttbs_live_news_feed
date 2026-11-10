@@ -1,5 +1,5 @@
 # ==============================================================================
-# Stage 1: Builder & PyArmor Free License Obfuscation
+# Stage 1: Builder - install dependencies into an isolated virtualenv
 # ==============================================================================
 # Fully qualified image names: Podman on RHEL refuses ambiguous short names in non-interactive builds.
 FROM docker.io/library/python:3.12-slim AS builder
@@ -19,20 +19,11 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install PyArmor in the builder stage
-RUN pip install --no-cache-dir "pyarmor>=9.3,<10"
-
-# Copy application code and free license obfuscation script
+# Copy application source (shipped as plain Python)
 COPY app/ ./app/
-COPY scripts/obfuscate.sh ./scripts/obfuscate.sh
-RUN chmod +x ./scripts/obfuscate.sh
 
-# Run PyArmor Free License protection
-RUN sed -i 's/\r$//' ./scripts/obfuscate.sh && ./scripts/obfuscate.sh
-
-# Prune PyArmor CLI and prune unneeded virtualenv files to minimize layer size
-RUN pip uninstall -y pyarmor pyarmor.cli.core && \
-    find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true && \
+# Prune unneeded virtualenv files to minimize layer size
+RUN find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true && \
     find /opt/venv -type f -name "*.pyc" -delete && \
     find /opt/venv -type f -name "*.pyo" -delete && \
     find /opt/venv -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
@@ -53,8 +44,8 @@ WORKDIR /app
 # Copy stripped virtualenv from builder stage
 COPY --from=builder /opt/venv /opt/venv
 
-# Copy protected application code and pyarmor runtime from builder
-COPY --from=builder /build/protected/ /app/
+# Copy the application package (plain Python source) from builder
+COPY --from=builder /build/app /app/app
 
 # Copy database migrations, configuration, and entrypoint
 COPY alembic.ini .

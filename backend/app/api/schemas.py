@@ -146,13 +146,14 @@ def run_out(r: Run, notes: dict[str, int] | None = None) -> dict[str, Any]:
     }
 
 
-def result_out(x: ResearchResult) -> dict[str, Any]:
+def result_out(x: ResearchResult, pam_name: str | None = None) -> dict[str, Any]:
     return {
         "id": str(x.id),
         "runId": str(x.run_id),
         "companyId": str(x.company_id),
         "companyName": x.company.name,
         "pamId": str(x.pam_id) if x.pam_id else None,
+        "pamName": pam_name,
         "status": x.status,
         "category": x.category,
         "keySignals": x.key_signals,

@@ -51,7 +51,7 @@ export function eventColumns(showRun: boolean): ColumnDef<ProcessEvent, unknown>
             <span className="font-medium">{kindLabel(e.kind)}</span>
             <p className="text-xs text-muted-foreground">
               {showRun && e.runId ? (
-                <Link to={`/runs/${e.runId}?tab=timeline`} className="hover:underline" onClick={(ev) => ev.stopPropagation()}>
+                <Link to={`/runs/${e.runId}`} className="hover:underline" onClick={(ev) => ev.stopPropagation()}>
                   Run #{e.runId}
                 </Link>
               ) : null}

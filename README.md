@@ -182,7 +182,7 @@ Images built from this repo:
 
 | Image | Built from | Contents |
 |---|---|---|
-| `ttbs-backend:<stage>` | [backend/Dockerfile](backend/Dockerfile) | The API, Celery worker/beat and migrations (code obfuscated with PyArmor) |
+| `ttbs-backend:<stage>` | [backend/Dockerfile](backend/Dockerfile) | The API, Celery worker/beat and migrations |
 | `ttbs-gateway:<stage>` | [deploy/nginx/Dockerfile](deploy/nginx/Dockerfile) | Stage 1 builds the SPA with Node 24; stage 2 is nginx with the built files and config |
 
 How to run it: [deploy/README.md](deploy/README.md). Security controls: [docs/security.md](docs/security.md).

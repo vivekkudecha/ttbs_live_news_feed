@@ -43,6 +43,11 @@ import type {
   ResearchPromptVersion,
   NotificationDetail,
   OutboxPage,
+  BoardFacets,
+  BoardLogo,
+  BoardPam,
+  DigestRender,
+  LogoTimeline,
 } from "./types"
 
 // VITE_API_URL="/" means same origin: the SPA and the API sit behind one reverse proxy (Docker/nginx).
@@ -164,6 +169,16 @@ export const backend = {
   runEvents: (id: string, q: TableQ & { kind?: string; status?: string }) =>
     request<Page<ProcessEvent>>("GET", `/runs/${id}/events${qs({ ...tq(q), kind: q.kind, status: q.status })}`),
   runAudit: (id: string, q: TableQ) => request<Page<AuditEntry>>("GET", `/runs/${id}/audit${qs(tq(q))}`),
+  // Run results board (services/run_board.py)
+  boardGroups: (id: string, q: TableQ & { q?: string }) => request<Page<BoardPam>>("GET", `/runs/${id}/board/groups${qs({ ...tq(q), q: q.q })}`),
+  boardLogos: (id: string, q: TableQ & { q?: string; pamId?: string }) =>
+    request<Page<BoardLogo>>("GET", `/runs/${id}/board/logos${qs({ ...tq(q), q: q.q, pamId: q.pamId })}`),
+  boardFacets: (id: string, q: { q?: string; filter?: string }) => request<BoardFacets>("GET", `/runs/${id}/board/facets${qs(q)}`),
+  logoTimeline: (id: string, resultId: string) => request<LogoTimeline>("GET", `/runs/${id}/board/logos/${resultId}/timeline`),
+  pamDigest: (id: string, pamId: string) => request<DigestRender>("GET", `/runs/${id}/board/pams/${pamId}/digest`),
+  boardRetry: (id: string, body: { resultIds?: string[]; pamIds?: string[] }) => request<{ requeued: number }>("POST", `/runs/${id}/board/retry`, body),
+  boardResend: (id: string, body: { pamIds: string[]; channel?: DeliveryChannel }) =>
+    request<{ requeued: number; skipped: number }>("POST", `/runs/${id}/board/resend`, body),
   runCosts: (id: string) => request<RunCosts>("GET", `/runs/${id}/costs`),
 
   // Telemetry

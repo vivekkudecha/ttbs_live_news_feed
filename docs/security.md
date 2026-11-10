@@ -88,7 +88,7 @@ Code: `backend/app/core/permissions.py`, `authorize()` in `backend/app/api/deps.
 | `pids_limit` | backend services |
 | Pinned, supported images | nginx 1.30.6 (stable), MySQL 8.4.13 (LTS), Redis 7.4.12, phpMyAdmin 5.2.3, Python 3.12, Node 24 (build stage only) |
 | Secrets | Only in `.env.<stage>` files (mode 600, git-ignored, never in a build context). The gateway receives only `GATEWAY_PMA_HTPASSWD`, no application secrets. LLM API keys are AES-GCM encrypted in the DB with `SECRETS_KEY`. |
-| Code protection | Backend code is obfuscated with PyArmor in the image. |
+| Code protection | Backend runs as plain Python source inside the image; the image itself is private (not published to any registry). |
 
 Data stores: MySQL with `local_infile=0` and `skip-name-resolve`, the app uses a non-root DB user.
 Redis requires a password with dangerous admin commands disabled. Neither is reachable from outside

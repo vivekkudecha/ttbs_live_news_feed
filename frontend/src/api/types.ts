@@ -630,6 +630,7 @@ export interface JobResult {
   companyId: string
   companyName: string
   pamId: string | null
+  pamName: string | null
   status: ResearchStatus | "running"
   category: SignalCategory | null
   keySignals: string | null
@@ -1035,4 +1036,96 @@ export interface ResearchPromptPreview {
   windowEnd: string
   characters: number
   approxTokens: number
+}
+
+// ---- Run results board (one table: logos, PAM groups, digests, timelines) ------------------------
+
+export type BoardDigestStatus = "pending" | "sending" | "sent" | "failed" | "skipped"
+
+export interface BoardDigest {
+  id: string
+  status: BoardDigestStatus
+  recipient: string | null
+  attempts: number
+  lastError: string | null
+  sentAt: string | null
+  /** Signals in the digest as built (may be stale, see `outdated`). */
+  signals: number | null
+  /** Built before a retry changed this PAM's signals: resend to bring it up to date. */
+  outdated: boolean
+}
+
+export interface BoardPam {
+  kind: "pam"
+  id: string
+  pamId: string | null
+  pamName: string
+  pamEmail: string | null
+  /** Counts over the logos matching the current filters. */
+  logos: number
+  signal: number
+  noSignal: number
+  failed: number
+  pending: number
+  finishedAt: string | null
+  /** The PAM's whole share of the run. */
+  totalAll: number
+  doneAll: number
+  signalAll: number
+  digests: Partial<Record<DeliveryChannel, BoardDigest>>
+}
+
+export interface BoardLogo {
+  kind: "logo"
+  id: string
+  companyId: string
+  companyName: string
+  industry: string | null
+  segment: string | null
+  pamId: string | null
+  pamName: string | null
+  status: ResearchStatus | "running"
+  category: string | null
+  keySignals: string | null
+  opportunity: string | null
+  outreach: string | null
+  sources: Source[]
+  attempts: number
+  cached: boolean
+  error: string | null
+  finishedAt: string | null
+  /** The PAM's email digest status for this run ("none" before it is queued). */
+  digest: BoardDigestStatus | "none"
+}
+
+export interface BoardFacetOption {
+  value: string
+  label?: string
+  count: number
+}
+
+export interface BoardFacets {
+  status: Partial<Record<"signal" | "no_signal" | "failed" | "pending", number>>
+  all: number
+  categories: BoardFacetOption[]
+  pams: BoardFacetOption[]
+  digest: BoardFacetOption[]
+}
+
+export interface LogoTimeline {
+  logo: BoardLogo & { enqueuedAt: string | null; startedAt: string | null; latencyMs: number | null }
+  run: { id: string; label: string; status: RunStatus; windowStart: string | null; windowEnd: string | null }
+  events: ProcessEvent[]
+  digests: { id: string; channel: DeliveryChannel; status: BoardDigestStatus; sentAt: string | null; recipient: string | null; lastError: string | null; includesLogo: boolean; signals: number | null }[]
+  history: { runId: string; label: string; windowEnd: string | null; status: ResearchStatus | "running"; category: string | null; finishedAt: string | null }[]
+}
+
+export interface DigestRender {
+  subject: string
+  html: string
+  text: string
+  asSent: boolean
+  sentAt: string | null
+  status: BoardDigestStatus | "none"
+  recipient: string | null
 }

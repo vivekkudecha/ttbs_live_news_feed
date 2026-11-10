@@ -12,11 +12,13 @@ const KIND_LABEL: Record<string, string> = {
   "run.finish": "Run finished",
   "run.cancel": "Run cancelled",
   "run.retry_failed": "Failed logos re-queued",
+  "run.retry_selected": "Selected logos re-queued",
   "research.attempt": "Research attempt",
   "notify.queued": "Digest queued",
   "notify.skipped": "Digest skipped",
   "notify.attempt": "Digest delivery",
   "notify.resend": "Digest re-sent",
+  "notify.refreshed": "Digest updated after retry",
   "sweeper.recovered": "Lost work recovered",
 }
 

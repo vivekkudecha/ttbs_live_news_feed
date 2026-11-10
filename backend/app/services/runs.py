@@ -25,6 +25,8 @@ from app.db.models import (
     CHANNELS,
     IMPORT_COMPLETED,
     NOTE_PENDING,
+    NOTE_SENDING,
+    NOTE_SENT,
     NOTE_SKIPPED,
     RES_FAILED,
     RES_NO_SIGNAL,
@@ -414,9 +416,35 @@ def finalize(uow: UnitOfWork, run: Run) -> None:
 # --- Notifications (outbox) -----------------------------------------------------------------
 
 
+def pam_digest(uow: UnitOfWork, run: Run, pam_id: int) -> tuple[Pam | None, list[ResearchResult], dict[str, Any]]:
+    """The PAM's digest for this run, built from the results as they are now."""
+    s = uow.session
+    in_run = (ResearchResult.run_id == run.id, ResearchResult.part_month == run.part_month)  # one partition
+    pam = s.get(Pam, pam_id)
+    signals = list(s.scalars(
+        select(ResearchResult).where(*in_run, ResearchResult.pam_id == pam_id, ResearchResult.status == RES_SIGNAL).order_by(ResearchResult.id)
+    ))
+    total = s.scalar(select(func.count(ResearchResult.id)).where(*in_run, ResearchResult.pam_id == pam_id)) or 0
+    return pam, signals, build_digest(run, pam, signals, total)
+
+
+def _eligibility(pam: Pam | None, channel: str, has_signals: bool, send_when_no_signals: bool) -> tuple[str, str | None, str | None]:
+    """(status, recipient, reason) for a PAM's digest on one channel."""
+    recipient, reason = _recipient(pam, channel)
+    if reason:
+        return NOTE_SKIPPED, recipient, reason
+    if not has_signals and not (channel == "email" and send_when_no_signals):
+        return NOTE_SKIPPED, recipient, "no signals for this PAM in this run"
+    return NOTE_PENDING, recipient, None
+
+
 def maybe_queue_pam_digest(uow: UnitOfWork, run: Run, pam_id: int) -> list[int]:
     """When a PAM's last company in this run is done, write one outbox row per channel.
-    Every row (queued or skipped) is audited and recorded as a telemetry event."""
+    Every row (queued or skipped) is audited and recorded as a telemetry event.
+
+    Failed companies count as done, so a PAM's digest can be written while some of its companies
+    failed (e.g. rate limited). When those are retried and finish, the existing row is refreshed
+    from the current results (see `_refresh_digest`) instead of keeping the first snapshot."""
     s = uow.session
     in_run = (ResearchResult.run_id == run.id, ResearchResult.part_month == run.part_month)  # one partition
     open_count = s.scalar(
@@ -424,33 +452,25 @@ def maybe_queue_pam_digest(uow: UnitOfWork, run: Run, pam_id: int) -> list[int]:
     )
     if open_count:
         return []
-    pam = s.get(Pam, pam_id)
-    signals = s.scalars(
-        select(ResearchResult).where(*in_run, ResearchResult.pam_id == pam_id, ResearchResult.status == RES_SIGNAL).order_by(ResearchResult.id)
-    ).all()
-    total = s.scalar(select(func.count(ResearchResult.id)).where(*in_run, ResearchResult.pam_id == pam_id))
-    payload = build_digest(run, pam, signals, total or 0)
+    pam, signals, payload = pam_digest(uow, run, pam_id)
+    total = payload["total"]
     from app.services import email_config  # delivery policy is set in the UI
 
     email_policy = email_config.policy(email_config.get_row(uow))
     created: list[int] = []
     email_ids: list[int] = []
     for channel in run.channels or []:
-        recipient, reason = _recipient(pam, channel)
-        status = NOTE_PENDING
-        if reason:
-            status = NOTE_SKIPPED
-        elif not signals and not (channel == "email" and email_policy.send_when_no_signals):
-            status, reason = NOTE_SKIPPED, "no signals for this PAM in this run"
+        status, recipient, reason = _eligibility(pam, channel, bool(signals), email_policy.send_when_no_signals)
         note = Notification(
             run_id=run.id, pam_id=pam_id, channel=channel, recipient=recipient, status=status,
             last_error=reason, payload=payload, next_attempt_at=utcnow() if status == NOTE_PENDING else None,
         )
         try:
-            with s.begin_nested():  # unique (run, pam, channel): a duplicate trigger is a no-op
+            with s.begin_nested():  # unique (run, pam, channel): the digest already exists
                 s.add(note)
                 s.flush()
         except IntegrityError:
+            _refresh_digest(uow, run, pam_id, channel, payload, status, recipient, reason)
             continue
         if status == NOTE_PENDING:
             created.append(note.id)
@@ -475,6 +495,65 @@ def maybe_queue_pam_digest(uow: UnitOfWork, run: Run, pam_id: int) -> list[int]:
         if email_ids:
             uow.after_commit(lambda: dispatch_email.apply_async())
     return created
+
+
+def _same_digest(a: dict[str, Any] | None, b: dict[str, Any]) -> bool:
+    a = a or {}
+    return a.get("signals") == b.get("signals") and a.get("total") == b.get("total") and a.get("items") == b.get("items")
+
+
+def _refresh_digest(uow: UnitOfWork, run: Run, pam_id: int, channel: str, payload: dict[str, Any],
+                    status: str, recipient: str | None, reason: str | None) -> None:
+    """A PAM's digest row already exists (its companies finished again after a retry): bring it up
+    to date with the current results.
+
+    - unchanged content: nothing to do;
+    - queued (not yet handed to a worker): swap in the new content;
+    - being sent right now: left alone;
+    - skipped / failed / sent: the new content replaces the old and, when it now qualifies, it is
+      queued again, so the PAM gets the corrected digest (e.g. 3 signals instead of the 0 the
+      rate-limited first pass produced)."""
+    from app.services import notifications
+
+    s = uow.session
+    note = s.scalars(select(Notification).where(
+        Notification.run_id == run.id, Notification.part_month == run.part_month,
+        Notification.pam_id == pam_id, Notification.channel == channel)).first()
+    if note is None or note.status == NOTE_SENDING or _same_digest(note.payload, payload):
+        return
+    before = (note.payload or {}).get("signals")
+    if note.status == NOTE_PENDING:
+        if note.reserved_at is not None:  # a worker is about to send it
+            return
+        note.payload, note.rendered = payload, None
+        action = "updated"
+    elif status == NOTE_PENDING:
+        note.payload, note.recipient = payload, recipient
+        notifications._requeue(uow, note)
+        action = "requeued"
+    elif note.status == NOTE_SENT:
+        return  # still nothing to send (e.g. PAM opted out since): keep the record of what was sent
+    else:
+        note.payload, note.recipient, note.last_error = payload, recipient, reason
+        note.status = NOTE_SKIPPED
+        action = "updated"
+    audit.record(uow, "notify.refresh", "notification", note.id,
+                 {"pam_id": pam_id, "channel": channel, "signals_before": before, "signals": payload["signals"], "action": action},
+                 actor="system", run_id=run.id)
+    telemetry.event(uow, "notify.refreshed", telemetry.INFO, run_id=run.id, import_id=run.import_id, pam_id=pam_id,
+                    notification_id=note.id, actor="system", channel=channel, signals=payload["signals"], total=payload["total"],
+                    message=f"Digest refreshed after retry: {before or 0} -> {payload['signals']} signals ({action})")
+    uow.after_commit(lambda: cache.bump(f"run:{run.id}", "runs", "outbox"))
+
+
+def refresh_payload(uow: UnitOfWork, note: Notification) -> None:
+    """Rebuild a digest row's content from the run's current results (before a manual resend)."""
+    run = uow.session.get(Run, note.run_id)
+    if run is None or note.pam_id is None:
+        return
+    _, _, payload = pam_digest(uow, run, note.pam_id)
+    if not _same_digest(note.payload, payload):
+        note.payload = payload
 
 
 def _recipient(pam: Pam | None, channel: str) -> tuple[str | None, str | None]:

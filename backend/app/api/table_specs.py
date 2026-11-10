@@ -25,6 +25,7 @@ RUNS: Spec = {
 
 RESULTS: Spec = {
     "companyName": Col(Company.name, "text"),
+    "pamName": Col(Pam.name, "text"),  # the route outer-joins Pam
     "status": Col(ResearchResult.status, "enum"),
     "category": Col(ResearchResult.category, "enum"),
     "keySignals": Col(ResearchResult.key_signals, "text", sortable=False),

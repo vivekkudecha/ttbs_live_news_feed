@@ -2,8 +2,9 @@
  * Research runs (formerly "Jobs" + "Research runs"): one list and one detail page per run.
  *
  * List: queue health, status tabs with counts, search, rich rows with inline Cancel / Retry.
- * Detail: header actions, a progress hero (live rate + ETA), key numbers, and tabs for the live
- * grid, per-company results, per-PAM jobs and digest deliveries. The tab lives in the URL.
+ * Detail: header actions, a progress hero (live rate + ETA), key numbers, and tabs: Overview (live
+ * grid + run timeline), Results (one board for logos, PAMs, digests and logo timelines), Events and
+ * the audit trail. The tab lives in the URL.
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
@@ -15,15 +16,14 @@ import {
   CalendarClock,
   DatabaseZap,
   Clock,
-  ExternalLink,
   FileSpreadsheet,
   Gauge,
   Loader2,
   Play,
   Radio,
-  RefreshCw,
   RotateCcw,
   Search,
+  Table2,
   Sparkles,
   TriangleAlert,
   Users,
@@ -31,9 +31,8 @@ import {
 } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { EmptyState } from "@/components/common/EmptyState"
-import { RichText, safeHref } from "@/components/common/RichText"
 import { StatCard } from "@/components/common/StatCard"
-import { StatusBadge, type AnyStatus } from "@/components/common/StatusBadge"
+import { StatusBadge } from "@/components/common/StatusBadge"
 import { LiveRunPanel } from "@/components/live/LiveRunPanel"
 import { CompanyDrawer } from "@/components/companies/CompanyDrawer"
 import { ReassignDialog } from "@/components/companies/ReassignDialog"
@@ -48,29 +47,26 @@ import { DataTableColumnHeader } from "@/components/data-table/DataTableColumnHe
 import { SmartTable } from "@/components/data-table/SmartTable"
 import { useServerTable } from "@/components/data-table/useSmartTable"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { api } from "@/api/client"
 import { backend, errorMessage } from "@/api/http"
 import {
   useCancelJob,
   useJob,
   useQueues,
-  useResend,
-  useResendNotification,
   useRetryFailed,
   useRun,
 } from "@/api/hooks"
 import { useDebounced } from "@/lib/use-debounced"
 import { durationMin, fmtDate, fmtDateTime, pct } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { Job, JobNotification, JobPage, JobResult, JobResultPage, PamJobRow } from "@/api/types"
+import type { Job, JobPage } from "@/api/types"
 import { NewRunDialog } from "@/components/runs/NewRunDialog"
 import { AuditTab, EventsTab, TimelineTab } from "@/components/runs/RunInsights"
+import { RunBoard } from "@/components/runs/board/RunBoard"
 import { Page, StatGrid } from "@/components/common/layout"
 import { LiveDot } from "@/components/common/LiveDot"
 
 const n = (x: number) => x.toLocaleString("en-IN")
 const ACTIVE = new Set(["scheduled", "queued", "running"])
-const asStatus = (s: string): AnyStatus => (s === "sending" ? "running" : (s as AnyStatus))
 const TRIGGER: Record<Job["trigger"], { label: string; icon: typeof Play }> = {
   upload: { label: "New upload", icon: FileSpreadsheet },
   rerun: { label: "Re-run", icon: RotateCcw },
@@ -494,414 +490,9 @@ function ProgressHero({ j, rate }: { j: Job; rate?: number | null }) {
   )
 }
 
-function Findings({ r }: { r: JobResult }) {
-  const [open, setOpen] = useState(false)
-  if (r.status === "failed") return <span className="text-destructive">{r.error ?? "Failed"}</span>
-  if (r.status === "no_signal") return <span className="text-muted-foreground">No TTBS-relevant news in the window.</span>
-  if (r.status !== "signal")
-    return <span className="text-muted-foreground">{r.status === "running" ? "Researching now…" : r.error ? `Retrying: ${r.error}` : "Waiting in queue…"}</span>
-  return (
-    <div className="space-y-1.5">
-      <div className={cn(!open && "line-clamp-2")}>
-        <RichText text={r.keySignals ?? undefined} />
-      </div>
-      {open && (
-        <>
-          {r.opportunity && (
-            <p className="text-muted-foreground">
-              <span className="font-medium text-foreground">Opportunity: </span>
-              <RichText text={r.opportunity} />
-            </p>
-          )}
-          {r.outreach && (
-            <p className="text-muted-foreground">
-              <span className="font-medium text-foreground">Outreach: </span>
-              <RichText text={r.outreach} />
-            </p>
-          )}
-          {r.sources.length > 0 && (
-            <div className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5">
-              {r.sources.map((s) => (
-                <a key={s.url} href={safeHref(s.url)} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
-                  <ExternalLink className="size-3" /> {s.title}
-                </a>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-      <button type="button" className="text-xs font-medium text-brand-blue hover:underline" onClick={() => setOpen((v) => !v)}>
-        {open ? "Show less" : `Show opportunity, outreach${r.sources.length ? ` & ${r.sources.length} source${r.sources.length === 1 ? "" : "s"}` : ""}`}
-      </button>
-    </div>
-  )
-}
-
-const RESULT_STATUS = [
-  { value: "signal", label: "Signal" },
-  { value: "no_signal", label: "No signal" },
-  { value: "failed", label: "Failed" },
-  { value: "pending", label: "Pending" },
-  { value: "running", label: "Researching" },
-]
-
-function ResultsTab({ j, live, onOpenCompany }: { j: Job; live: boolean; onOpenCompany: (id: string) => void }) {
-  const [status, setStatus] = useState("all")
-  const [search, setSearch] = useState("")
-  const q = useDebounced(search, 250)
-  const columns = useMemo<ColumnDef<JobResult, unknown>[]>(
-    () => [
-      {
-        id: "companyName",
-        accessorKey: "companyName",
-        enableHiding: false,
-        size: 280,
-        meta: { label: "Company", filter: { type: "text" } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Company" />,
-        cell: ({ row }) => {
-          const r = row.original
-          return (
-            <div>
-              <button type="button" onClick={() => onOpenCompany(r.companyId)} className="text-left font-semibold hover:text-brand-blue hover:underline">
-                {r.companyName}
-              </button>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                {r.category && <Badge variant="outline">{r.category}</Badge>}
-                {r.cached && <Badge variant="secondary">cached</Badge>}
-                {r.attempts > 1 && <Badge variant="secondary">{r.attempts} attempts</Badge>}
-              </div>
-            </div>
-          )
-        },
-      },
-      {
-        id: "status",
-        accessorKey: "status",
-        size: 120,
-        meta: { label: "Status", filter: { type: "enum", options: RESULT_STATUS } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-        cell: ({ row }) => <StatusBadge status={asStatus(row.original.status)} />,
-      },
-      {
-        id: "keySignals",
-        accessorKey: "keySignals",
-        enableSorting: false,
-        meta: { label: "Findings", filter: { type: "text", placeholder: "Words in the findings" } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Findings" />,
-        cell: ({ row }) => (
-          <div className="whitespace-normal text-sm">
-            <Findings r={row.original} />
-          </div>
-        ),
-      },
-      {
-        id: "latencyMs",
-        accessorKey: "latencyMs",
-        size: 90,
-        meta: { label: "Time", align: "right", filter: { type: "range", unit: "ms" } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Time" align="right" />,
-        cell: ({ row }) => <span className="tabular text-xs text-muted-foreground">{row.original.latencyMs ? `${(row.original.latencyMs / 1000).toFixed(1)} s` : "—"}</span>,
-      },
-      {
-        id: "finishedAt",
-        accessorKey: "finishedAt",
-        meta: { label: "Finished", filter: { type: "date" } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Finished" />,
-        cell: ({ row }) => <span className="tabular whitespace-nowrap text-xs text-muted-foreground">{row.original.finishedAt ? fmtDateTime(row.original.finishedAt) : "—"}</span>,
-      },
-    ],
-    [onOpenCompany],
-  )
-  const state = useServerTable<JobResult, JobResultPage>({
-    id: "results",
-    columns,
-    queryKey: ["jobResults", j.id, { status, q }],
-    fetcher: (t) => backend.jobResults(j.id, { ...t, status: status === "all" ? undefined : status, q: q || undefined }),
-    pageSize: 50,
-    defaultHidden: ["finishedAt"],
-    getRowId: (r) => r.id,
-    refetchInterval: live ? 3_000 : false,
-  })
-  const c = state.data?.counts ?? {}
-  const pending = (c.pending ?? 0) + (c.running ?? 0)
-  const filters: [string, string, number][] = [
-    ["all", "All", j.companies],
-    ["signal", "Signals", c.signal ?? 0],
-    ["no_signal", "No signal", c.no_signal ?? 0],
-    ["failed", "Failed", c.failed ?? 0],
-    ["pending", "Pending", pending],
-  ]
-
-  return (
-    <SmartTable
-      state={state}
-      pageSizes={[25, 50, 100]}
-      toolbar={
-        <>
-          <Tabs value={status} onValueChange={setStatus}>
-            <TabsList>
-              {filters.map(([key, label, count]) => (
-                <TabsTrigger key={key} value={key} className="gap-1.5">
-                  {label}
-                  <span className="tabular rounded-full bg-muted px-1.5 text-xs text-muted-foreground">{n(count)}</span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-          <SearchBox value={search} onChange={setSearch} placeholder="Search companies" label="Search companies in this run" />
-        </>
-      }
-      empty={
-        <EmptyState icon={Search} title={j.status === "scheduled" ? "Not started yet" : "Nothing in this view"}>
-          {j.status === "scheduled" ? "This run has not started yet." : q ? `No companies match “${q}”.` : "Try another tab or filter."}
-        </EmptyState>
-      }
-    />
-  )
-}
-
-const DELIVERY = ["sent", "pending", "sending", "failed", "skipped", "none"].map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1) }))
-
-/** Per-PAM progress and delivery, paged, sorted and filtered on the server. */
-function PamsTab({ runId }: { runId: string }) {
-  const resend = useResend()
-  const [filter, setFilter] = useState<"all" | "attention" | "in_progress" | "done">("all")
-  const [search, setSearch] = useState("")
-  const q = useDebounced(search, 250)
-  const columns = useMemo<ColumnDef<PamJobRow, unknown>[]>(
-    () => [
-      {
-        id: "pamName",
-        accessorKey: "pamName",
-        enableHiding: false,
-        meta: { label: "PAM", filter: { type: "text" } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="PAM" />,
-        cell: ({ row }) => <span className="font-semibold">{row.original.pamName}</span>,
-      },
-      {
-        id: "status",
-        accessorKey: "status",
-        meta: { label: "Status", filter: { type: "enum", options: RUN_STATUS_OPTIONS } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-        cell: ({ row }) => <StatusBadge status={row.original.status} />,
-      },
-      {
-        id: "done",
-        accessorKey: "done",
-        meta: { label: "Progress", filter: { type: "range" } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Progress" />,
-        cell: ({ row }) => (
-          <div className="flex w-44 items-center gap-2">
-            <Progress value={pct(row.original.done, row.original.total)} className="h-1.5" />
-            <span className="tabular w-12 text-right text-xs text-muted-foreground">
-              {row.original.done}/{row.original.total}
-            </span>
-          </div>
-        ),
-      },
-      {
-        id: "withSignal",
-        accessorKey: "withSignal",
-        meta: { label: "Signals", align: "right", filter: { type: "range" } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Signals" align="right" />,
-        cell: ({ row }) => <span className="tabular font-semibold">{row.original.withSignal}</span>,
-      },
-      {
-        id: "email",
-        accessorKey: "email",
-        meta: { label: "Email", filter: { type: "enum", options: DELIVERY } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Email" />,
-        cell: ({ row }) => <StatusBadge status={row.original.email} />,
-      },
-      {
-        id: "whatsapp",
-        accessorKey: "whatsapp",
-        meta: { label: "WhatsApp", filter: { type: "enum", options: DELIVERY } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="WhatsApp" />,
-        cell: ({ row }) => <StatusBadge status={row.original.whatsapp} />,
-      },
-      {
-        id: "actions",
-        enableSorting: false,
-        enableHiding: false,
-        header: () => <span className="sr-only">Actions</span>,
-        cell: ({ row }) => {
-          const j = row.original
-          return (
-            j.email === "failed" || j.whatsapp === "failed" ? (
-              <div className="flex justify-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={resend.isPending}
-                  onClick={() =>
-                    resend.mutate(
-                      { runId, pamId: j.pamId, actor: "" },
-                      {
-                        onSuccess: () => toast.success(`Digest re-queued for ${j.pamName}`),
-                        onError: (e) => toast.error("Could not resend", { description: errorMessage(e) }),
-                      },
-                    )
-                  }
-                >
-                  <RefreshCw /> Resend
-                </Button>
-              </div>
-            ) : null
-          )
-        },
-      },
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [runId, resend.isPending],
-  )
-  const state = useServerTable<PamJobRow>({
-    id: "pams",
-    columns,
-    queryKey: ["pamJobs", runId, { filter, q }],
-    fetcher: (t) => api.pamJobs(runId, { page: t.page, pageSize: t.pageSize, filter, search: q, sort: t.sort, desc: t.desc, columnFilter: t.filter }),
-    getRowId: (r) => r.pamId,
-  })
-
-  return (
-    <SmartTable
-      state={state}
-      toolbar={
-        <>
-          <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
-            <TabsList>
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="attention">Needs attention</TabsTrigger>
-              <TabsTrigger value="in_progress">In progress</TabsTrigger>
-              <TabsTrigger value="done">Done</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <SearchBox value={search} onChange={setSearch} placeholder="Search PAMs" label="Search PAMs in this run" />
-        </>
-      }
-      empty={
-        <EmptyState icon={Users} title="No PAMs in this view">
-          Try another tab or filter.
-        </EmptyState>
-      }
-    />
-  )
-}
-
-const NOTE_STATUS = ["sent", "pending", "sending", "failed", "skipped"].map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1) }))
-
-function DigestsTab({ runId, live }: { runId: string; live: boolean }) {
-  const resend = useResendNotification()
-  const columns = useMemo<ColumnDef<JobNotification, unknown>[]>(
-    () => [
-      {
-        id: "pamName",
-        accessorKey: "pamName",
-        enableHiding: false,
-        meta: { label: "PAM", filter: { type: "text" } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="PAM" />,
-        cell: ({ row }) => (
-          <div>
-            <span className="font-semibold">{row.original.pamName}</span>
-            <p className="text-xs text-muted-foreground">{row.original.recipient}</p>
-          </div>
-        ),
-      },
-      {
-        id: "channel",
-        accessorKey: "channel",
-        meta: { label: "Channel", filter: { type: "enum", options: [{ value: "email", label: "Email" }, { value: "whatsapp", label: "WhatsApp" }] } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Channel" />,
-        cell: ({ row }) => <span className="capitalize">{row.original.channel}</span>,
-      },
-      {
-        id: "status",
-        accessorKey: "status",
-        meta: { label: "Status", filter: { type: "enum", options: NOTE_STATUS } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-        cell: ({ row }) => <StatusBadge status={asStatus(row.original.status)} label={row.original.status} />,
-      },
-      {
-        id: "attempts",
-        accessorKey: "attempts",
-        meta: { label: "Attempts", align: "right", filter: { type: "range" } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Attempts" align="right" />,
-        cell: ({ row }) => <span className="tabular">{row.original.attempts}</span>,
-      },
-      {
-        id: "sentAt",
-        accessorKey: "sentAt",
-        meta: { label: "Detail", filter: { type: "date" } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Detail" />,
-        cell: ({ row }) => {
-          const x = row.original
-          return (
-            <span className="whitespace-normal text-sm text-muted-foreground">
-              {x.status === "sent" ? `Sent ${fmtDateTime(x.sentAt)}` : x.lastError}
-              {x.status === "pending" && x.nextAttemptAt && ` · next try ${fmtDateTime(x.nextAttemptAt)}`}
-            </span>
-          )
-        },
-      },
-      {
-        id: "actions",
-        enableSorting: false,
-        enableHiding: false,
-        header: () => <span className="sr-only">Actions</span>,
-        cell: ({ row }) => {
-          const x = row.original
-          return x.status === "failed" || x.status === "sent" || (x.status === "skipped" && x.recipient) ? (
-            <div className="flex justify-end">
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={resend.isPending}
-                onClick={() =>
-                  resend.mutate(x.id, {
-                    onSuccess: () => toast.success("Digest re-queued"),
-                    onError: (e) => toast.error("Could not resend", { description: errorMessage(e) }),
-                  })
-                }
-              >
-                <RotateCcw /> Resend
-              </Button>
-            </div>
-          ) : null
-        },
-      },
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [resend.isPending],
-  )
-  const state = useServerTable<JobNotification>({
-    id: "digests",
-    columns,
-    queryKey: ["jobNotifications", runId],
-    fetcher: (t) => backend.jobNotifications(runId, t),
-    pageSize: 50,
-    getRowId: (x) => x.id,
-    refetchInterval: live ? 3_000 : false,
-  })
-  if (!state.loading && state.total === 0 && state.table.getState().columnFilters.length === 0)
-    return (
-      <EmptyState icon={BellRing} title="No digests yet">
-        Each PAM's digest is queued the moment all of their companies are researched.
-      </EmptyState>
-    )
-  return (
-    <SmartTable
-      state={state}
-      pageSizes={[25, 50, 100]}
-      empty={
-        <EmptyState icon={BellRing} title="No digests match">
-          Clear a filter to see every digest.
-        </EmptyState>
-      }
-    />
-  )
-}
-
-type DetailTab = "live" | "results" | "pams" | "digests" | "timeline" | "events" | "audit"
+type DetailTab = "live" | "results" | "events" | "audit"
+/** Tabs merged into the results board (old links keep working). */
+const MERGED: Record<string, DetailTab> = { pams: "results", digests: "results" }
 
 export function RunDetail() {
   const { id = "" } = useParams()
@@ -916,7 +507,8 @@ export function RunDetail() {
   const started = !!j && j.status !== "scheduled"
   const live = !!j && ACTIVE.has(j.status)
   const fallback: DetailTab = live && started ? "live" : "results"
-  const tab = (params.get("tab") as DetailTab | null) ?? fallback
+  const rawTab = params.get("tab")
+  const tab: DetailTab = rawTab === "timeline" ? (started ? "live" : "results") : ((MERGED[rawTab ?? ""] ?? rawTab ?? fallback) as DetailTab)
 
   // The live grid only exists once a run has started.
   useEffect(() => {
@@ -983,29 +575,23 @@ export function RunDetail() {
               {live ? <Radio className="text-info" /> : <Gauge />} {live ? "Live" : "Overview"}
             </TabsTrigger>
           )}
-          <TabsTrigger value="results">Results</TabsTrigger>
-          <TabsTrigger value="pams">PAMs</TabsTrigger>
-          <TabsTrigger value="digests">Digests</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="results" className="gap-1.5">
+            <Table2 /> Results
+            <span className="tabular rounded-full bg-muted px-1.5 text-xs text-muted-foreground">{n(j.companies)}</span>
+          </TabsTrigger>
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="audit">Audit trail</TabsTrigger>
         </TabsList>
         {started && (
           <TabsContent value="live" className="mt-4">
-            <LiveRunPanel runId={j.id} finishedAt={j.finishedAt} onOpenCompany={setOpenCompany} />
+            <div className="space-y-6">
+              <LiveRunPanel runId={j.id} finishedAt={j.finishedAt} onOpenCompany={setOpenCompany} />
+              <TimelineTab runId={j.id} live={live} />
+            </div>
           </TabsContent>
         )}
         <TabsContent value="results" className="mt-4">
-          <ResultsTab j={j} live={live} onOpenCompany={setOpenCompany} />
-        </TabsContent>
-        <TabsContent value="pams" className="mt-4">
-          <PamsTab runId={j.id} />
-        </TabsContent>
-        <TabsContent value="digests" className="mt-4">
-          <DigestsTab runId={j.id} live={live} />
-        </TabsContent>
-        <TabsContent value="timeline" className="mt-4">
-          <TimelineTab runId={j.id} live={live} />
+          <RunBoard runId={j.id} live={live} onOpenCompany={setOpenCompany} onReassign={setReassign} />
         </TabsContent>
         <TabsContent value="events" className="mt-4">
           <EventsTab runId={j.id} live={live} />

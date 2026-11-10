@@ -31,6 +31,7 @@ from app.db.models import (
     DatasetCompany,
     ImportBatch,
     Notification,
+    Pam,
     ProcessEvent,
     ResearchResult,
     Run,
@@ -360,21 +361,23 @@ def run_results(run_id: int, pg: tuple[int, int] = Depends(_page), status: str |
         conds = [ResearchResult.run_id == run_id, ResearchResult.part_month == run.part_month]  # one partition
         if status:
             conds.append(ResearchResult.status.in_([RES_PENDING, RES_RUNNING] if status == RES_PENDING else [status]))
-        base = select(ResearchResult).join(Company, Company.id == ResearchResult.company_id)
-        cq = select(func.count(ResearchResult.id)).join(Company, Company.id == ResearchResult.company_id)
+        base = (select(ResearchResult, Pam.name).join(Company, Company.id == ResearchResult.company_id)
+                .outerjoin(Pam, Pam.id == ResearchResult.pam_id))
+        cq = (select(func.count(ResearchResult.id)).join(Company, Company.id == ResearchResult.company_id)
+              .outerjoin(Pam, Pam.id == ResearchResult.pam_id))
         search = (q or "").strip()[:100]
         if search:
             conds.append(Company.name.ilike(f"%{search}%"))
         conds += conditions(spec.RESULTS, lst)
         signal_first = case((ResearchResult.status == "signal", 0), (ResearchResult.status == "failed", 1), else_=2)
         order = ordering(spec.RESULTS, lst, [signal_first, Company.name], ResearchResult.id)
-        rows = uow.session.scalars(base.where(*conds).order_by(*order).limit(size).offset(page * size))
+        rows = uow.session.execute(base.where(*conds).order_by(*order).limit(size).offset(page * size)).all()
         cq = cq.where(*conds)
         counts = dict(uow.session.execute(
             select(ResearchResult.status, func.count())
             .where(ResearchResult.run_id == run_id, ResearchResult.part_month == run.part_month).group_by(ResearchResult.status)
         ).all())
-        return {"rows": [sch.result_out(r) for r in rows], "total": uow.session.scalar(cq) or 0, "page": page,
+        return {"rows": [sch.result_out(r, pam_name) for r, pam_name in rows], "total": uow.session.scalar(cq) or 0, "page": page,
                 "pageSize": size, "counts": counts}
 
 
