@@ -58,7 +58,7 @@ export function DataTable<T>({
     <div ref={box} className={cn("rounded-xl border bg-card shadow-xs", fits ? "overflow-x-clip" : "overflow-x-auto")}>
       <Table
         style={{ "--table-min": minWidth } as CSSProperties}
-        className="min-w-(--table-min) lg:min-w-0 lg:text-[13px] 2xl:text-sm lg:[&_td]:whitespace-normal lg:[&_td]:break-words lg:[&_th]:whitespace-normal"
+        className="min-w-(--table-min) lg:min-w-0 lg:text-sm lg:[&_td]:whitespace-normal lg:[&_td]:break-words lg:[&_th]:whitespace-normal"
         containerClassName="overflow-visible"
       >
         <TableHeader
@@ -72,7 +72,8 @@ export function DataTable<T>({
               {hg.headers.map((h) => (
                 <TableHead
                   key={h.id}
-                  style={{ width: h.column.columnDef.size !== 150 ? h.column.columnDef.size : undefined }}
+                  // Column `size` is declared in px at 1080p; as rem it follows the screen-fitted scale.
+                  style={{ width: h.column.columnDef.size && h.column.columnDef.size !== 150 ? `${h.column.columnDef.size / 16}rem` : undefined }}
                   className={cn(
                     "group/th h-11 text-xs font-medium text-muted-foreground first:rounded-tl-xl first:pl-4 last:rounded-tr-xl last:pr-4",
                     h.column.columnDef.meta?.align === "right" && "text-right",

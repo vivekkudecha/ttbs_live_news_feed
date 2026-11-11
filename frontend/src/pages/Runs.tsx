@@ -176,7 +176,7 @@ function runColumns(): ColumnDef<Job, unknown>[] {
         const j = row.original
         return (
           <div className="min-w-0 space-y-1">
-            <Link to={`/runs/${j.id}`} className="block max-w-[26rem] truncate font-semibold hover:text-brand-blue hover:underline" onClick={(e) => e.stopPropagation()}>
+            <Link to={`/runs/${j.id}`} className="line-clamp-2 max-w-[26rem] font-semibold [overflow-wrap:anywhere] hover:text-brand-blue hover:underline" onClick={(e) => e.stopPropagation()}>
               <span className="text-muted-foreground">#{j.id}</span> {j.label}
             </Link>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">

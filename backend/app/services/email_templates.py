@@ -8,11 +8,16 @@ them against sample data with undefined variables treated as errors.
 Variables: pam.{name, first_name, email}, run.{id, label, window_start, window_end},
 signals[].{company, category, key_signals, opportunity, outreach, sources[].{title, url}},
 counts.{signals, total}, ai_summary, generated_at.
+Each signal also carries ready-to-show sections (same rules as the web app's lib/findings.ts):
+points[] (key signals split into points, URLs taken out), opportunity_text, outreach_text (URLs taken
+out) and links[].{url, label} (sources plus URLs mentioned in the text, each once).
 """
 
+import hashlib
 import logging
 import re
 from typing import Any
+from urllib.parse import urlparse
 
 from jinja2 import StrictUndefined, TemplateError, Undefined
 from jinja2.sandbox import SandboxedEnvironment
@@ -40,12 +45,70 @@ def _rich(value: Any) -> Markup:
     """Escape research text, then turn **bold** into <strong> and URLs into links."""
     s = str(escape(value or ""))
     s = _BOLD.sub(r"<strong>\1</strong>", s)
-    s = _URL.sub(r'<a href="\1" style="color:#2563eb">\1</a>', s)
+    s = _URL.sub(r'<a href="\1" style="color:#0072b1">\1</a>', s)
     return Markup(s.replace("\n", "<br>"))
 
 
 def _plain(value: Any) -> str:
     return _BOLD.sub(r"\1", str(value or ""))
+
+
+# --- Findings as sections (mirrors frontend/src/lib/findings.ts) -----------------------------------
+
+_TEXT_URL = re.compile(r"https?://[^\s)\];,<>\"']+")
+_POINT_SPLIT = re.compile(r";\s+|(?<=[a-z0-9)\]*%])\.\s+(?=\*{0,2}[A-Z])")
+
+
+def _urls_in(text: str | None) -> list[str]:
+    return list(dict.fromkeys(u.rstrip(".,") for u in _TEXT_URL.findall(text or "")))
+
+
+def _without_urls(text: str | None) -> str:
+    s = _TEXT_URL.sub("", text or "")
+    s = re.sub(r"\(\s*(?:[;,|]\s*)*\)", "", s)  # "( ; ; )" left by a URL list
+    s = re.sub(r"\[\s*\]", "", s)
+    s = re.sub(r"\s+([.,;])", r"\1", s)
+    return re.sub(r"\s{2,}", " ", s).strip()
+
+
+def _points(text: str | None) -> list[str]:
+    """Key signals as points: split at "; " and sentence ends; short fragments join the point before."""
+    out: list[str] = []
+    for piece in (p.strip().rstrip(".;") for p in _POINT_SPLIT.split(_without_urls(text))):
+        if not piece:
+            continue
+        if out and len(piece) < 25:
+            out[-1] += f"; {piece}"
+        else:
+            out.append(piece[0].upper() + piece[1:])
+    return out
+
+
+def _host(url: str) -> str:
+    return (urlparse(url).hostname or url).removeprefix("www.")
+
+
+def _links(item: dict[str, Any]) -> list[dict[str, str]]:
+    """The item's sources, then any URL only mentioned in its text; each once, with a short label."""
+    seen: set[str] = set()
+    out: list[dict[str, str]] = []
+    for src in item.get("sources") or []:
+        url = src.get("url") if isinstance(src, dict) else None
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        title = src.get("title") or ""
+        out.append({"url": url, "label": title if title and not title.startswith(("http://", "https://")) else _host(url)})
+    for url in (u for f in ("key_signals", "opportunity", "outreach") for u in _urls_in(item.get(f))):
+        if url not in seen:
+            seen.add(url)
+            out.append({"url": url, "label": _host(url)})
+    return out
+
+
+def _sections(item: dict[str, Any]) -> dict[str, Any]:
+    return item | {"points": _points(item.get("key_signals")), "opportunity_text": _without_urls(item.get("opportunity")),
+                   "outreach_text": _without_urls(item.get("outreach")), "links": _links(item)}
 
 
 def _env(*, html: bool, strict: bool) -> SandboxedEnvironment:
@@ -69,7 +132,7 @@ def context(payload: dict[str, Any], ai_summary: str = "") -> dict[str, Any]:
     return {
         "pam": {"name": name, "first_name": name.split(" ")[0], "email": pam.get("email") or ""},
         "run": payload.get("run") or {},
-        "signals": items,
+        "signals": [_sections(i) for i in items if isinstance(i, dict)],
         "counts": {"signals": payload.get("signals", len(items)), "total": payload.get("total", len(items))},
         "ai_summary": ai_summary,
         "generated_at": utcnow().strftime("%d %b %Y"),
@@ -172,6 +235,7 @@ def versions(uow: UnitOfWork, template_id: int) -> list[EmailTemplateVersion]:
 def ensure_default(uow: UnitOfWork) -> None:
     s = uow.session
     if s.scalar(select(func.count(EmailTemplate.id))):
+        _upgrade_builtin(uow)
         return
     try:
         with s.begin_nested():
@@ -183,6 +247,40 @@ def ensure_default(uow: UnitOfWork) -> None:
             s.flush()
     except IntegrityError:  # seeded concurrently
         pass
+
+
+# Earlier built-in bodies (sha256 of html_tpl, text_tpl). A template still exactly equal to one of them
+# was never edited, so it moves to the current built-in body (recorded as a new version).
+_PREVIOUS_BUILTINS = {("af7cddfacabfa4287dc6f231be20c6d5c276b234154d0cd280f916a91fae9fa5",
+                       "a822bf84b7f737d554c4ec0c459b3dad859204a4d06ce7ed382bb4f95a57326d")}
+_builtin_checked = False
+
+
+def _sha(v: str | None) -> str:
+    return hashlib.sha256((v or "").encode()).hexdigest()
+
+
+def _upgrade_builtin(uow: UnitOfWork) -> None:
+    global _builtin_checked
+    if _builtin_checked:  # once per process
+        return
+    s = uow.session
+    for t in s.scalars(select(EmailTemplate).where(EmailTemplate.name == DEFAULT_TEMPLATE["name"])):
+        if (_sha(t.html_tpl), _sha(t.text_tpl)) not in _PREVIOUS_BUILTINS:
+            continue
+        try:
+            with s.begin_nested():
+                t.html_tpl, t.text_tpl = DEFAULT_TEMPLATE["html_tpl"], DEFAULT_TEMPLATE["text_tpl"]
+                t.description = DEFAULT_TEMPLATE["description"]
+                t.version += 1
+                t.updated_by = "system"
+                s.flush()
+                _version(uow, t, "system", "Built-in default updated: findings shown as sections")
+                s.flush()
+            uow.after_commit(lambda: cache.bump("email"))
+        except IntegrityError:  # another process upgraded it first
+            pass
+    _builtin_checked = True
 
 
 # --- Commands -------------------------------------------------------------------------------------
@@ -300,48 +398,81 @@ def preview(data: dict[str, Any], payload: dict[str, Any] | None, *, with_ai: bo
 
 # --- Built-in default ------------------------------------------------------------------------------
 
+# TTBS theme: primary #0072b1, brand orange #e8742a, ink #132235, muted #586777, border #e1e8ef, canvas #f5f8fb.
+# Each account is one card with the same sections as the web app: Key signals (points), Opportunity,
+# Recommended outreach, Sources. Inline styles and tables only (what email clients render reliably).
+_SECTION = "margin-top:14px;padding-top:12px;border-top:1px solid #eef2f6"
+_LABEL = "font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px"
+
 _DEFAULT_HTML = """<!doctype html>
-<html><body style="margin:0;padding:0;background:#f4f5f7;font-family:Segoe UI,Arial,sans-serif;color:#1f2937">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:24px 0">
+<html><body style="margin:0;padding:0;background:#f5f8fb;font-family:Segoe UI,Arial,sans-serif;color:#132235">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f8fb;padding:24px 0">
 <tr><td align="center">
-<table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden">
-  <tr><td style="padding:20px 28px;border-bottom:3px solid #1d4ed8">
-    <div style="font-size:18px;font-weight:700;color:#1d4ed8">TTBS Signals</div>
-    <div style="font-size:12px;color:#6b7280">News window {{ run.window_start }} to {{ run.window_end }}</div>
+<table role="presentation" width="640" cellpadding="0" cellspacing="0"
+  style="max-width:640px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e1e8ef">
+  <tr><td style="height:4px;line-height:4px;font-size:0;background:#e8742a">&nbsp;</td></tr>
+  <tr><td style="padding:20px 28px;border-bottom:1px solid #e1e8ef">
+    <div style="font-size:18px;font-weight:700;color:#0072b1">TTBS Signals</div>
+    <div style="font-size:12px;color:#586777">News window {{ run.window_start }} to {{ run.window_end }}</div>
   </td></tr>
   <tr><td style="padding:24px 28px 8px;font-size:14px;line-height:1.6">
     <p style="margin:0 0 12px">Hi {{ pam.first_name }},</p>
     <p style="margin:0 0 12px">We researched <strong>{{ counts.total }}</strong> accounts you own.
     <strong>{{ counts.signals }}</strong> {{ 'has' if counts.signals == 1 else 'have' }} a TTBS-relevant trigger.</p>
     {% if ai_summary %}
-    <div style="margin:16px 0;padding:14px 16px;background:#eff6ff;border-left:4px solid #1d4ed8;border-radius:6px">
-      <div style="font-size:11px;font-weight:700;letter-spacing:.04em;color:#1d4ed8;text-transform:uppercase">Summary</div>
+    <div style="margin:16px 0;padding:14px 16px;background:#e9f3fa;border-left:4px solid #0072b1;border-radius:6px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#0072b1;text-transform:uppercase">Summary</div>
       <div style="margin-top:6px">{{ ai_summary }}</div>
     </div>
     {% endif %}
   </td></tr>
   {% for s in signals %}
   <tr><td style="padding:8px 28px">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px">
-      <tr><td style="padding:14px 16px;font-size:14px;line-height:1.55">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e1e8ef;border-radius:10px">
+      <tr><td style="padding:16px 18px;font-size:14px;line-height:1.55">
         <div style="font-weight:700;font-size:15px">{{ s.company }}
-          {% if s.category %}<span style="font-weight:600;font-size:11px;color:#1d4ed8;background:#eff6ff;
+          {% if s.category %}<span style="font-weight:600;font-size:11px;color:#0072b1;background:#e9f3fa;
             border-radius:999px;padding:2px 8px;margin-left:6px">{{ s.category }}</span>{% endif %}
         </div>
-        <div style="margin-top:8px"><span style="color:#6b7280">Signals:</span> {{ s.key_signals | rich }}</div>
-        <div style="margin-top:4px"><span style="color:#6b7280">Opportunity:</span> {{ s.opportunity | rich }}</div>
-        <div style="margin-top:4px"><span style="color:#6b7280">Next step:</span> {{ s.outreach | rich }}</div>
+        {% if s.points %}
+        <div style="margin-top:12px">
+          <div style="FONT_LABEL;color:#c25e14">Key signals</div>
+          <ul style="margin:0;padding-left:18px">
+            {% for p in s.points %}<li style="margin:0 0 4px">{{ p | rich }}</li>{% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+        {% if s.opportunity_text %}
+        <div style="SECTION">
+          <div style="FONT_LABEL;color:#0072b1">Opportunity</div>
+          <div>{{ s.opportunity_text | rich }}</div>
+        </div>
+        {% endif %}
+        {% if s.outreach_text %}
+        <div style="SECTION">
+          <div style="FONT_LABEL;color:#18865a">Recommended outreach</div>
+          <div>{{ s.outreach_text | rich }}</div>
+        </div>
+        {% endif %}
+        {% if s.links %}
+        <div style="SECTION">
+          <div style="FONT_LABEL;color:#586777">Sources</div>
+          {% for l in s.links %}
+          <div style="margin:0 0 2px;font-size:13px"><a href="{{ l.url }}" style="color:#0072b1;text-decoration:none">&#8599; {{ l.label }}</a></div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </td></tr>
     </table>
   </td></tr>
   {% endfor %}
-  <tr><td style="padding:20px 28px 28px;font-size:12px;color:#6b7280">
+  <tr><td style="padding:20px 28px 28px;font-size:12px;color:#586777">
     Sent automatically by TTBS Live News Feed{% if run.label %} · {{ run.label }}{% endif %}. Reply to this email if something looks wrong.
   </td></tr>
 </table>
 </td></tr></table>
 </body></html>
-"""
+""".replace("SECTION", _SECTION).replace("FONT_LABEL", _LABEL)
 
 _DEFAULT_TEXT = """Hi {{ pam.first_name }},
 
@@ -352,18 +483,34 @@ Summary: {{ ai_summary }}
 {% endif %}
 
 {% for s in signals %}
-- {{ s.company }}{% if s.category %} [{{ s.category }}]{% endif %}
+== {{ s.company }}{% if s.category %} [{{ s.category }}]{% endif %} ==
 
-  Signals: {{ s.key_signals | plain }}
-  Opportunity: {{ s.opportunity | plain }}
-  Next step: {{ s.outreach | plain }}
+{% if s.points %}
+Key signals:
+{% for p in s.points %}
+  - {{ p | plain }}
+{% endfor %}
+{% endif %}
+{% if s.opportunity_text %}
+Opportunity: {{ s.opportunity_text | plain }}
+{% endif %}
+{% if s.outreach_text %}
+Recommended outreach: {{ s.outreach_text | plain }}
+{% endif %}
+{% if s.links %}
+Sources:
+{% for l in s.links %}
+  {{ l.label }}: {{ l.url }}
+{% endfor %}
+{% endif %}
 
 {% endfor %}
 """
 
+
 DEFAULT_TEMPLATE: dict[str, Any] = {
     "name": "PAM digest (default)",
-    "description": "Built-in digest: greeting, optional AI summary, one card per account with a signal.",
+    "description": "Built-in digest: greeting, optional AI summary, one card per account with its key signals, opportunity, outreach and sources.",
     "subject_tpl": "TTBS signals: {{ counts.signals }} of your {{ counts.total }} accounts need attention ({{ run.window_end }})",
     "html_tpl": _DEFAULT_HTML,
     "text_tpl": _DEFAULT_TEXT,

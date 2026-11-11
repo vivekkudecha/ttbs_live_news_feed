@@ -49,6 +49,9 @@ const VARIABLES: [string, string][] = [
   ["{{ s.key_signals | rich }}", "Research text: **bold** and links kept, safely escaped"],
   ["{{ s.opportunity | rich }} {{ s.outreach | rich }}", "Opportunity and next step"],
   ["{% for src in s.sources %}{{ src.url }}{% endfor %}", "Cited sources"],
+  ["{% for p in s.points %}{{ p | rich }}{% endfor %}", "Key signals split into points (URLs removed), as in the app"],
+  ["{{ s.opportunity_text | rich }} {{ s.outreach_text | rich }}", "Opportunity and outreach without inline URLs"],
+  ["{% for l in s.links %}{{ l.label }} {{ l.url }}{% endfor %}", "Sources plus URLs from the text, each once"],
   ["{{ ai_summary }}", "AI summary (empty when off or failed)"],
   ["{{ generated_at }}", "Send date"],
 ]

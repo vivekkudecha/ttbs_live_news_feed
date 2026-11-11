@@ -10,7 +10,7 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table"
-import { AlertTriangle, Building2, CircleDashed, CircleOff, Copy, Download,  Upload, MoreHorizontal, PanelRightOpen, Search, Sparkles, Trash2, UserRound, X } from "lucide-react"
+import { Building2, CircleDashed, Copy, Download, Upload, MoreHorizontal, PanelRightOpen, Search, Trash2, UserRound, X } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { EmptyState } from "@/components/common/EmptyState"
 import { StatusBadge } from "@/components/common/StatusBadge"
@@ -24,7 +24,6 @@ import { DataTableViewOptions } from "@/components/data-table/DataTableViewOptio
 import { useLogoDrawer } from "@/components/logo/logo-drawer-context"
 import { ReassignDialog } from "@/components/companies/ReassignDialog"
 import { PamMultiFilter } from "@/components/pickers/Pickers"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -39,7 +38,6 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useCompanyPage } from "@/api/hooks"
-import { useCountUp } from "@/lib/use-count-up"
 import { useDebounced } from "@/lib/use-debounced"
 import { fmtDate, initials } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -87,97 +85,6 @@ const TONES = [
 ]
 const tone = (name: string) => TONES[[...name].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7) % TONES.length]
 
-const SEGMENT_TONE: Record<string, string> = {
-  Enterprise: "border-sky-300/60 bg-sky-50 text-sky-700 dark:border-sky-400/30 dark:bg-sky-500/10 dark:text-sky-300",
-  "Mid-market": "border-violet-300/60 bg-violet-50 text-violet-700 dark:border-violet-400/30 dark:bg-violet-500/10 dark:text-violet-300",
-  Emerging: "border-emerald-300/60 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-300",
-}
-
-type CoverageKey = "signal" | "no_signal" | "none" | "failed"
-const COVERAGE: { key: CoverageKey; label: string; icon: typeof Sparkles; bar: string; chip: string; ring: string }[] = [
-  { key: "signal", label: "With a signal", icon: Sparkles, bar: "bg-brand", chip: "bg-brand/12 text-brand", ring: "ring-brand" },
-  { key: "no_signal", label: "No signal", icon: CircleOff, bar: "bg-brand-blue/60", chip: "bg-brand-blue/10 text-brand-blue", ring: "ring-brand-blue" },
-  { key: "none", label: "Not researched yet", icon: CircleDashed, bar: "bg-muted-foreground/25", chip: "bg-muted text-muted-foreground", ring: "ring-muted-foreground" },
-  { key: "failed", label: "Research failed", icon: AlertTriangle, bar: "bg-destructive/70", chip: "bg-destructive/10 text-destructive", ring: "ring-destructive" },
-]
-
-function Count({ value }: { value: number }) {
-  return <>{useCountUp(value).toLocaleString("en-IN")}</>
-}
-
-/**
- * Coverage tiles: how many logos (under the other filters) had a signal in their latest cycle,
- * none, failed, or were never researched. Click a tile to filter the table; click again to clear.
- */
-function CoverageStrip({ counts, value, onChange }: { counts: Record<string, number>; value: string[]; onChange: (v: string[]) => void }) {
-  const total = COVERAGE.reduce((a, c) => a + (counts[c.key] ?? 0), 0)
-  const only = value.length === 1 ? value[0] : null
-  return (
-    <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.4fr_repeat(4,1fr)]">
-      <button
-        type="button"
-        onClick={() => onChange([])}
-        aria-pressed={value.length === 0}
-        className={cn(
-          "group relative overflow-hidden rounded-xl border bg-card p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:col-span-2 xl:col-span-1",
-          value.length === 0 && "ring-2 ring-primary",
-        )}
-      >
-        <span className="absolute inset-x-0 top-0 h-1 bg-brand-gradient" aria-hidden="true" />
-        <span className="flex items-center gap-2.5 text-sm text-muted-foreground">
-          <span className="grid size-8 place-items-center rounded-lg bg-brand-gradient text-white shadow-sm shadow-brand/25">
-            <Building2 className="size-4" />
-          </span>
-          Logos tracked
-        </span>
-        <span className="tabular mt-2 block text-3xl font-semibold tracking-tight">
-          <Count value={total} />
-        </span>
-        {/* Distribution bar: one segment per status, widths animate when filters change. */}
-        <span className="mt-3 flex h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-          {COVERAGE.map((c) => (
-            <span key={c.key} className={cn("h-full transition-all duration-500", c.bar)} style={{ width: `${total ? ((counts[c.key] ?? 0) / total) * 100 : 0}%` }} />
-          ))}
-        </span>
-        <span className="mt-1.5 block text-xs text-muted-foreground">
-          {total ? `${Math.round(((counts.signal ?? 0) / total) * 100)}% with a signal in the latest cycle` : "No logos match"}
-        </span>
-      </button>
-      {COVERAGE.map((c) => {
-        const v = counts[c.key] ?? 0
-        const on = only === c.key
-        return (
-          <button
-            key={c.key}
-            type="button"
-            onClick={() => onChange(on ? [] : [c.key])}
-            aria-pressed={on}
-            className={cn(
-              "group rounded-xl border bg-card p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
-              on && cn("ring-2", c.ring),
-              v === 0 && !on && "opacity-70",
-            )}
-          >
-            <span className="flex items-center justify-between gap-2">
-              <span className={cn("grid size-8 place-items-center rounded-lg", c.chip)}>
-                <c.icon className="size-4" />
-              </span>
-              <span className="text-xs font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">{on ? "Clear" : "Filter"}</span>
-            </span>
-            <span className="tabular mt-3 block text-2xl font-semibold tracking-tight">
-              <Count value={v} />
-            </span>
-            <span className="block text-xs text-muted-foreground">
-              {c.label}
-              {total > 0 && <span className="tabular"> · {Math.round((v / total) * 100)}%</span>}
-            </span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
 export function CompaniesList() {
   const [params, setParams] = useSearchParams()
   const drawer = useLogoDrawer()
@@ -189,7 +96,6 @@ export function CompaniesList() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [search, setSearch] = useState("")
-  const [segments, setSegments] = useState<string[]>([])
   // Arriving from the PAMs table (?pam=ID) pre-filters to that PAM's logos.
   const [pamIds, setPamIds] = useState<string[]>(() => (params.get("pam") ? [params.get("pam")!] : []))
   const [latest, setLatest] = useState<string[]>([])
@@ -210,7 +116,6 @@ export function CompaniesList() {
     page: pagination.pageIndex,
     pageSize: pagination.pageSize,
     search: debouncedSearch,
-    segments,
     pamIds,
     latest: latest as LatestStatus[],
     sort: sorting[0],
@@ -272,20 +177,6 @@ export function CompaniesList() {
           </div>
         ),
       },
-      {
-        id: "segment",
-        accessorKey: "segment",
-        meta: { label: "Segment" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Segment" />,
-        cell: ({ row }) =>
-          row.original.segment ? (
-            <Badge variant="outline" className={cn("font-medium", SEGMENT_TONE[row.original.segment])}>
-              {row.original.segment}
-            </Badge>
-          ) : (
-            <span className="text-xs text-muted-foreground/70">—</span>
-          ),
-      },
     )
       cols.push({
         id: "pam",
@@ -294,7 +185,7 @@ export function CompaniesList() {
         header: ({ column }) => <DataTableColumnHeader column={column} title="PAM" />,
         cell: ({ row }) => (
           <span className="flex min-w-0 items-center gap-2">
-            <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ring-2 ring-card", tone(row.original.pamName))}>
+            <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-2xs font-semibold ring-2 ring-card", tone(row.original.pamName))}>
               {initials(row.original.pamName)}
             </span>
             <span className="truncate font-medium">{row.original.pamName}</span>
@@ -427,7 +318,7 @@ export function CompaniesList() {
   })
 
   const selectedIds = Object.keys(rowSelection)
-  const filtered = segments.length + pamIds.length + latest.length > 0 || search !== ""
+  const filtered = pamIds.length + latest.length > 0 || search !== ""
   const setFilter = (fn: (v: string[]) => void) => (v: string[]) => {
     fn(v)
     resetPage()
@@ -440,18 +331,10 @@ export function CompaniesList() {
         description="Every logo being tracked, its PAM and its signal history. Select a company to see its full timeline."
       />
 
-      {page ? (
-        <CoverageStrip counts={page.facets.latest} value={latest} onChange={setFilter(setLatest)} />
-      ) : (
-        <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.4fr_repeat(4,1fr)]">
-          {Array.from({ length: 5 }, (_, i) => (
-            <Skeleton key={i} className="h-[7.5rem] rounded-xl" />
-          ))}
-        </div>
-      )}
-
+      {/* One row: the search gives up width first (breaks lines at 8rem, then grows into the free space);
+          filters/actions keep their size, and labels collapse to icons below 2xl. Wraps only on narrow screens. */}
       <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2 shadow-xs">
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-auto sm:min-w-32 sm:max-w-72 sm:flex-[1_1_8rem]">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             aria-label="Search companies"
@@ -469,8 +352,7 @@ export function CompaniesList() {
             </button>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <DataTableFacetedFilter title="Segment" value={segments} onChange={setFilter(setSegments)} counts={page?.facets.segment} options={["Enterprise", "Mid-market", "Emerging"].map((v) => ({ value: v, label: v }))} />
+        <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:flex-nowrap">
           <PamMultiFilter value={pamIds} onChange={setFilter(setPamIds)} />
           <DataTableFacetedFilter title="Latest cycle" value={latest} onChange={setFilter(setLatest)} counts={page?.facets.latest} options={latestStatusOptions} />
           {filtered && (
@@ -479,7 +361,6 @@ export function CompaniesList() {
               size="sm"
               className="text-muted-foreground"
               onClick={() => {
-                setSegments([])
                 setPamIds([])
                 setLatest([])
                 setSearch("")
@@ -490,16 +371,16 @@ export function CompaniesList() {
             </Button>
           )}
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2 lg:shrink-0 lg:flex-nowrap">
           {page && <DataTableCompactPager table={table} totalRows={page.total} />}
           <DataTableViewOptions table={table} />
-          <Button variant="outline" onClick={() => toast.success(`Export of ${(page?.total ?? 0).toLocaleString("en-IN")} companies started`, { description: "Large exports are generated on the server and emailed as a link." })}>
-            <Download /> Export
+          <Button variant="outline" title="Export companies" onClick={() => toast.success(`Export of ${(page?.total ?? 0).toLocaleString("en-IN")} companies started`, { description: "Large exports are generated on the server and emailed as a link." })}>
+            <Download /> <span className="max-2xl:sr-only">Export</span>
           </Button>
           {(
-            <Button variant="outline" asChild>
+            <Button variant="outline" title="Import companies" asChild>
               <Link to="/imports">
-                <Upload /> Import
+                <Upload /> <span className="max-2xl:sr-only">Import</span>
               </Link>
             </Button>
           )}

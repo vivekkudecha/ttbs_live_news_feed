@@ -35,6 +35,7 @@ import {
   Sparkles,
   Timer,
   UserRound,
+  X,
   XCircle,
   Zap,
   type LucideIcon,
@@ -46,7 +47,7 @@ import { ReassignDialog } from "@/components/companies/ReassignDialog"
 import { Avatar } from "@/components/runs/board/cells"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -151,6 +152,7 @@ function LogoDrawer({
     <Sheet open={!!target} onOpenChange={(o) => !o && onClose()}>
       <SheetContent
         side="right"
+        showCloseButton={false}
         // Focus the panel itself, not its first button (that would pop the "Previous / Next logo" tooltip).
         onOpenAutoFocus={(e) => {
           e.preventDefault()
@@ -160,7 +162,7 @@ function LogoDrawer({
       >
         <div className="h-1 shrink-0 bg-brand-gradient" aria-hidden="true" />
         <SheetHeader className="gap-4 border-b px-6 pb-4 pt-5">
-          <div className="flex items-start gap-4 pr-10">
+          <div className="flex items-start gap-4">
             <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-primary text-base font-semibold text-primary-foreground">
               {name ? initials(name) : <Building2 className="size-5" />}
             </div>
@@ -187,6 +189,13 @@ function LogoDrawer({
             <div className="flex shrink-0 items-center gap-1">
               <NavButton label="Previous logo" target={prev} onNavigate={onNavigate} icon={ChevronUp} />
               <NavButton label="Next logo" target={next} onNavigate={onNavigate} icon={ChevronDown} />
+              <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+              {/* Close sits with the other header controls: same size, aligned to the title row. */}
+              <SheetClose asChild>
+                <Button variant="outline" size="icon" className="size-8 text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-accent-foreground" aria-label="Close">
+                  <X />
+                </Button>
+              </SheetClose>
             </div>
           </div>
           <Stats d={d} t={t} />
@@ -510,7 +519,7 @@ function RunTab({ t, stale }: { t: LogoTimeline; stale: boolean }) {
                     animationFillMode: "both",
                   }}
                 >
-                  {i < steps.length - 1 && <span className="absolute left-[15px] top-8 h-[calc(100%-1.5rem)] w-px bg-border" aria-hidden="true" />}
+                  {i < steps.length - 1 && <span className="absolute left-[0.9375rem] top-8 h-[calc(100%-1.5rem)] w-px bg-border" aria-hidden="true" />}
                   <span className={cn("relative z-10 grid size-8 shrink-0 place-items-center rounded-full border bg-card", s.tone)}>
                     <s.icon className="size-4" aria-hidden="true" />
                   </span>
@@ -668,7 +677,7 @@ function OwnershipTab({ d }: { d: CompanyDetail }) {
         icon: <R.icon />,
         title: (
           <span className="flex flex-wrap items-center gap-2">
-            <Avatar name={pamName(a.pamId)} className="size-6 text-[10px]" />
+            <Avatar name={pamName(a.pamId)} className="size-6 text-2xs" />
             {pamName(a.pamId)}
             {a.validTo === null && <StatusBadge status="active" label="Current owner" />}
           </span>

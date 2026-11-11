@@ -33,7 +33,7 @@ export function ChannelPicker({ value, onChange }: { value: DeliveryChannel[]; o
               <span className="block truncate text-xs text-muted-foreground">{c.hint}</span>
             </span>
             <span className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", on ? "bg-primary" : "bg-muted-foreground/30")}>
-              <span className={cn("absolute top-0.5 size-4 rounded-full bg-white shadow transition-all", on ? "left-[18px]" : "left-0.5")} />
+              <span className={cn("absolute top-0.5 size-4 rounded-full bg-white shadow transition-all", on ? "left-[1.125rem]" : "left-0.5")} />
             </span>
           </button>
         )

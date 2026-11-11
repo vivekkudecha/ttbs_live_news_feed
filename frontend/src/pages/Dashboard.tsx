@@ -23,6 +23,7 @@ import { Page, StatGrid, Split } from "@/components/common/layout"
 import { LiveDot } from "@/components/common/LiveDot"
 import { ChartCard } from "@/components/common/ChartCard"
 import { chartTheme } from "@/components/common/chart-theme"
+import { useRootPx } from "@/lib/use-root-px"
 
 const n = (x: number) => x.toLocaleString("en-IN")
 
@@ -113,6 +114,7 @@ export default function Dashboard() {
   const { user } = useSession()
   // One summary call: the server aggregates 10k logos / 5k PAMs; the UI renders a handful of numbers.
   const dash = useDashboard()
+  const rootPx = useRootPx() // category axis width follows the UI scale
   const d = dash.data
 
   if (!d) {
@@ -230,10 +232,10 @@ export default function Dashboard() {
           <BarChart data={d.byCategory} layout="vertical" margin={{ left: 8, right: 40, top: 4, bottom: 4 }} barCategoryGap={6}>
             <CartesianGrid horizontal={false} {...chartTheme.grid} />
             <XAxis type="number" allowDecimals={false} {...chartTheme.axis} tickFormatter={(v) => n(v)} />
-            <YAxis type="category" dataKey="category" width={96} {...chartTheme.axis} tick={{ fill: "var(--foreground)", fontSize: 13 }} />
+            <YAxis type="category" dataKey="category" width={Math.round(6 * rootPx)} {...chartTheme.axis} tick={{ fill: "var(--foreground)", fontSize: "0.8125rem" }} />
             <Tooltip {...chartTheme.tooltip} formatter={(v: number) => [`${n(v)} signals`, ""]} separator="" />
             <Bar dataKey="count" fill="var(--chart-1)" radius={[0, 6, 6, 0]} maxBarSize={22}>
-              <LabelList dataKey="count" position="right" formatter={(v: number) => n(v)} style={{ fill: "var(--muted-foreground)", fontSize: 13 }} />
+              <LabelList dataKey="count" position="right" formatter={(v: number) => n(v)} style={{ fill: "var(--muted-foreground)", fontSize: "0.8125rem" }} />
             </Bar>
           </BarChart>
         </ChartCard>

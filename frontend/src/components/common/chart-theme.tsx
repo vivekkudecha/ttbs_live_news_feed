@@ -4,7 +4,7 @@
  */
 export const chartTheme = {
   grid: { stroke: "var(--border)", strokeDasharray: "3 4" },
-  axis: { tickLine: false, axisLine: false, tick: { fill: "var(--muted-foreground)", fontSize: 12 } },
+  axis: { tickLine: false, axisLine: false, tick: { fill: "var(--muted-foreground)", fontSize: "0.75rem" } },
   tooltip: {
     cursor: { fill: "var(--primary)", opacity: 0.06 },
     contentStyle: {
@@ -12,14 +12,14 @@ export const chartTheme = {
       border: "1px solid var(--border)",
       borderRadius: 10,
       boxShadow: "var(--shadow-card-hover)",
-      fontSize: 13,
+      fontSize: "0.8125rem",
       color: "var(--popover-foreground)",
     },
   },
   legend: {
     iconType: "circle" as const,
     iconSize: 8,
-    wrapperStyle: { fontSize: 13 },
+    wrapperStyle: { fontSize: "0.8125rem" },
     formatter: (value: string) => <span style={{ color: "var(--foreground)" }}>{value}</span>,
   },
   /** Thin card-coloured gap between stacked segments. */

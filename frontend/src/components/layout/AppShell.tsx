@@ -29,6 +29,7 @@ import { preloadRoute } from "@/lib/route-chunks"
 import { PageTransition } from "@/components/motion/PageTransition"
 import { LogoDrawerProvider } from "@/components/logo/LogoDrawer"
 import { initials } from "@/lib/format"
+import { applyUiScale, savedUiScale, type UiScale } from "@/lib/ui-scale"
 
 const RAIL_KEY = "ttbs.sidebar.rail"
 
@@ -77,7 +78,7 @@ function NavItem({ item, rail, onNavigate, layoutGroup }: { item: NavItemDef; ra
       className={({ isActive }) =>
         cn(
           "group/nav relative flex items-center gap-3 rounded-lg px-3 py-2 text-[0.9375rem] text-sidebar-foreground transition-colors duration-200 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-          "short:py-1 tiny:py-[3px] tiny:text-sm",
+          "short:py-1 tiny:py-[0.1875rem] tiny:text-sm",
           rail && "justify-center px-0",
           (isActive || also) && "font-medium text-sidebar-accent-foreground",
         )
@@ -162,21 +163,37 @@ function FetchIndicator() {
   )
 }
 
+/** Display menu: theme, and the size multiplier on top of the screen-fitted scale. */
 function ThemeToggle() {
   const { theme, setTheme } = useTheme()
+  const [scale, setScale] = useState(savedUiScale)
   const Icon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Theme">
+        <Button variant="ghost" size="icon" aria-label="Display">
           <Icon />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuLabel className="eyebrow">Theme</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
           <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="eyebrow">Size</DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={scale}
+          onValueChange={(v) => {
+            setScale(v as UiScale)
+            applyUiScale(v as UiScale, true)
+          }}
+        >
+          <DropdownMenuRadioItem value="compact">Compact</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="default">Default</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="large">Large</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>

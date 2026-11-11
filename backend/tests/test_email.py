@@ -435,3 +435,47 @@ def test_settings_defaults_without_config(client):
     s = client.get("/api/v1/settings/email").json()
     assert s["configured"] is False and s["quota"]["mode"] == "console"
     assert s["limits"]["perDay"] == 10000 and get_settings().email_dispatch_interval_s == 10
+
+
+def test_default_digest_shows_each_account_in_sections():
+    from app.services import email_templates as et
+
+    item = {"company": "3i Infotech", "category": "Contract", "outreach": "Call the CIO",
+            "key_signals": "New **IT contract** with a state utility (https://a.example/1); expansion to three more Indian cities. "
+                           "Hiring 200 engineers for a new Pune campus (https://www.b.example/2)",
+            "opportunity": "SD-WAN for the new sites (https://a.example/1)",
+            "sources": [{"title": "Utility award", "url": "https://a.example/1"}]}
+    ctx = et.context({"pam": {"name": "Vivek K"}, "run": {"label": "Run #3", "window_start": "2026-11-01", "window_end": "2026-11-10"}, "items": [item]})
+    s = ctx["signals"][0]
+    assert s["points"] == ["New **IT contract** with a state utility", "Expansion to three more Indian cities", "Hiring 200 engineers for a new Pune campus"]
+    assert s["opportunity_text"] == "SD-WAN for the new sites" and s["outreach_text"] == "Call the CIO"
+    assert s["links"] == [{"url": "https://a.example/1", "label": "Utility award"}, {"url": "https://www.b.example/2", "label": "b.example"}]
+
+    out = et.render(et.DEFAULT_TEMPLATE, ctx, strict=True)
+    for label in ("Key signals", "Opportunity", "Recommended outreach", "Sources"):
+        assert label in out["html"] and label in out["text"]
+    assert out["html"].count("<li ") == 3 and "<strong>IT contract</strong>" in out["html"]
+    assert "(https://" not in out["html"] and "  - Expansion to three more Indian cities" in out["text"]
+
+
+def test_unedited_builtin_template_is_upgraded_but_edited_one_is_kept(client, monkeypatch):
+    from app.db.models import EmailTemplate, EmailTemplateVersion
+    from app.services import email_templates as et
+
+    with unit_of_work() as uow:
+        et.ensure_default(uow)
+        t = uow.session.scalars(select(EmailTemplate)).one()
+        t.html_tpl, t.text_tpl = "<p>old built-in</p>", "old"
+    monkeypatch.setattr(et, "_PREVIOUS_BUILTINS", {(et._sha("<p>old built-in</p>"), et._sha("old"))})
+    monkeypatch.setattr(et, "_builtin_checked", False)
+    with unit_of_work() as uow:
+        et.ensure_default(uow)
+    with unit_of_work() as uow:
+        t = uow.session.scalars(select(EmailTemplate)).one()
+        assert t.html_tpl == et.DEFAULT_TEMPLATE["html_tpl"] and t.version == 2
+        assert uow.session.scalar(select(func.count(EmailTemplateVersion.id)).where(EmailTemplateVersion.template_id == t.id)) == 2
+        t.html_tpl = "<p>my own edit</p>"  # edited by someone: never overwritten
+    monkeypatch.setattr(et, "_builtin_checked", False)
+    with unit_of_work() as uow:
+        et.ensure_default(uow)
+        assert uow.session.scalars(select(EmailTemplate)).one().html_tpl == "<p>my own edit</p>"

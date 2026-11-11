@@ -77,7 +77,7 @@ export function TimelineTab({ runId, live }: { runId: string; live: boolean }) {
                 const Icon = kindIcon(e)
                 return (
                   <li key={e.id} className="relative flex gap-3 pb-5">
-                    {i < d.events.length - 1 && <span className="absolute left-[15px] top-8 h-[calc(100%-1.5rem)] w-px bg-border" aria-hidden="true" />}
+                    {i < d.events.length - 1 && <span className="absolute left-[0.9375rem] top-8 h-[calc(100%-1.5rem)] w-px bg-border" aria-hidden="true" />}
                     <span
                       className={cn(
                         "relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full border bg-card",

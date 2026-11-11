@@ -95,7 +95,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
       accessorFn: (r) => val(r, "account"),
       size: grouped ? 270 : 250,
       enableHiding: false,
-      meta: { label: "Logo", width: grouped ? "24%" : "21%", filter: { type: "text", placeholder: "Company name contains…" } },
+      meta: { label: "Logo", width: grouped ? "28%" : "21%", filter: { type: "text", placeholder: "Company name contains…" } },
       header: ({ column }) => <DataTableColumnHeader column={column} title={grouped ? "PAM / logo" : "Logo"} />,
       cell: ({ row }) => <AccountCell row={row} ctx={ctx} />,
     },
@@ -111,7 +111,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
         const r = row.original as BoardLogo
         return r.pamName ? (
           <span className="flex items-center gap-2">
-            <Avatar name={r.pamName} className="size-6 shrink-0 text-[10px]" />
+            <Avatar name={r.pamName} className="size-6 shrink-0 text-2xs" />
             <span className="min-w-0 break-words">{r.pamName}</span>
           </span>
         ) : (
@@ -138,7 +138,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
       id: "status",
       accessorFn: (r) => val(r, "status"),
       size: grouped ? 150 : 120,
-      meta: { label: "Status", width: grouped ? "14%" : "10%", filter: { type: "enum", options: RESULT_STATUS } },
+      meta: { label: "Status", width: grouped ? "13%" : "10%", filter: { type: "enum", options: RESULT_STATUS } },
       header: ({ column }) => <DataTableColumnHeader column={column} title={grouped ? "Outcome" : "Status"} />,
       cell: ({ row }) => {
         const r = row.original
@@ -151,7 +151,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
       id: "category",
       accessorFn: (r) => val(r, "category"),
       size: 130,
-      meta: { label: "Category", width: "10%", filter: { type: "enum", options: categoryOptions } },
+      meta: { label: "Category", width: grouped ? "9%" : "10%", filter: { type: "enum", options: categoryOptions } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Category" />,
       cell: ({ row }) => {
         const r = row.original
@@ -187,7 +187,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
         if (r.kind === "logo")
           return (
             <div className="whitespace-normal break-words">
-              <Findings r={r} />
+              <Findings r={r} onOpen={() => ctx.openLogo(r)} />
             </div>
           )
         return null
@@ -198,7 +198,7 @@ export function boardColumns(ctx: BoardCtx): ColumnDef<BoardRow, unknown>[] {
       accessorFn: (r) => val(r, "digest"),
       size: 150,
       enableSorting: false,
-      meta: { label: "Digest", width: grouped ? "13%" : "10%", filter: { type: "enum", options: DIGEST_STATUS } },
+      meta: { label: "Digest", width: grouped ? "11%" : "10%", filter: { type: "enum", options: DIGEST_STATUS } },
       header: ({ column }) => <DataTableColumnHeader column={column} title="Digest" />,
       cell: ({ row }) => {
         const r = row.original
@@ -244,7 +244,7 @@ function AccountCell({ row, ctx }: { row: Row<BoardRow>; ctx: BoardCtx }) {
     const key = pamKey(r)
     const open = ctx.isOpen(key)
     return (
-      <div className="flex items-center gap-2.5">
+      <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
           aria-expanded={open}
@@ -253,16 +253,23 @@ function AccountCell({ row, ctx }: { row: Row<BoardRow>; ctx: BoardCtx }) {
             e.stopPropagation()
             ctx.toggle(key)
           }}
-          className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="-ml-1 grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <ChevronRight className={cn("size-4 transition-transform duration-200", open && "rotate-90")} />
         </button>
         <Avatar name={r.pamName} />
-        <div className="min-w-0">
-          <p className="break-words font-semibold">{r.pamName}</p>
-          <p className="break-all text-xs text-muted-foreground">
-            {r.pamEmail ? `${r.pamEmail} · ` : ""}
-            {n(r.logos)} {r.logos === 1 ? "logo" : "logos"}
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold" title={r.pamName}>{r.pamName}</p>
+          <p className="flex min-w-0 text-xs text-muted-foreground">
+            {r.pamEmail && (
+              <span className="truncate" title={r.pamEmail}>
+                {r.pamEmail}
+              </span>
+            )}
+            <span className="shrink-0 whitespace-nowrap">
+              {r.pamEmail && <span className="px-1">·</span>}
+              {n(r.logos)} {r.logos === 1 ? "logo" : "logos"}
+            </span>
           </p>
         </div>
       </div>
@@ -270,8 +277,8 @@ function AccountCell({ row, ctx }: { row: Row<BoardRow>; ctx: BoardCtx }) {
   }
   if (r.kind !== "logo") return null
   return (
-    <div className={cn("min-w-0", row.depth > 0 && "relative pl-10")}>
-      {row.depth > 0 && <span aria-hidden="true" className="absolute bottom-[-0.9rem] left-[0.85rem] top-[-0.9rem] w-px bg-border" />}
+    <div className={cn("min-w-0", row.depth > 0 && "relative pl-8")}>
+      {row.depth > 0 && <span aria-hidden="true" className="absolute bottom-[-0.9rem] left-[0.6875rem] top-[-0.9rem] w-px bg-border" />}
       <button
         type="button"
         onClick={(e) => {

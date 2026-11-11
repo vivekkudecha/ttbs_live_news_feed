@@ -359,9 +359,10 @@ export function RunBoard({
 
   return (
     <div className="min-w-0 space-y-3">
-      {/* One toolbar row: search · status · filters · (right) view controls. Wraps only on narrow screens. */}
+      {/* One toolbar row: search · status · filters · (right) view controls. The search gives up width first
+          (it breaks lines at 8rem, then grows into the free space), so the row wraps only on narrow screens. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full sm:w-60 2xl:w-80">
+        <div className="relative w-full sm:w-auto sm:min-w-32 sm:max-w-80 sm:flex-[1_1_8rem]">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input aria-label="Search logos or PAMs" placeholder="Search logos or PAMs…" className="pl-8 pr-8" value={search} onChange={(e) => setSearch(e.target.value)} />
           {search && (
@@ -376,7 +377,7 @@ export function RunBoard({
           )}
         </div>
         <Tabs value={statusVal} onValueChange={(v) => url.setFilter("status", v === "all" ? undefined : [v])}>
-          <TabsList className="h-auto flex-wrap">
+          <TabsList className="h-auto flex-wrap lg:flex-nowrap">
             {STATUS_TABS.map(([v, label]) => {
               const count = !fa ? null : v === "all" ? fa.all : (fa.status[v as keyof typeof fa.status] ?? 0)
               return (
@@ -413,7 +414,7 @@ export function RunBoard({
         />
         {facets.isFetching && !facets.isLoading && <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="Updating counts" />}
 
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <Tabs value={url.view} onValueChange={(v) => url.setView(v as "pam" | "logo")}>
             <TabsList>
               <TabsTrigger value="pam" className="gap-1.5" aria-label="Group by PAM" title="Group by PAM">
@@ -667,7 +668,7 @@ function BoardTable({
       {/* Laptop and up: fixed column proportions and wrapping text, so the table always fits its box
           (no sideways scroll). Phones keep a minimum width and scroll inside the box. */}
       <Table
-        className="min-w-[60rem] text-[13px] lg:min-w-0 lg:table-fixed [&_td]:whitespace-normal [&_td]:break-words [&_th]:whitespace-normal"
+        className="min-w-[60rem] text-sm lg:min-w-0 lg:table-fixed [&_td]:whitespace-normal [&_td]:break-words [&_th]:whitespace-normal"
         containerClassName="overflow-visible"
       >
         <TableHeader

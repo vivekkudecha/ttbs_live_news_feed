@@ -140,12 +140,12 @@ export function PamMultiFilter({ value, onChange, title = "PAM" }: { value: stri
       placeholder="Search PAMs"
       trigger={
         <Button variant="outline" className="font-normal">
-          <PlusCircle className="opacity-60" />
+          <PlusCircle className="opacity-60 max-2xl:hidden" />
           {title}
           {value.length > 0 && (
             <>
               <Separator orientation="vertical" className="mx-1 h-4" />
-              <Badge variant="secondary" className="rounded-sm px-1.5 font-normal">
+              <Badge variant="secondary" className="block max-w-32 truncate rounded-sm px-1.5 font-normal">
                 {value.length === 1 ? (selected.data?.[0]?.name ?? "1 selected") : `${value.length} selected`}
               </Badge>
             </>

@@ -1,7 +1,6 @@
 /** Small presentational pieces of the results board (rows, timeline sheet). */
-import { useState } from "react"
-import { AlertTriangle, ExternalLink, Mail, MessageCircle } from "lucide-react"
-import { RichText, safeHref } from "@/components/common/RichText"
+import { AlertTriangle, Mail, MessageCircle } from "lucide-react"
+import { RichText } from "@/components/common/RichText"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { fmtDateTime } from "@/lib/format"
@@ -70,7 +69,7 @@ export function DigestBadges({ g }: { g: BoardPam }) {
   const chans = Object.entries(g.digests) as [DeliveryChannel, BoardDigest][]
   if (!chans.length) return <span className="text-xs text-muted-foreground">{g.doneAll < g.totalAll ? "After the last logo" : "—"}</span>
   return (
-    <div className="flex flex-col items-start gap-1 [&_[data-slot=badge]]:text-[11px]">
+    <div className="flex flex-col items-start gap-1 [&_[data-slot=badge]]:text-2xs">
       {chans.map(([ch, d]) => {
         const Icon = CH_ICON[ch] ?? Mail
         const detail = d.status === "sent" ? `Sent ${fmtDateTime(d.sentAt)}` : d.lastError ?? d.status
@@ -81,7 +80,7 @@ export function DigestBadges({ g }: { g: BoardPam }) {
                 <Icon className="size-3.5 text-muted-foreground" aria-label={ch} />
                 <StatusBadge status={d.status === "sending" ? "running" : d.status} />
                 {d.outdated && (
-                  <span className="inline-flex items-center gap-0.5 rounded-full bg-warning/15 px-1.5 py-0.5 text-[11px] font-medium text-warning">
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-warning/15 px-1.5 py-0.5 text-2xs font-medium text-warning">
                     <AlertTriangle className="size-3" /> Outdated
                   </span>
                 )}
@@ -104,61 +103,26 @@ export function DigestBadges({ g }: { g: BoardPam }) {
 
 // ---- Findings (logo rows and the timeline sheet) -----------------------------------------------------------
 
-export function Findings({ r, full = false }: { r: BoardLogo; full?: boolean }) {
-  const [open, setOpen] = useState(full)
+export function Findings({ r, onOpen }: { r: BoardLogo; onOpen: () => void }) {
   if (r.status === "failed") return <span className="text-destructive">{r.error ?? "Failed"}</span>
   if (r.status === "no_signal") return <span className="text-muted-foreground">No TTBS-relevant news in the window.</span>
   if (r.status !== "signal")
     return <span className="text-muted-foreground">{r.status === "running" ? "Researching now…" : r.error ? `Retrying: ${r.error}` : "Waiting in queue…"}</span>
   return (
     <div className="space-y-1.5">
-      <div className={cn("wrap-anywhere", !open && "line-clamp-2")}>
+      <div className="line-clamp-2 wrap-anywhere">
         <RichText text={withoutUrls(r.keySignals)} />
       </div>
-      {open && (
-        <>
-          {r.opportunity && (
-            <p className="text-muted-foreground">
-              <span className="font-medium text-foreground">Opportunity: </span>
-              <RichText text={withoutUrls(r.opportunity)} />
-            </p>
-          )}
-          {r.outreach && (
-            <p className="text-muted-foreground">
-              <span className="font-medium text-foreground">Outreach: </span>
-              <RichText text={withoutUrls(r.outreach)} />
-            </p>
-          )}
-          {r.sources.length > 0 && (
-            <div className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5">
-              {r.sources.map((s) => (
-                <a
-                  key={s.url}
-                  href={safeHref(s.url)}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                >
-                  <ExternalLink className="size-3" /> {s.title}
-                </a>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-      {!full && (r.opportunity || r.outreach || r.sources.length > 0) && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            setOpen(!open)
-          }}
-          className="text-xs font-medium text-primary hover:underline"
-        >
-          {open ? "Show less" : "Opportunity, outreach & sources"}
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onOpen()
+        }}
+        className="text-xs font-medium text-primary hover:underline"
+      >
+        Key signals, opportunity, outreach & sources
+      </button>
     </div>
   )
 }

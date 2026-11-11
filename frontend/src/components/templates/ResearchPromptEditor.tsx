@@ -375,7 +375,7 @@ function PlaceholderPanel({ state }: { state: ResearchPromptState }) {
             <span className="min-w-0">
               <code className="text-xs font-medium">{`{${p.key}}`}</code>
               {p.required && (
-                <Badge variant="outline" className="ml-1 px-1 py-0 text-[10px]">
+                <Badge variant="outline" className="ml-1 px-1 py-0 text-2xs">
                   required
                 </Badge>
               )}

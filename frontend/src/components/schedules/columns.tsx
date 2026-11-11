@@ -34,8 +34,8 @@ export function scheduleColumns(onToggle: (s: Schedule, on: boolean) => void): C
       header: ({ column }) => <DataTableColumnHeader column={column} title="Schedule" />,
       cell: ({ row }) => (
         <div className="min-w-0">
-          <p className="truncate font-medium">{row.original.name}</p>
-          <p className="truncate text-xs text-muted-foreground">{row.original.summary} IST</p>
+          <p className="line-clamp-2 font-medium [overflow-wrap:anywhere]" title={row.original.name}>{row.original.name}</p>
+          <p className="text-xs text-muted-foreground">{row.original.summary} IST</p>
         </div>
       ),
     },
@@ -48,9 +48,9 @@ export function scheduleColumns(onToggle: (s: Schedule, on: boolean) => void): C
         const s = row.original
         const Icon = s.target === "latest" ? Layers : FileSpreadsheet
         return (
-          <span className="flex min-w-0 items-center gap-1.5 text-sm">
-            <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate">{s.targetLabel}</span>
+          <span className="flex min-w-0 items-start gap-1.5 text-sm">
+            <Icon className="mt-[0.2em] size-3.5 shrink-0 text-muted-foreground" />
+            <span className="line-clamp-2 [overflow-wrap:anywhere]" title={s.targetLabel}>{s.targetLabel}</span>
           </span>
         )
       },
