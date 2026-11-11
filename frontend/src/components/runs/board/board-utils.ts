@@ -29,7 +29,7 @@ export const pamKey = (g: BoardPam) => g.pamId ?? "0"
 
 /** Lines for the CSV export (one per logo). */
 export function toCsv(rows: BoardLogo[]): string {
-  const head = ["Company", "Industry", "Segment", "PAM", "Status", "Category", "Key signals", "Opportunity", "Outreach", "Sources", "Attempts", "Finished"]
+  const head = ["Company", "Industry", "PAM", "Status", "Category", "Key signals", "Opportunity", "Outreach", "Sources", "Attempts", "Finished"]
   const plain = (s: string | null | undefined) => (s ?? "").replace(/\*\*/g, "")
   const esc = (v: unknown) => {
     const s = String(v ?? "")
@@ -39,7 +39,6 @@ export function toCsv(rows: BoardLogo[]): string {
     [
       r.companyName,
       r.industry,
-      r.segment,
       r.pamName,
       r.status,
       r.category,

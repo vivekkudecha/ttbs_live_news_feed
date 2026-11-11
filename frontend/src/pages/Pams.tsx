@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { getCoreRowModel, useReactTable, type ColumnDef, type PaginationState, type RowSelectionState, type SortingState, type VisibilityState } from "@tanstack/react-table"
-import { ArrowRight, Building2, Copy, Download,  Loader2, Mail, MessageCircle, MoreHorizontal, Pencil, Search, Shuffle, UserMinus, Users, X } from "lucide-react"
+import { ArrowRight, Building2, Copy, Download,  Loader2, Mail, MessageCircle, MoreHorizontal, Pencil, Shuffle, UserMinus, Users, X } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { EmptyState } from "@/components/common/EmptyState"
 import { StatusBadge } from "@/components/common/StatusBadge"
@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
+import { Toolbar, ToolbarSearch } from "@/components/data-table/Toolbar"
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -55,7 +55,6 @@ export default function Pams() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ whatsapp: false })
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [search, setSearch] = useState("")
-  const [segments, setSegments] = useState<string[]>([])
   const [status, setStatus] = useState<string[]>(["active"])
   const q = useDebounced(search, 250)
   const resetPage = () => setPagination((p) => ({ ...p, pageIndex: 0 }))
@@ -64,7 +63,6 @@ export default function Pams() {
     page: pagination.pageIndex,
     pageSize: pagination.pageSize,
     search: q,
-    segments,
     status: status as ("active" | "inactive")[],
     sort: sorting[0],
   })
@@ -120,13 +118,6 @@ export default function Pams() {
             </div>
           </div>
         ),
-      },
-      {
-        id: "segment",
-        accessorKey: "segment",
-        meta: { label: "Segment" },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Segment" />,
-        cell: ({ row }) => <span className="text-muted-foreground">{row.original.segment}</span>,
       },
       {
         id: "load",
@@ -258,7 +249,7 @@ export default function Pams() {
     fn(v)
     resetPage()
   }
-  const filtered = segments.length > 0 || search !== "" || status.join() !== "active"
+  const filtered = search !== "" || status.join() !== "active"
   const selectedIds = Object.keys(rowSelection)
 
   return (
@@ -271,33 +262,23 @@ export default function Pams() {
         <Shuffle />
         <AlertTitle>Automatic rebalancing is on</AlertTitle>
         <AlertDescription>
-          When a PAM leaves (deactivated here or missing from an import), their logos move automatically to the least-loaded active PAM in the same segment, within capacity.
+          When a PAM leaves (deactivated here or missing from an import), their logos move automatically to the least-loaded active PAMs, within capacity.
           History and past results stay with each company.
         </AlertDescription>
       </Alert>
 
       <div>
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              aria-label="Search PAMs"
-              placeholder="Search name, email or segment"
-              className="pl-9 pr-8"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                resetPage()
-              }}
-            />
-            {search && (
-              <button type="button" aria-label="Clear search" onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground">
-                <X className="size-3.5" />
-              </button>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <DataTableFacetedFilter title="Segment" value={segments} onChange={setFilter(setSegments)} counts={page?.facets.segment} options={["Enterprise", "Mid-market", "Emerging"].map((v) => ({ value: v, label: v }))} />
+        <Toolbar>
+          <ToolbarSearch
+            label="Search PAMs"
+            placeholder="Search name or email"
+            value={search}
+            onChange={(v) => {
+              setSearch(v)
+              resetPage()
+            }}
+          />
+          <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:flex-nowrap">
             <DataTableFacetedFilter
               title="Status"
               value={status}
@@ -314,7 +295,6 @@ export default function Pams() {
                 size="sm"
                 className="text-muted-foreground"
                 onClick={() => {
-                  setSegments([])
                   setStatus(["active"])
                   setSearch("")
                   resetPage()
@@ -324,14 +304,14 @@ export default function Pams() {
               </Button>
             )}
           </div>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2 lg:shrink-0 lg:flex-nowrap">
             {page && <DataTableCompactPager table={table} totalRows={page.total} />}
             <DataTableViewOptions table={table} />
-            <Button variant="outline" onClick={() => toast.success(`Export of ${(page?.total ?? 0).toLocaleString("en-IN")} PAMs started`, { description: "Generated on the server and emailed as a link." })}>
-              <Download /> Export
+            <Button variant="outline" title="Export PAMs" onClick={() => toast.success(`Export of ${(page?.total ?? 0).toLocaleString("en-IN")} PAMs started`, { description: "Generated on the server and emailed as a link." })}>
+              <Download /> <span className="max-2xl:sr-only">Export</span>
             </Button>
           </div>
-        </div>
+        </Toolbar>
 
         {selectedIds.length > 0 && (
           <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-blue/30 bg-brand-blue/[0.06] px-4 py-2.5 text-sm">

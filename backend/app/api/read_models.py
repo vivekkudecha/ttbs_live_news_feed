@@ -446,9 +446,9 @@ def dashboard(uow: UnitOfWork, pam_id: str | None) -> dict[str, Any]:
 
 
 def pam_options(uow: UnitOfWork, pams: list[Pam]) -> list[dict[str, Any]]:
-    loads, segments = accounts.pam_profiles(uow)
+    loads = accounts.pam_profiles(uow)
     cap = get_settings().pam_default_capacity
-    return [{"id": str(p.id), "name": p.name, "email": p.email, "segment": segments.get(p.id), "active": p.active,
+    return [{"id": str(p.id), "name": p.name, "email": p.email, "active": p.active,
              "load": loads.get(p.id, 0), "capacity": cap} for p in pams]
 
 
@@ -481,17 +481,17 @@ def _latest_map(uow: UnitOfWork) -> dict[int, tuple[str, str | None]]:
 
 def _company_rows(rows: list[tuple], latest: dict, stats: dict, cycles: dict) -> list[dict[str, Any]]:
     out = []
-    for cid, name, industry, segment, pam_id, pam_name in rows:
+    for cid, name, industry, pam_id, pam_name in rows:
         st, cat = latest.get(cid, ("none", None))
         n, last = stats.get(cid, (0, None))
-        out.append({"id": str(cid), "name": name, "industry": industry or "", "segment": segment, "pamId": str(pam_id) if pam_id else None,
+        out.append({"id": str(cid), "name": name, "industry": industry or "", "pamId": str(pam_id) if pam_id else None,
                     "pamName": pam_name or "Unassigned", "latestStatus": st, "latestCategory": cat if st == "signal" else None,
                     "signals": n, "lastSignal": last.isoformat() if last else None, "cycles": cycles.get(cid, [])})
     return out
 
 
 # Base row layout (JSON list, shared by every user): see company_base().
-_C_ID, _C_NAME, _C_IND, _C_SEG, _C_PAM, _C_PAMNAME, _C_PAMMAIL, _C_ST, _C_CAT, _C_N, _C_LAST = range(11)
+_C_ID, _C_NAME, _C_IND, _C_PAM, _C_PAMNAME, _C_PAMMAIL, _C_ST, _C_CAT, _C_N, _C_LAST = range(10)
 
 
 def company_base(uow: UnitOfWork) -> dict[str, Any]:
@@ -500,13 +500,13 @@ def company_base(uow: UnitOfWork) -> dict[str, Any]:
     latest = _latest_map(uow)
     stats = _signal_stats(uow)
     rows = []
-    for cid, name, industry, segment, pam_id, pam_name, pam_email in uow.session.execute(
-        select(Company.id, Company.name, Company.industry, Company.segment, Company.pam_id, Pam.name, Pam.email)
+    for cid, name, industry, pam_id, pam_name, pam_email in uow.session.execute(
+        select(Company.id, Company.name, Company.industry, Company.pam_id, Pam.name, Pam.email)
         .outerjoin(Pam, Pam.id == Company.pam_id).where(Company.active.is_(True))
     ):
         st, cat = latest.get(cid, ("none", None))
         n, last = stats.get(cid, (0, None))
-        rows.append([cid, name, industry, segment, pam_id, pam_name, pam_email, st, cat, n, last.isoformat() if last else None])
+        rows.append([cid, name, industry, pam_id, pam_name, pam_email, st, cat, n, last.isoformat() if last else None])
     return {"rows": rows}
 
 
@@ -516,10 +516,9 @@ def companies_view(base: dict[str, Any], q: dict[str, Any], cycles_for) -> dict[
     t0 = datetime.now(UTC)
     scope = _int(q["scopePamId"]) or 0 if q.get("scopePamId") else None
     pam_set = {_int(x) for x in q.get("pamIds") or []} or None
-    segments = set(q.get("segments") or []) or None
     latest_set = set(q.get("latest") or []) or None
     toks = _tokens(q.get("search"))
-    facets: dict[str, dict[str, int]] = {"segment": {}, "latest": {}}
+    facets: dict[str, dict[str, int]] = {"latest": {}}
     hits = []
     for r in base["rows"]:
         if scope is not None and r[_C_PAM] != scope:
@@ -530,14 +529,8 @@ def companies_view(base: dict[str, Any], q: dict[str, Any], cycles_for) -> dict[
                 continue
         if pam_set and r[_C_PAM] not in pam_set:
             continue
-        seg_key = r[_C_SEG] or "Unspecified"
-        m_s = not segments or seg_key in segments
-        m_l = not latest_set or r[_C_ST] in latest_set
-        if m_l:
-            facets["segment"][seg_key] = facets["segment"].get(seg_key, 0) + 1
-        if m_s:
-            facets["latest"][r[_C_ST]] = facets["latest"].get(r[_C_ST], 0) + 1
-        if m_s and m_l:
+        facets["latest"][r[_C_ST]] = facets["latest"].get(r[_C_ST], 0) + 1
+        if not latest_set or r[_C_ST] in latest_set:
             hits.append(r)
 
     sort = q.get("sort") or {"id": "name", "desc": False}
@@ -550,15 +543,13 @@ def companies_view(base: dict[str, Any], q: dict[str, Any], cycles_for) -> dict[
             hits.sort(key=lambda h: h[_C_LAST] or "", reverse=desc)  # ISO dates sort as strings
     elif sort.get("id") == "pam":
         hits.sort(key=lambda h: ((h[_C_PAMNAME] or "~").lower(), h[_C_NAME].lower()), reverse=desc)
-    elif sort.get("id") == "segment":
-        hits.sort(key=lambda h: ((h[_C_SEG] or "~").lower(), h[_C_NAME].lower()), reverse=desc)
     else:
         hits.sort(key=lambda h: h[_C_NAME].lower(), reverse=desc)
 
     pg = _page(hits, int(q.get("page") or 0), int(q.get("pageSize") or 50))
     cycles = cycles_for([h[_C_ID] for h in pg["rows"]]) if pg["rows"] else {}
     pg["rows"] = [
-        {"id": str(h[_C_ID]), "name": h[_C_NAME], "industry": h[_C_IND] or "", "segment": h[_C_SEG],
+        {"id": str(h[_C_ID]), "name": h[_C_NAME], "industry": h[_C_IND] or "",
          "pamId": str(h[_C_PAM]) if h[_C_PAM] else None, "pamName": h[_C_PAMNAME] or "Unassigned", "latestStatus": h[_C_ST],
          "latestCategory": h[_C_CAT] if h[_C_ST] == "signal" else None, "signals": h[_C_N], "lastSignal": h[_C_LAST],
          "cycles": cycles.get(h[_C_ID], [])}
@@ -584,7 +575,7 @@ def company_detail(uow: UnitOfWork, company_id: str) -> dict[str, Any] | None:
     if c is None:
         return None
     pam = uow.session.get(Pam, c.pam_id) if c.pam_id else None
-    row = _company_rows([(c.id, c.name, c.industry, c.segment, c.pam_id, pam.name if pam else None)],
+    row = _company_rows([(c.id, c.name, c.industry, c.pam_id, pam.name if pam else None)],
                         _latest_map(uow), _signal_stats(uow, [c.id]), _cycles(uow, [c.id]))[0]
     cycles = [
         {"result": result_ui(r), "run": {"id": str(run.id), "windowStart": _window(run)[0], "windowEnd": _window(run)[1],
@@ -611,45 +602,37 @@ def company_detail(uow: UnitOfWork, company_id: str) -> dict[str, Any] | None:
 # --- PAMs -----------------------------------------------------------------------------------------
 
 
-def _pam_card(p: Pam, loads: dict[int, int], segments: dict[int, str | None], cap: int) -> dict[str, Any]:
-    return {"id": str(p.id), "name": p.name, "email": p.email, "whatsapp": p.whatsapp or "", "segment": segments.get(p.id), "active": p.active,
+def _pam_card(p: Pam, loads: dict[int, int], cap: int) -> dict[str, Any]:
+    return {"id": str(p.id), "name": p.name, "email": p.email, "whatsapp": p.whatsapp or "", "active": p.active,
             "capacity": cap, "notifyEmail": p.notify_email, "notifyWhatsapp": p.notify_whatsapp, "load": loads.get(p.id, 0)}
 
 
 def pam_base(uow: UnitOfWork) -> dict[str, Any]:
     """Every PAM as a card (JSON-shaped), cached once for all users; `pams_view` filters per request."""
-    loads, segments = accounts.pam_profiles(uow)
+    loads = accounts.pam_profiles(uow)
     cap = get_settings().pam_default_capacity
-    cards = [_pam_card(p, loads, segments, cap) for p in uow.session.scalars(select(Pam))]
+    cards = [_pam_card(p, loads, cap) for p in uow.session.scalars(select(Pam))]
     return {"cards": cards, "activeTotal": sum(1 for c in cards if c["active"])}
 
 
 def pams_view(base: dict[str, Any], q: dict[str, Any]) -> dict[str, Any]:
     t0 = datetime.now(UTC)
     toks = _tokens(q.get("search"))
-    seg_f = set(q.get("segments") or []) or None
     st_f = set(q.get("status") or []) or None
-    facets: dict[str, dict[str, int]] = {"segment": {}, "status": {}}
+    facets: dict[str, dict[str, int]] = {"status": {}}
     hits = []
     for c in base["cards"]:
         st = "active" if c["active"] else "inactive"
-        seg = c["segment"] or "Unspecified"
-        if toks and not all(t in f"{c['name']} {c['email']} {seg}".lower() for t in toks):
+        if toks and not all(t in f"{c['name']} {c['email']}".lower() for t in toks):
             continue
-        m_s, m_t = not seg_f or seg in seg_f, not st_f or st in st_f
-        if m_t:
-            facets["segment"][seg] = facets["segment"].get(seg, 0) + 1
-        if m_s:
-            facets["status"][st] = facets["status"].get(st, 0) + 1
-        if m_s and m_t:
+        facets["status"][st] = facets["status"].get(st, 0) + 1
+        if not st_f or st in st_f:
             hits.append(c)
     sort = q.get("sort") or {"id": "name", "desc": False}
     desc = bool(sort.get("desc"))
     hits.sort(key=lambda c: c["name"].lower())
     if sort.get("id") == "load":
         hits.sort(key=lambda c: c["load"], reverse=desc)
-    elif sort.get("id") == "segment":
-        hits.sort(key=lambda c: c["segment"] or "~", reverse=desc)
     elif sort.get("id") == "status":
         hits.sort(key=lambda c: not c["active"], reverse=desc)
     elif desc:
@@ -691,36 +674,27 @@ def _dataset_stmt(import_id: int):
 
 
 def _dataset_row(row_no: int, c: Company, p: Pam | None) -> dict[str, Any]:
-    return {"companyId": str(c.id), "rowNo": row_no, "company": c.name, "industry": c.industry or "", "segment": c.segment,
+    return {"companyId": str(c.id), "rowNo": row_no, "company": c.name, "industry": c.industry or "",
             "active": c.active, "pamId": str(p.id) if p else None, "pamName": p.name if p else "", "pamEmail": p.email if p else "",
             "pamWhatsapp": (p.whatsapp or "") if p else ""}
 
 
-def dataset_rows(uow: UnitOfWork, import_id: int, page: int, size: int, q: str | None, segment: str | None,
+def dataset_rows(uow: UnitOfWork, import_id: int, page: int, size: int, q: str | None,
                  pam_id: str | None, sort: str, desc: bool) -> dict[str, Any]:
     """One page of a dataset's rows (current master data), with facets for the grid filters."""
     base = _dataset_stmt(import_id)
     conds = []
     for t in _tokens(q):
         conds.append(or_(Company.name.ilike(f"%{t}%"), Company.industry.ilike(f"%{t}%"), Pam.name.ilike(f"%{t}%"), Pam.email.ilike(f"%{t}%")))
-    seg_cond = (Company.segment.is_(None) if segment == "none" else Company.segment == segment) if segment else None
     pam_cond = Company.pam_id == (_int(pam_id) or 0) if pam_id else None
-
-    def counted(group_col, *extra):
-        q_ = (select(group_col, func.count(DatasetCompany.id)).select_from(DatasetCompany)
-              .join(Company, Company.id == DatasetCompany.company_id).outerjoin(Pam, Pam.id == Company.pam_id)
-              .where(DatasetCompany.import_id == import_id, *conds, *[c for c in extra if c is not None]).group_by(group_col))
-        return uow.session.execute(q_).all()
-
-    seg_facet = {(s or "none"): n for s, n in counted(Company.segment, pam_cond)}
     pam_rows = (select(Pam.id, Pam.name, func.count(DatasetCompany.id)).select_from(DatasetCompany)
                 .join(Company, Company.id == DatasetCompany.company_id).join(Pam, Pam.id == Company.pam_id)
-                .where(DatasetCompany.import_id == import_id, *conds, *([seg_cond] if seg_cond is not None else []))
+                .where(DatasetCompany.import_id == import_id, *conds)
                 .group_by(Pam.id, Pam.name).order_by(Pam.name))
     pam_facet = [{"id": str(i), "name": nm, "count": n} for i, nm, n in uow.session.execute(pam_rows)]
 
-    where = conds + [c for c in (seg_cond, pam_cond) if c is not None]
-    order = {"pam": Pam.name, "segment": Company.segment, "row": DatasetCompany.row_no, "industry": Company.industry}.get(sort, Company.name)
+    where = conds + ([pam_cond] if pam_cond is not None else [])
+    order = {"pam": Pam.name, "row": DatasetCompany.row_no, "industry": Company.industry}.get(sort, Company.name)
     total = uow.session.scalar(
         select(func.count(DatasetCompany.id)).select_from(DatasetCompany).join(Company, Company.id == DatasetCompany.company_id)
         .outerjoin(Pam, Pam.id == Company.pam_id).where(DatasetCompany.import_id == import_id, *where)
@@ -729,7 +703,7 @@ def dataset_rows(uow: UnitOfWork, import_id: int, page: int, size: int, q: str |
         base.where(*where).order_by(order.desc() if desc else order.asc(), Company.name, DatasetCompany.id).limit(size).offset(page * size)
     ).all()
     return {"rows": [_dataset_row(rn, c, p) for rn, c, p in rows], "total": total, "page": page, "pageSize": size,
-            "facets": {"segment": seg_facet, "pams": pam_facet}}
+            "facets": {"pams": pam_facet}}
 
 
 def dataset_row(uow: UnitOfWork, import_id: int, company_id: int) -> dict[str, Any]:

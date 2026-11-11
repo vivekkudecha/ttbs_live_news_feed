@@ -50,12 +50,12 @@ def test_companies_query_detail_and_reassign(client):
     aarav, priya = _pam_id(client, "aarav@ttbs.example"), _pam_id(client, "priya@ttbs.example")
     page = client.post("/api/v1/companies/query", json={"page": 0, "pageSize": 2, "sort": {"id": "name", "desc": False}}).json()
     assert page["total"] == 3 and [r["name"] for r in page["rows"]] == ["Havells India", "Pine Labs Pvt Ltd"]
-    assert page["facets"]["segment"] == {"Enterprise": 2, "Mid-market": 1} and page["facets"]["latest"] == {"signal": 3}
+    assert page["facets"] == {"latest": {"signal": 3}} and "segment" not in page["rows"][0]
     row = page["rows"][1]
     assert row["latestStatus"] == "signal" and row["signals"] == 1 and row["cycles"] == [{"runId": run_id, "status": "signal"}]
     scoped = client.post("/api/v1/companies/query", json={"page": 0, "pageSize": 50, "scopePamId": priya}).json()
     assert [r["name"] for r in scoped["rows"]] == ["Havells India"]
-    assert client.post("/api/v1/companies/query", json={"page": 0, "pageSize": 50, "segments": ["Mid-market"]}).json()["total"] == 1
+    assert client.post("/api/v1/companies/query", json={"segments": ["Mid-market"]}).status_code == 422  # filter retired
     assert [c["name"] for c in client.get("/api/v1/companies/search?q=zom").json()] == ["Zomato Hyperpure"]
 
     pine = row["id"]
@@ -77,11 +77,14 @@ def test_pams_query_rebalance_and_deactivate(client):
 
     pg = client.post("/api/v1/pams/query", json={"page": 0, "pageSize": 10, "sort": {"id": "load", "desc": True}}).json()
     assert pg["total"] == 3 and pg["activeTotal"] == 3 and pg["rows"][0]["email"] == "aarav@ttbs.example" and pg["rows"][0]["load"] == 2
-    assert pg["rows"][0]["segment"] in ("Enterprise", "Mid-market")
+    assert "segment" not in pg["rows"][0] and set(pg["facets"]) == {"status"}
     assert [p["id"] for p in client.get(f"/api/v1/pams/by-ids?ids={aarav},{rohan}").json()] == [aarav, rohan]
 
     plan = client.get(f"/api/v1/pams/{aarav}/rebalance-plan").json()
-    assert len(plan["moves"]) == 2 and all(m["toPamId"] != aarav for m in plan["moves"])
+    # By load alone: Aarav's two logos go one each to the least-loaded PAMs (Priya and Rohan own one each).
+    priya = _pam_id(client, "priya@ttbs.example")
+    assert sorted(m["toPamId"] for m in plan["moves"]) == sorted([priya, rohan])
+    assert {m["reason"] for m in plan["moves"]} == {"Least-loaded active PAM"}
     out = client.post(f"/api/v1/pams/{aarav}/deactivate").json()
     assert len(out["moves"]) == 2
     after = client.post("/api/v1/pams/query", json={"page": 0, "pageSize": 10, "status": ["inactive"]}).json()

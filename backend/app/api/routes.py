@@ -241,13 +241,13 @@ def resume_dataset(import_id: int, actor: str = Depends(current_actor)) -> dict[
 
 @router.get("/imports/{import_id}/rows")
 def dataset_rows(
-    import_id: int, pg: tuple[int, int] = Depends(_page), q: str | None = None, segment: str | None = None,
+    import_id: int, pg: tuple[int, int] = Depends(_page), q: str | None = None,
     pam_id: str | None = Query(None, alias="pamId"), sort: str = "company", desc: bool = False,
 ) -> dict[str, Any]:
     page, size = pg
     with unit_of_work() as uow:
         imports.get_dataset(uow, import_id)
-        return rm.dataset_rows(uow, import_id, page, size, q, segment, pam_id, sort, desc)
+        return rm.dataset_rows(uow, import_id, page, size, q, pam_id, sort, desc)
 
 
 @router.patch("/imports/{import_id}/rows/{company_id}")

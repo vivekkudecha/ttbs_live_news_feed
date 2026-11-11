@@ -57,7 +57,6 @@ RES_TERMINAL = (RES_SIGNAL, RES_NO_SIGNAL, RES_FAILED)
 NOTE_PENDING, NOTE_SENDING, NOTE_SENT = "pending", "sending", "sent"
 NOTE_FAILED, NOTE_SKIPPED = "failed", "skipped"
 
-SEGMENTS = ("Enterprise", "Mid-market", "Emerging")
 CHANNELS = ("email", "whatsapp")
 
 
@@ -105,7 +104,6 @@ class Company(TimestampMixin, Base):
     # Upper-cased, punctuation-free form: "Pine Labs Pvt. Ltd" and "PINE LABS PVT LTD" are one logo.
     name_key: Mapped[str] = mapped_column(String(300), unique=True)
     industry: Mapped[str | None] = mapped_column(String(200))
-    segment: Mapped[str | None] = mapped_column(String(40))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     pam_id: Mapped[int | None] = mapped_column(ForeignKey("pams.id"), index=True)
     last_import_id: Mapped[int | None] = mapped_column(ForeignKey("import_batches.id"), index=True)

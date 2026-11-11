@@ -10,8 +10,8 @@
 Nothing ever holds the whole file in memory; the file itself is kept, time-stamped, under UPLOAD_DIR.
 
 Expected columns (case-insensitive, aliases accepted):
-    Company*, Industry, Segment, PAM Name*, PAM Email*, PAM WhatsApp*
-A Region/Zone column, if present, is ignored.
+    Company*, Industry, PAM Name*, PAM Email*, PAM WhatsApp*
+Region, Zone or Segment columns, if present, are ignored.
 """
 
 import csv
@@ -48,7 +48,6 @@ from app.db.models import (
     IMPORT_PREVIEWED,
     IMPORT_PROCESSING,
     IMPORT_QUEUED,
-    SEGMENTS,
     Company,
     CompanyAssignment,
     DatasetCompany,
@@ -63,13 +62,12 @@ log = logging.getLogger(__name__)
 HEADER_ALIASES: dict[str, tuple[str, ...]] = {
     "company": ("company", "company name", "logo", "account", "account name"),
     "industry": ("industry", "sector"),
-    "segment": ("segment",),
     "pam_name": ("pam name", "pam", "account manager"),
     "pam_email": ("pam email", "pam e-mail", "email"),
     "pam_whatsapp": ("pam whatsapp", "whatsapp", "pam phone", "pam mobile", "mobile"),
 }
 REQUIRED = ("company", "pam_name", "pam_email", "pam_whatsapp")
-IGNORED_HEADERS = {"region", "zone"}
+IGNORED_HEADERS = {"region", "zone", "segment"}
 SAMPLE_SIZE = 50
 MAX_ISSUES = 500
 
@@ -87,11 +85,6 @@ def normalize_whatsapp(raw: str, default_cc: str) -> str | None:
     elif len(digits) == 11 and digits.startswith("0"):
         digits = default_cc + digits[1:]
     return f"+{digits}" if 11 <= len(digits) <= 15 else None
-
-
-def _canon_segment(v: str) -> str | None:
-    k = re.sub(r"[^a-z]", "", v.lower())
-    return next((s for s in SEGMENTS if re.sub(r"[^a-z]", "", s.lower()) == k), None)
 
 
 # --- Parsing ---------------------------------------------------------------------------------
@@ -264,11 +257,6 @@ def valid_rows(rows: Iterator[list[Any]], mapping: dict[str, int], header_row: i
         if not wa:
             issue(rown, company, "PAM WhatsApp", f"'{values['pam_whatsapp'] or 'blank'}' is not a valid mobile number", "error")
             row_errors += 1
-        segment = None
-        if values["segment"]:
-            segment = _canon_segment(values["segment"])
-            if not segment:
-                issue(rown, company, "Segment", f"Unknown segment '{values['segment']}'; left blank", "warning")
         if row_errors:
             scan.errors += 1
             continue
@@ -285,7 +273,7 @@ def valid_rows(rows: Iterator[list[Any]], mapping: dict[str, int], header_row: i
         pam_names.setdefault(email, values["pam_name"])
         scan.valid += 1
         yield {
-            "row": rown, "company": company, "name_key": key, "industry": values["industry"] or None, "segment": segment,
+            "row": rown, "company": company, "name_key": key, "industry": values["industry"] or None,
             "pam_name": pam_names[email], "pam_email": email, "pam_whatsapp": wa,
         }
 
@@ -328,7 +316,7 @@ def _diff(uow: UnitOfWork, rows: list[dict[str, Any]]) -> tuple[list[dict[str, A
             change = "new"
         elif c.pam is None or c.pam.email != r["pam_email"]:
             change = "reassigned"
-        elif (r["industry"] and r["industry"] != c.industry) or (r["segment"] and r["segment"] != c.segment) or not c.active:
+        elif (r["industry"] and r["industry"] != c.industry) or not c.active:
             change = "updated"
         else:
             change = "unchanged"
@@ -432,7 +420,7 @@ def analyze(batch_id: int) -> str:
             counts[k] += c.get(k, 0)
         for r in diffed[: max(0, PREVIEW_ROWS - len(sample))]:
             sample.append({
-                "row": r["row"], "company": r["company"], "industry": r["industry"], "segment": r["segment"],
+                "row": r["row"], "company": r["company"], "industry": r["industry"],
                 "pamName": r["pam_name"], "pamEmail": r["pam_email"], "pamWhatsapp": r["pam_whatsapp"],
                 "change": r["change"], "currentPam": r["current_pam"],
             })
@@ -741,7 +729,7 @@ def _apply(uow: UnitOfWork, b: ImportBatch, rows: list[dict[str, Any]]) -> dict[
         c = companies.get(r["name_key"])
         if c is None:
             counts["new_companies"] += 1
-            c = Company(name=r["company"], name_key=r["name_key"], industry=r["industry"], segment=r["segment"], active=True,
+            c = Company(name=r["company"], name_key=r["name_key"], industry=r["industry"], active=True,
                         last_import_id=b.id)
             companies[r["name_key"]] = c
             s.add(c)
@@ -750,15 +738,13 @@ def _apply(uow: UnitOfWork, b: ImportBatch, rows: list[dict[str, Any]]) -> dict[
         if c.pam is None or c.pam.email != r["pam_email"]:
             counts["reassignments"] += 1
             moves.append((c, r["pam_email"]))
-        elif (r["industry"] and r["industry"] != c.industry) or (r["segment"] and r["segment"] != c.segment) or not c.active:
+        elif (r["industry"] and r["industry"] != c.industry) or not c.active:
             counts["updated_companies"] += 1
         else:
             counts["unchanged"] += 1
         c.name = r["company"]
         if r["industry"]:
             c.industry = r["industry"]
-        if r["segment"]:
-            c.segment = r["segment"]
         c.active, c.last_import_id = True, b.id
     s.flush()  # new PAMs + companies get ids (batched INSERTs)
 
@@ -854,7 +840,7 @@ def update_row(uow: UnitOfWork, batch_id: int, company_id: int, patch: dict[str,
     get_dataset(uow, batch_id)
     c = _member(uow, batch_id, company_id)
     s_ = get_settings()
-    before = {"company": c.name, "industry": c.industry, "segment": c.segment, "pam": c.pam.email if c.pam else None}
+    before = {"company": c.name, "industry": c.industry, "pam": c.pam.email if c.pam else None}
 
     if "company" in patch:
         name = re.sub(r"\s+", " ", str(patch["company"] or "")).strip()
@@ -867,12 +853,6 @@ def update_row(uow: UnitOfWork, batch_id: int, company_id: int, patch: dict[str,
         c.name, c.name_key = name, key
     if "industry" in patch:
         c.industry = (str(patch["industry"] or "").strip() or None)
-    if "segment" in patch:
-        raw = str(patch["segment"] or "").strip()
-        seg = _canon_segment(raw) if raw else None
-        if raw and not seg:
-            raise ValidationFailed(f"Segment must be one of {', '.join(SEGMENTS)}", details={"field": "segment"})
-        c.segment = seg
 
     pam_fields = {k: patch[k] for k in ("pam_name", "pam_email", "pam_whatsapp") if k in patch}
     if pam_fields:
@@ -907,7 +887,7 @@ def update_row(uow: UnitOfWork, batch_id: int, company_id: int, patch: dict[str,
 
     uow.session.flush()
     uow.session.expire(c, ["pam"])  # pam_id may have changed: reload the relationship
-    after = {"company": c.name, "industry": c.industry, "segment": c.segment, "pam": c.pam.email if c.pam else None}
+    after = {"company": c.name, "industry": c.industry, "pam": c.pam.email if c.pam else None}
     audit.record(uow, "dataset.row.update", "company", c.id, {"dataset": batch_id, "before": before, "after": after}, actor=actor)
     uow.after_commit(lambda: cache.bump("imports", "runs"))
     return c

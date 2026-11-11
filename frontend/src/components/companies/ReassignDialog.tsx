@@ -54,7 +54,7 @@ export function ReassignDialog({ companyIds, open, onOpenChange, onDone }: { com
           <PamPicker id="reassign-pam" className="h-10 w-full" value={target.id} onChange={(id, pam) => setTarget({ id, pam })} activeOnly excludeId={company?.pamId ?? undefined} />
           {target.pam && (
             <p className="text-xs text-muted-foreground">
-              {target.pam.segment} · currently {target.pam.load}/{target.pam.capacity} logos
+              Currently {target.pam.load}/{target.pam.capacity} logos
             </p>
           )}
         </div>

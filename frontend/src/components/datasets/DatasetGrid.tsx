@@ -1,5 +1,5 @@
 /**
- * Quick view of an uploaded dataset: server-paged rows with search, segment and PAM filters,
+ * Quick view of an uploaded dataset: server-paged rows with search and PAM filters,
  * sortable columns, row-level edit (inline) and delete (single or bulk).
  * Edits update the real company / PAM records; delete removes the row from this dataset and
  * stops tracking the company if it is in no other dataset.
@@ -21,19 +21,17 @@ import { useDebounced } from "@/lib/use-debounced"
 import { cn } from "@/lib/utils"
 import type { DatasetRow, DatasetRowPatch, DatasetRowQuery } from "@/api/types"
 
-const SEGMENTS = ["Enterprise", "Mid-market", "Emerging"] as const
 const ALL = "__all"
 const n = (x: number) => x.toLocaleString("en-IN")
 type SortKey = NonNullable<DatasetRowQuery["sort"]>
 
-type Draft = { company: string; industry: string; segment: string; pamName: string; pamEmail: string; pamWhatsapp: string }
-const toDraft = (r: DatasetRow): Draft => ({ company: r.company, industry: r.industry, segment: r.segment ?? "", pamName: r.pamName, pamEmail: r.pamEmail, pamWhatsapp: r.pamWhatsapp })
+type Draft = { company: string; industry: string; pamName: string; pamEmail: string; pamWhatsapp: string }
+const toDraft = (r: DatasetRow): Draft => ({ company: r.company, industry: r.industry, pamName: r.pamName, pamEmail: r.pamEmail, pamWhatsapp: r.pamWhatsapp })
 
 function changes(r: DatasetRow, d: Draft): DatasetRowPatch {
   const p: DatasetRowPatch = {}
   if (d.company.trim() !== r.company) p.company = d.company.trim()
   if (d.industry.trim() !== r.industry) p.industry = d.industry.trim()
-  if ((d.segment || null) !== r.segment) p.segment = d.segment || null
   if (d.pamEmail.trim().toLowerCase() !== r.pamEmail) p.pamEmail = d.pamEmail.trim()
   if (d.pamName.trim() !== r.pamName) p.pamName = d.pamName.trim()
   if (d.pamWhatsapp.trim() !== r.pamWhatsapp) p.pamWhatsapp = d.pamWhatsapp.trim()
@@ -54,7 +52,6 @@ function SortHead({ id, label, sort, desc, onSort, className }: { id: SortKey; l
 
 export function DatasetGrid({ datasetId, pageSize = 25, className }: { datasetId: string; pageSize?: number; className?: string }) {
   const [search, setSearch] = useState("")
-  const [segment, setSegment] = useState(ALL)
   const [pamId, setPamId] = useState(ALL)
   const [sort, setSort] = useState<SortKey>("company")
   const [desc, setDesc] = useState(false)
@@ -68,7 +65,6 @@ export function DatasetGrid({ datasetId, pageSize = 25, className }: { datasetId
     page,
     pageSize,
     q: q || undefined,
-    segment: segment === ALL ? undefined : segment,
     pamId: pamId === ALL ? undefined : pamId,
     sort,
     desc,
@@ -157,26 +153,6 @@ export function DatasetGrid({ datasetId, pageSize = 25, className }: { datasetId
           />
         </div>
         <Select
-          value={segment}
-          onValueChange={(v) => {
-            setSegment(v)
-            reset()
-          }}
-        >
-          <SelectTrigger className="lg:w-48" aria-label="Filter by segment">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>All segments</SelectItem>
-            {[...SEGMENTS, "none"].map((s) => (
-              <SelectItem key={s} value={s}>
-                {s === "none" ? "No segment" : s}
-                {data?.facets.segment[s] !== undefined && <span className="text-muted-foreground"> ({n(data.facets.segment[s])})</span>}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
           value={pamId}
           onValueChange={(v) => {
             setPamId(v)
@@ -223,7 +199,6 @@ export function DatasetGrid({ datasetId, pageSize = 25, className }: { datasetId
               <SortHead id="row" label="Row" sort={sort} desc={desc} onSort={onSort} className="w-16" />
               <SortHead id="company" label="Company" sort={sort} desc={desc} onSort={onSort} />
               <SortHead id="industry" label="Industry" sort={sort} desc={desc} onSort={onSort} />
-              <SortHead id="segment" label="Segment" sort={sort} desc={desc} onSort={onSort} className="w-40" />
               <SortHead id="pam" label="PAM" sort={sort} desc={desc} onSort={onSort} />
               <TableHead>WhatsApp</TableHead>
               <TableHead className="w-24 pr-3 text-right" />
@@ -266,21 +241,6 @@ export function DatasetGrid({ datasetId, pageSize = 25, className }: { datasetId
                     <>
                       <TableCell>{cell("company", "Company")}</TableCell>
                       <TableCell>{cell("industry", "Industry")}</TableCell>
-                      <TableCell>
-                        <Select value={editing.draft.segment || "none"} onValueChange={(v) => set("segment", v === "none" ? "" : v)}>
-                          <SelectTrigger className="h-8 w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">No segment</SelectItem>
-                            {SEGMENTS.map((s) => (
-                              <SelectItem key={s} value={s}>
-                                {s}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
                       <TableCell className="space-y-1.5">
                         {cell("pamName", "PAM name")}
                         {cell("pamEmail", "PAM email")}
@@ -308,7 +268,6 @@ export function DatasetGrid({ datasetId, pageSize = 25, className }: { datasetId
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">{r.industry || "—"}</TableCell>
-                      <TableCell>{r.segment ? <Badge variant="outline">{r.segment}</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
                       <TableCell>
                         <p>{r.pamName || "—"}</p>
                         <p className="text-xs text-muted-foreground">{r.pamEmail}</p>

@@ -56,7 +56,7 @@ function SearchShell({
   )
 }
 
-const pamMeta = (p: PamOption) => `${p.segment} · ${p.load}/${p.capacity} logos`
+const pamMeta = (p: PamOption) => `${p.load}/${p.capacity} logos`
 
 /** Single PAM selector. `value=""` with `allLabel` acts as "All PAMs". */
 export function PamPicker({
@@ -187,7 +187,7 @@ export function PamMultiFilter({ value, onChange, title = "PAM" }: { value: stri
                 <Check className="size-3" />
               </span>
               <span className="min-w-0 flex-1 truncate">{p.name}</span>
-              <span className="text-xs text-muted-foreground">{p.segment}</span>
+              <span className="tabular text-xs text-muted-foreground">{pamMeta(p)}</span>
             </CommandItem>
           ))}
       </CommandGroup>

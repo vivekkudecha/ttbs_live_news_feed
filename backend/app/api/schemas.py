@@ -85,7 +85,6 @@ class RowPatch(In):
 
     company: str | None = Field(default=None, max_length=300)
     industry: str | None = Field(default=None, max_length=200)
-    segment: str | None = Field(default=None, max_length=40)
     pam_name: str | None = Field(default=None, max_length=200)
     pam_email: str | None = Field(default=None, max_length=320)
     pam_whatsapp: str | None = Field(default=None, max_length=40)

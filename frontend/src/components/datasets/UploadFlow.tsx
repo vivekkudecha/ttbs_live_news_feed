@@ -42,13 +42,12 @@ export const COLUMNS: [string, string][] = [
   ["PAM Email", "required"],
   ["PAM WhatsApp", "required; 10-digit numbers get +91"],
   ["Industry", "optional"],
-  ["Segment", "optional: Enterprise, Mid-market, Emerging"],
 ]
 
 export function downloadTemplate() {
   const rows = [
-    ["Company", "Industry", "Segment", "PAM Name", "PAM Email", "PAM WhatsApp"],
-    ["Example Logistics Pvt Ltd", "Logistics", "Enterprise", "Aarav Mehta", "aarav.mehta@ttbs.example", "+91 98100 11001"],
+    ["Company", "Industry", "PAM Name", "PAM Email", "PAM WhatsApp"],
+    ["Example Logistics Pvt Ltd", "Logistics", "Aarav Mehta", "aarav.mehta@ttbs.example", "+91 98100 11001"],
   ]
   const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\r\n")
   const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }))
@@ -112,13 +111,6 @@ function PreviewTable({ p }: { p: UploadPreview }) {
         meta: { label: "WhatsApp", filter: { type: "text" } },
         header: ({ column }) => <DataTableColumnHeader column={column} title="WhatsApp" />,
         cell: ({ row }) => <span className="tabular text-sm">{row.original.pamWhatsapp}</span>,
-      },
-      {
-        id: "segment",
-        accessorFn: (r) => r.segment ?? "",
-        meta: { label: "Segment", filter: { type: "enum", options: ["Enterprise", "Mid-market", "Emerging"].map((v) => ({ value: v, label: v })) } },
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Segment" />,
-        cell: ({ row }) => <span className="text-sm">{row.original.segment ?? "—"}</span>,
       },
       {
         id: "change",

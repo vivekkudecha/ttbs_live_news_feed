@@ -223,11 +223,11 @@ def test_company_table_is_one_shared_dataset_for_every_user(client, monkeypatch,
     with anon_client() as other:
         assert sign_in(other, "member1").status_code == 200
         a = client.post("/api/v1/companies/query", json={"search": "pine"}).json()
-        b = other.post("/api/v1/companies/query", json={"segments": ["Enterprise"], "sort": {"id": "name", "desc": True}}).json()
+        b = other.post("/api/v1/companies/query", json={"sort": {"id": "name", "desc": True}}).json()
         c = other.post("/api/v1/companies/query", json={}).json()
     assert len(calls) == 1  # computed once, served to both users with their own filters
     assert [r["name"] for r in a["rows"]] == ["Pine Labs Pvt Ltd"]
-    assert {r["segment"] for r in b["rows"]} == {"Enterprise"} and c["total"] == 3
+    assert [r["name"] for r in b["rows"]][0] == "Zomato Hyperpure" and c["total"] == 3
     keys = env.keys("*")
     assert keys and not any("tester" in k or "member1" in k for k in keys)  # no user in any cache key
 

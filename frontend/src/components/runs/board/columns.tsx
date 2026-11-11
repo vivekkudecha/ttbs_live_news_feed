@@ -290,7 +290,7 @@ function AccountCell({ row, ctx }: { row: Row<BoardRow>; ctx: BoardCtx }) {
         {r.companyName}
       </button>
       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        {[r.industry, r.segment].filter(Boolean).join(" · ")}
+        {r.industry}
         {r.cached && <Badge variant="secondary">cached</Badge>}
         {r.attempts > 1 && <Badge variant="secondary">{r.attempts} attempts</Badge>}
       </div>

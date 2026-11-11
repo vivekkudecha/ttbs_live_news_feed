@@ -243,7 +243,7 @@ export default function Imports() {
 
       {nothingYet ? (
         <EmptyState icon={FileSpreadsheet} title="No uploads yet">
-          <p>Upload the company → PAM Excel to get started. Columns: Company, PAM Name, PAM Email, PAM WhatsApp, and optionally Industry and Segment.</p>
+          <p>Upload the company → PAM Excel to get started. Columns: Company, PAM Name, PAM Email, PAM WhatsApp, and optionally Industry.</p>
           <div className="mt-4 flex justify-center">
             <UploadDialog />
           </div>

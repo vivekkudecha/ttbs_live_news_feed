@@ -10,7 +10,7 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table"
-import { Building2, CircleDashed, Copy, Download, Upload, MoreHorizontal, PanelRightOpen, Search, Trash2, UserRound, X } from "lucide-react"
+import { Building2, CircleDashed, Copy, Download, Upload, MoreHorizontal, PanelRightOpen, Trash2, UserRound, X } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { EmptyState } from "@/components/common/EmptyState"
 import { StatusBadge } from "@/components/common/StatusBadge"
@@ -34,7 +34,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
+import { Toolbar, ToolbarSearch } from "@/components/data-table/Toolbar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useCompanyPage } from "@/api/hooks"
@@ -333,25 +333,16 @@ export function CompaniesList() {
 
       {/* One row: the search gives up width first (breaks lines at 8rem, then grows into the free space);
           filters/actions keep their size, and labels collapse to icons below 2xl. Wraps only on narrow screens. */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2 shadow-xs">
-        <div className="relative w-full sm:w-auto sm:min-w-32 sm:max-w-72 sm:flex-[1_1_8rem]">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            aria-label="Search companies"
-            placeholder="Search company or PAM"
-            className="border-transparent bg-muted/60 pl-9 pr-8 focus-visible:bg-card"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              resetPage()
-            }}
-          />
-          {search && (
-            <button type="button" aria-label="Clear search" onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground">
-              <X className="size-3.5" />
-            </button>
-          )}
-        </div>
+      <Toolbar>
+        <ToolbarSearch
+          label="Search companies"
+          placeholder="Search company or PAM"
+          value={search}
+          onChange={(v) => {
+            setSearch(v)
+            resetPage()
+          }}
+        />
         <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:flex-nowrap">
           <PamMultiFilter value={pamIds} onChange={setFilter(setPamIds)} />
           <DataTableFacetedFilter title="Latest cycle" value={latest} onChange={setFilter(setLatest)} counts={page?.facets.latest} options={latestStatusOptions} />
@@ -385,7 +376,7 @@ export function CompaniesList() {
             </Button>
           )}
         </div>
-      </div>
+      </Toolbar>
 
       {/* Floating action bar while rows are selected. */}
       {selectedIds.length > 0 && (

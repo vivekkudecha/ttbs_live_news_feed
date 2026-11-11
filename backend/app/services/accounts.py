@@ -1,10 +1,8 @@
 """Account ownership commands: manual reassignment and PAM deactivation with auto-rebalancing.
 
-PAM segment and load are derived from the companies a PAM owns (the Excel carries a segment per
-company, not per PAM): segment = the most common segment among their active companies.
+A PAM's load is the number of active companies they own.
 """
 
-from collections import Counter, defaultdict
 from typing import Any
 
 from sqlalchemy import func, select
@@ -18,19 +16,14 @@ from app.db.session import UnitOfWork
 from app.services import assignments, audit
 
 
-def pam_profiles(uow: UnitOfWork) -> tuple[dict[int, int], dict[int, str | None]]:
-    """(load per PAM, majority segment per PAM) over active companies."""
-    seg_counts: dict[int, Counter] = defaultdict(Counter)
+def pam_profiles(uow: UnitOfWork) -> dict[int, int]:
+    """Load per PAM: how many active companies each owns."""
     rows = uow.session.execute(
-        select(Company.pam_id, Company.segment, func.count(Company.id))
+        select(Company.pam_id, func.count(Company.id))
         .where(Company.active.is_(True), Company.pam_id.is_not(None))
-        .group_by(Company.pam_id, Company.segment)
+        .group_by(Company.pam_id)
     )
-    for pam_id, segment, n in rows:
-        seg_counts[pam_id][segment] += n
-    loads = {p: sum(c.values()) for p, c in seg_counts.items()}
-    segments = {p: next((s for s, _ in c.most_common() if s), None) for p, c in seg_counts.items()}
-    return loads, segments
+    return {pam_id: n for pam_id, n in rows}
 
 
 def _parse_id(value: str | int, what: str) -> int:
@@ -41,14 +34,14 @@ def _parse_id(value: str | int, what: str) -> int:
 
 
 def rebalance_plan(uow: UnitOfWork, pam_id: str | int) -> dict[str, Any]:
-    """Where each company of a leaving PAM would go: the least-loaded active PAM in the same
-    segment with spare capacity, else the least-loaded active PAM overall."""
+    """Where each company of a leaving PAM would go: the least-loaded active PAM (by name on a tie),
+    one company at a time, so the leaving PAM's companies spread out within capacity."""
     pid = _parse_id(pam_id, "PAM")
     leaving = uow.session.get(Pam, pid)
     if leaving is None:
         raise NotFound(f"PAM {pam_id} not found")
     capacity = get_settings().pam_default_capacity
-    loads, segments = pam_profiles(uow)
+    loads = pam_profiles(uow)
     others = list(uow.session.scalars(select(Pam).where(Pam.active.is_(True), Pam.id != pid)))
     companies = list(uow.session.scalars(select(Company).where(Company.pam_id == pid, Company.active.is_(True)).order_by(Company.name)))
     if companies and not others:
@@ -57,13 +50,8 @@ def rebalance_plan(uow: UnitOfWork, pam_id: str | int) -> dict[str, Any]:
     load = {p.id: loads.get(p.id, 0) for p in others}
     moves, names = [], {}
     for c in companies:
-        same = [p for p in others if segments.get(p.id) == c.segment and load[p.id] < capacity]
-        if same:
-            best = min(same, key=lambda p: (load[p.id] / capacity, p.name))
-            reason = f"Same segment ({c.segment}), lowest load"
-        else:
-            best = min(others, key=lambda p: (load[p.id], p.name))
-            reason = f"No capacity in {c.segment}; least-loaded overall" if c.segment else "Least-loaded active PAM"
+        best = min(others, key=lambda p: (load[p.id], p.name))
+        reason = "Least-loaded active PAM" if load[best.id] < capacity else "Every PAM is at capacity; least-loaded"
         load[best.id] += 1
         moves.append({"companyId": str(c.id), "fromPamId": str(pid), "toPamId": str(best.id), "reason": reason})
         names[str(c.id)] = c.name

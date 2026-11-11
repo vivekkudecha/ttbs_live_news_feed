@@ -103,11 +103,10 @@ def test_grid_filters_facets_and_sort(client):
     ds = upload(client, label="Q4").json()
     g = client.get(f"/api/v1/imports/{ds['id']}/rows?pageSize=50&sort=company").json()
     assert [r["company"] for r in g["rows"]] == ["Havells India", "Pine Labs Pvt Ltd", "Zomato Hyperpure"]
-    assert g["facets"]["segment"] == {"Enterprise": 2, "Mid-market": 1}
+    assert set(g["facets"]) == {"pams"} and "segment" not in g["rows"][0]  # a Segment column in the file is ignored
     assert {p["name"]: p["count"] for p in g["facets"]["pams"]} == {"Aarav Mehta": 2, "Priya Nair": 1}
     aarav = next(p["id"] for p in g["facets"]["pams"] if p["name"] == "Aarav Mehta")
     assert client.get(f"/api/v1/imports/{ds['id']}/rows?pamId={aarav}").json()["total"] == 2
-    assert client.get(f"/api/v1/imports/{ds['id']}/rows?segment=Mid-market").json()["rows"][0]["company"] == "Zomato Hyperpure"
     assert client.get(f"/api/v1/imports/{ds['id']}/rows?q=priya").json()["total"] == 1
     assert client.get(f"/api/v1/imports/{ds['id']}/rows?sort=pam&desc=true").json()["rows"][0]["pamName"] == "Priya Nair"
 
@@ -117,9 +116,9 @@ def test_row_edit_updates_master_data(client):
     rows = client.get(f"/api/v1/imports/{ds['id']}/rows?q=havells").json()["rows"]
     cid = rows[0]["companyId"]
 
-    r = client.patch(f"/api/v1/imports/{ds['id']}/rows/{cid}", json={"company": "Havells India Ltd", "segment": "mid market", "industry": "Electrical"})
+    r = client.patch(f"/api/v1/imports/{ds['id']}/rows/{cid}", json={"company": "Havells India Ltd", "industry": "Electrical"})
     assert r.status_code == 200, r.text
-    assert r.json()["company"] == "Havells India Ltd" and r.json()["segment"] == "Mid-market"
+    assert r.json()["company"] == "Havells India Ltd" and r.json()["industry"] == "Electrical"
     assert client.get(f"/api/v1/companies/{cid}").json()["company"]["name"] == "Havells India Ltd"  # master record
 
     # Move to a brand-new PAM: created on the fly, ownership history recorded.
@@ -129,7 +128,7 @@ def test_row_edit_updates_master_data(client):
     assert [a["pamName"] for a in hist] == ["Priya Nair", "Neha Rao"] and hist[-1]["reason"] == "manual"
 
     assert client.patch(f"/api/v1/imports/{ds['id']}/rows/{cid}", json={"pamEmail": "bad"}).status_code == 422
-    assert client.patch(f"/api/v1/imports/{ds['id']}/rows/{cid}", json={"segment": "Galactic"}).status_code == 422
+    assert client.patch(f"/api/v1/imports/{ds['id']}/rows/{cid}", json={"segment": "Enterprise"}).status_code == 422  # no such field any more
     assert client.patch(f"/api/v1/imports/{ds['id']}/rows/{cid}", json={"company": "Zomato Hyperpure"}).status_code == 409
     assert client.patch(f"/api/v1/imports/{ds['id']}/rows/999", json={"industry": "x"}).status_code == 404
     assert "dataset.row.update" in [a["action"] for a in client.get("/api/v1/audit?pageSize=50").json()["rows"]]

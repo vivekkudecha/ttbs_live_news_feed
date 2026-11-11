@@ -58,7 +58,7 @@ EST_COST_PER_COMPANY = 0.0125
 SAVED_STATUSES = (IMPORT_COMPLETED, "committed")  # "committed": uploads from before datasets existed
 
 # --- Scopes ---------------------------------------------------------------------------------
-# A run's scope is always "import:<id>". Older keys ("all", "segment:…", "pam:…") only appear
+# A run's scope is always "import:<id>". Older keys ("all", "pam:…") only appear
 # on historical runs and are kept for their labels.
 
 
@@ -102,8 +102,6 @@ def scope_label(uow: UnitOfWork, scope_key: str) -> str:
     if scope_key == "all":
         return "All active companies"
     kind, _, value = scope_key.partition(":")
-    if kind == "segment":
-        return f"Segment = {value}"
     if kind == "pam":
         p = uow.session.get(Pam, int(value)) if value.isdigit() else None
         return f"PAM = {p.name if p else value}"

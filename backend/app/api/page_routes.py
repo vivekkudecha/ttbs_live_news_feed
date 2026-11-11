@@ -34,7 +34,6 @@ class CompanyQueryIn(sch.In):
     page: int = Field(0, ge=0)
     page_size: int = Field(50, ge=1, le=200)
     search: str | None = None
-    segments: list[str] | None = None
     pam_ids: list[str] | None = None
     latest: list[str] | None = None
     sort: SortIn | None = None
@@ -45,7 +44,6 @@ class PamQueryIn(sch.In):
     page: int = Field(0, ge=0)
     page_size: int = Field(50, ge=1, le=200)
     search: str | None = None
-    segments: list[str] | None = None
     status: list[Literal["active", "inactive"]] | None = None
     sort: SortIn | None = None
 
@@ -159,7 +157,8 @@ def query_companies(body: CompanyQueryIn, principal: Principal = Depends(current
         with unit_of_work() as uow:
             return rm.company_base(uow)
 
-    base = cache.shared("accounts", _accounts_key("companies-base"), get_settings().cache_ttl_lists, load)
+    # "-v2": the cached row layout changed (segment removed); never read rows cached in the old layout.
+    base = cache.shared("accounts", _accounts_key("companies-base-v2"), get_settings().cache_ttl_lists, load)
 
     def cycles(ids: list[int]):
         with unit_of_work() as uow:

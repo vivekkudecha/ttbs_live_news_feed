@@ -1,7 +1,5 @@
 // Domain contracts shared with the FastAPI backend (/api/v1); shapes match backend/app/api/read_models.py.
 
-export type Segment = "Enterprise" | "Mid-market" | "Emerging"
-
 // ---- Identity & access (backend/app/services/auth.py) -------------------------------------
 export type Role = "admin" | "member"
 export type PermLevel = "view" | "manage"
@@ -96,8 +94,6 @@ export interface Pam {
   name: string
   email: string
   whatsapp: string
-  /** Majority segment of the PAM's companies (null when they own none). */
-  segment: Segment | null
   active: boolean
   capacity: number
   notifyEmail: boolean
@@ -108,7 +104,6 @@ export interface Company {
   id: string
   name: string
   industry: string
-  segment: Segment
   active: boolean
   pamId: string | null
 }
@@ -411,7 +406,6 @@ export interface CompanyQuery {
   page: number
   pageSize: number
   search?: string
-  segments?: string[]
   pamIds?: string[]
   latest?: LatestStatus[]
   sort?: SortDir
@@ -423,7 +417,6 @@ export interface CompanyListRow {
   id: string
   name: string
   industry: string
-  segment: Segment | null
   pamId: string | null
   pamName: string
   latestStatus: LatestStatus
@@ -434,7 +427,7 @@ export interface CompanyListRow {
 }
 
 export interface CompanyPage extends Page<CompanyListRow> {
-  facets: { segment: Record<string, number>; latest: Record<string, number> }
+  facets: { latest: Record<string, number> }
   tookMs: number
 }
 
@@ -442,7 +435,6 @@ export interface PamOption {
   id: string
   name: string
   email: string
-  segment: Segment | null
   active: boolean
   load: number
   capacity: number
@@ -556,13 +548,12 @@ export interface PamQuery {
   page: number
   pageSize: number
   search?: string
-  segments?: string[]
   status?: ("active" | "inactive")[]
   sort?: SortDir
 }
 
 export interface PamPage extends Page<PamCard> {
-  facets: { segment: Record<string, number>; status: Record<string, number> }
+  facets: { status: Record<string, number> }
   activeTotal: number
   tookMs: number
 }
@@ -756,7 +747,6 @@ export interface UploadPreview {
     row: number
     company: string
     industry: string | null
-    segment: Segment | null
     pamName: string
     pamEmail: string
     pamWhatsapp: string
@@ -771,7 +761,6 @@ export interface DatasetRow {
   rowNo: number
   company: string
   industry: string
-  segment: Segment | null
   active: boolean
   pamId: string | null
   pamName: string
@@ -780,21 +769,20 @@ export interface DatasetRow {
 }
 
 export interface DatasetRowPage extends Page<DatasetRow> {
-  facets: { segment: Record<string, number>; pams: { id: string; name: string; count: number }[] }
+  facets: { pams: { id: string; name: string; count: number }[] }
 }
 
 export interface DatasetRowQuery {
   page: number
   pageSize: number
   q?: string
-  segment?: string
   pamId?: string
-  sort?: "company" | "pam" | "segment" | "industry" | "row"
+  sort?: "company" | "pam" | "industry" | "row"
   desc?: boolean
 }
 
 /** Only the fields sent change; edits update the real company / PAM records. */
-export type DatasetRowPatch = Partial<Pick<DatasetRow, "company" | "industry" | "pamName" | "pamEmail" | "pamWhatsapp">> & { segment?: string | null }
+export type DatasetRowPatch = Partial<Pick<DatasetRow, "company" | "industry" | "pamName" | "pamEmail" | "pamWhatsapp">>
 
 // ---- Email delivery (Microsoft Graph, app-to-app) ---------------------------------------------------
 export interface EmailLimits {
@@ -1060,7 +1048,6 @@ export interface BoardLogo {
   companyId: string
   companyName: string
   industry: string | null
-  segment: string | null
   pamId: string | null
   pamName: string | null
   status: ResearchStatus | "running"

@@ -26,7 +26,6 @@ import {
   FileSpreadsheet,
   Inbox,
   Mail,
-  MapPin,
   MessageCircle,
   Play,
   RotateCcw,
@@ -173,11 +172,6 @@ function LogoDrawer({
                   {(d?.company.industry || t?.logo.industry) && (
                     <span className="inline-flex items-center gap-1.5">
                       <Building2 className="size-3.5" /> {d?.company.industry || t?.logo.industry}
-                    </span>
-                  )}
-                  {(d?.company.segment || t?.logo.segment) && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <MapPin className="size-3.5" /> {d?.company.segment || t?.logo.segment}
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1.5">
@@ -705,7 +699,6 @@ function DetailsTab({ d }: { d: CompanyDetail }) {
           {[
             ["Legal name", d.company.name],
             ["Industry", d.company.industry || "—"],
-            ["Segment", d.company.segment || "—"],
             ["PAM", d.pam ? `${d.pam.name} · ${d.pam.email}` : "Unassigned"],
             ["Company ID", d.company.id],
           ].map(([k, v]) => (
