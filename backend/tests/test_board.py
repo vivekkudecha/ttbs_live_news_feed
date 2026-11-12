@@ -84,3 +84,28 @@ def test_digest_preview_renders_current_results(client, monkeypatch):
     pam = client.get(f"/api/v1/runs/{run_id}/board/groups").json()["rows"][0]
     d = client.get(f"/api/v1/runs/{run_id}/board/pams/{pam['pamId']}/digest").json()
     assert d["asSent"] is False and d["subject"] and d["html"]
+
+
+def test_resend_uses_the_pams_current_details(client, monkeypatch):
+    from sqlalchemy import select
+
+    from app.db.models import Notification
+    from app.db.session import unit_of_work
+
+    run_id, _ = _run(client, monkeypatch, fail=None)
+    aarav = next(r for r in client.get(f"/api/v1/runs/{run_id}/board/groups").json()["rows"] if r["pamName"] == "Aarav Mehta")["pamId"]
+    assert client.patch(f"/api/v1/pams/{aarav}", json={"name": "Aarav M.", "email": "aarav.m@ttbs.example", "whatsapp": "9810011099"}).status_code == 200
+
+    assert client.post(f"/api/v1/runs/{run_id}/board/resend", json={"pamIds": [aarav]}).json() == {"requeued": 1, "skipped": 0}
+    with unit_of_work() as uow:
+        note = uow.session.scalars(select(Notification).where(Notification.run_id == int(run_id), Notification.pam_id == int(aarav))).one()
+        assert note.recipient == "+919810011099" and note.payload["pam"]["name"] == "Aarav M." and note.status == "sent"
+        nid = note.id
+    d = client.get(f"/api/v1/runs/{run_id}/board/pams/{aarav}/digest").json()
+    assert d["recipient"] == d["currentRecipient"] == "aarav.m@ttbs.example"
+
+    # Opted out of WhatsApp: a resend leaves it alone instead of messaging them anyway.
+    client.patch(f"/api/v1/pams/{aarav}", json={"notifyWhatsapp": False})
+    assert client.post(f"/api/v1/runs/{run_id}/board/resend", json={"pamIds": [aarav]}).json() == {"requeued": 0, "skipped": 1}
+    out = client.post(f"/api/v1/notifications/{nid}/resend")
+    assert out.status_code == 409 and "opted out" in out.text

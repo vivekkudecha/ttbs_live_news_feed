@@ -54,7 +54,7 @@ export function ReassignDialog({ companyIds, open, onOpenChange, onDone }: { com
           <PamPicker id="reassign-pam" className="h-10 w-full" value={target.id} onChange={(id, pam) => setTarget({ id, pam })} activeOnly excludeId={company?.pamId ?? undefined} />
           {target.pam && (
             <p className="text-xs text-muted-foreground">
-              Currently {target.pam.load}/{target.pam.capacity} logos
+              Currently owns {target.pam.load.toLocaleString("en-IN")} {target.pam.load === 1 ? "logo" : "logos"}
             </p>
           )}
         </div>

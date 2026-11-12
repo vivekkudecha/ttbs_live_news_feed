@@ -107,7 +107,7 @@ def research_company(result_id: int) -> str:
         "error": None,
     }
     with unit_of_work() as uow:
-        runs.complete_result(uow, result_id, values)
+        runs.complete_result(uow, result_id, values, usage=out.usage)
     # Cache only successful answers, for the length of the research window.
     cacheable = {k: values[k] for k in ("status", "category", "key_signals", "opportunity", "outreach", "sources", "raw_text", "tokens_in", "tokens_out")}
     cache.set_json(cache_key, cacheable, ttl=prompt.window_days * 86400)

@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/common/PageHeader"
 import { StatCard } from "@/components/common/StatCard"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { CostTable } from "@/components/finops/CostTable"
+import { UsageBreakdown } from "@/components/finops/UsageBreakdown"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -183,6 +184,8 @@ function Report({ d, stale }: { d: NonNullable<ReturnType<typeof useFinops>["dat
           </CardContent>
         </Card>
       </Split>
+
+      <UsageBreakdown totals={d.usage.totals} daily={d.usage.daily} />
 
       <Tabs defaultValue="runs">
         <TabsList className="h-auto flex-wrap">

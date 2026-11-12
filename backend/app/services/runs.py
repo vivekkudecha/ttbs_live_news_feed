@@ -74,7 +74,7 @@ def import_id_of(scope_key: str | None) -> int:
 
 def _members(import_id: int):
     """(company_id, pam_id, uploaded_pam_id) for an upload. pam_id is the upload's own PAM while
-    that PAM is active; if the PAM has left (deactivated, logos rebalanced) it is the logo's
+    that PAM is active; if the PAM is inactive (left before uploads alone decided ownership) it is the logo's
     current owner, so results still reach someone."""
     up_pam = aliased(Pam)
     pam = case((up_pam.active.is_(True), DatasetCompany.pam_id), else_=Company.pam_id)
@@ -319,9 +319,11 @@ def claim_result(uow: UnitOfWork, result_id: int) -> ResearchResult | None:
     return res
 
 
-def complete_result(uow: UnitOfWork, result_id: int, values: dict[str, Any], *, event_status: str | None = None) -> None:
+def complete_result(uow: UnitOfWork, result_id: int, values: dict[str, Any], *, event_status: str | None = None,
+                    usage: Any = None) -> None:
     """Persist a terminal result, bump run counters atomically, then fire per-PAM / run completion.
-    The cost-ledger row and the telemetry event commit in this same transaction."""
+    The cost-ledger row (with the provider's `usage` breakdown, when a call was made) and the
+    telemetry event commit in this same transaction."""
     s = uow.session
     status = values["status"]
     assert status in RES_TERMINAL
@@ -334,7 +336,7 @@ def complete_result(uow: UnitOfWork, result_id: int, values: dict[str, Any], *, 
         return
     res = s.get(ResearchResult, result_id)
     run = s.get(Run, res.run_id)
-    finops.record_research(uow, res, run, values)
+    finops.record_research(uow, res, run, values, usage)
     ev_status = event_status or (telemetry.ERROR if status == RES_FAILED else telemetry.OK)
     cached = bool(values.get("cached"))  # a cache hit spends no tokens (values carry the original answer's usage)
     telemetry.event(
@@ -544,14 +546,16 @@ def _refresh_digest(uow: UnitOfWork, run: Run, pam_id: int, channel: str, payloa
     uow.after_commit(lambda: cache.bump(f"run:{run.id}", "runs", "outbox"))
 
 
-def refresh_payload(uow: UnitOfWork, note: Notification) -> None:
-    """Rebuild a digest row's content from the run's current results (before a manual resend)."""
+def refresh_payload(uow: UnitOfWork, note: Notification) -> str | None:
+    """Before a manual resend: rebuild the digest from the run's current results and the PAM's current
+    details (name, address, opt-outs), so an edited PAM gets it at the new address. Returns why it
+    cannot be sent (opted out, no number, inactive), else None."""
     run = uow.session.get(Run, note.run_id)
     if run is None or note.pam_id is None:
-        return
-    _, _, payload = pam_digest(uow, run, note.pam_id)
-    if not _same_digest(note.payload, payload):
-        note.payload = payload
+        return None
+    pam, _, note.payload = pam_digest(uow, run, note.pam_id)
+    note.recipient, reason = _recipient(pam, note.channel)
+    return reason
 
 
 def _recipient(pam: Pam | None, channel: str) -> tuple[str | None, str | None]:

@@ -70,7 +70,7 @@ def test_companies_query_detail_and_reassign(client):
     assert client.post("/api/v1/companies/reassign", json={"companyIds": [pine], "toPamId": "999"}).status_code == 404
 
 
-def test_pams_query_rebalance_and_deactivate(client):
+def test_pams_query_has_load_but_no_capacity_or_rebalancing(client):
     _seed(client)
     upload(client, [["Tata Elxsi", "IT", "Enterprise", "", "Rohan Das", "rohan@ttbs.example", "9830033003"]]).json()
     aarav, rohan = _pam_id(client, "aarav@ttbs.example"), _pam_id(client, "rohan@ttbs.example")
@@ -80,17 +80,34 @@ def test_pams_query_rebalance_and_deactivate(client):
     assert "segment" not in pg["rows"][0] and set(pg["facets"]) == {"status"}
     assert [p["id"] for p in client.get(f"/api/v1/pams/by-ids?ids={aarav},{rohan}").json()] == [aarav, rohan]
 
-    plan = client.get(f"/api/v1/pams/{aarav}/rebalance-plan").json()
-    # By load alone: Aarav's two logos go one each to the least-loaded PAMs (Priya and Rohan own one each).
-    priya = _pam_id(client, "priya@ttbs.example")
-    assert sorted(m["toPamId"] for m in plan["moves"]) == sorted([priya, rohan])
-    assert {m["reason"] for m in plan["moves"]} == {"Least-loaded active PAM"}
-    out = client.post(f"/api/v1/pams/{aarav}/deactivate").json()
-    assert len(out["moves"]) == 2
-    after = client.post("/api/v1/pams/query", json={"page": 0, "pageSize": 10, "status": ["inactive"]}).json()
-    assert [p["id"] for p in after["rows"]] == [aarav] and after["rows"][0]["load"] == 0
-    assert client.post(f"/api/v1/pams/{aarav}/deactivate").status_code == 409
-    assert "pam.deactivate" in [a["action"] for a in client.get("/api/v1/audit?pageSize=50").json()["rows"]]
+    # Uploads alone decide ownership: no capacity, no rebalance plan, no PAM deactivation.
+    assert "capacity" not in pg["rows"][0]
+    assert client.get(f"/api/v1/pams/{aarav}/rebalance-plan").status_code == 404
+    assert client.post(f"/api/v1/pams/{aarav}/deactivate").status_code in (404, 405)
+
+
+def test_edit_pam_details(client):
+    _seed(client)
+    upload(client, [["Tata Elxsi", "IT", "Enterprise", "", "Rohan Das", "rohan@ttbs.example", "9830033003"]])
+    aarav = _pam_id(client, "aarav@ttbs.example")
+
+    out = client.patch(f"/api/v1/pams/{aarav}", json={"name": " Aarav M. ", "email": "Aarav.M@TTBS.example", "whatsapp": "98100 11002",
+                                                      "notifyWhatsapp": False})
+    assert out.status_code == 200, out.text
+    card = out.json()
+    assert (card["name"], card["email"], card["whatsapp"], card["notifyEmail"], card["notifyWhatsapp"], card["load"]) == (
+        "Aarav M.", "aarav.m@ttbs.example", "+919810011002", True, False, 2)
+    # The cached PAM table shows the edit straight away, and the change is audited.
+    row = next(r for r in client.post("/api/v1/pams/query", json={"search": "aarav"}).json()["rows"])
+    assert row["email"] == "aarav.m@ttbs.example" and row["notifyWhatsapp"] is False
+    assert any(e["action"] == "pam.update" for e in client.get("/api/v1/audit").json()["rows"])
+
+    assert client.patch(f"/api/v1/pams/{aarav}", json={"email": "rohan@ttbs.example"}).status_code == 409
+    assert client.patch(f"/api/v1/pams/{aarav}", json={"email": "not-an-email"}).status_code == 422
+    assert client.patch(f"/api/v1/pams/{aarav}", json={"whatsapp": "12"}).status_code == 422
+    assert client.patch(f"/api/v1/pams/{aarav}", json={"name": "  "}).status_code == 422
+    assert client.patch(f"/api/v1/pams/{aarav}", json={"active": False}).status_code == 422  # not editable here
+    assert client.patch("/api/v1/pams/999999", json={"name": "X"}).status_code == 404
 
 
 def test_runs_list_groups_search_and_results_search(client):

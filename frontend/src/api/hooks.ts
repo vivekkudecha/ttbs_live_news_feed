@@ -13,6 +13,7 @@ import type {
   EmailSettings,
   EmailTemplateInput,
   ResearchPromptInput,
+  PamPatch,
   PamQuery,
   UserInput,
   UserPatch,
@@ -41,6 +42,11 @@ export const usePamSearch = (q: string, opts: { activeOnly?: boolean; excludeId?
 export const usePamsById = (ids: string[]) =>
   useQuery({ queryKey: ["pamsById", [...ids].sort()], queryFn: () => api.getPams(ids), enabled: ids.length > 0, staleTime: 60_000 })
 export const usePamPage = (q: PamQuery) => useQuery({ queryKey: ["pams", q], queryFn: () => api.queryPams(q), ...paged })
+export const useUpdatePam = () => {
+  // PAM names and emails also show on Companies, pickers, run boards, digests and the logo drawer.
+  const inv = useInvalidate([["pams"], ["pamSearch"], ["pamsById"], ["companies"], ["company"], ["board"], ["logoTimeline"], ["pamDigest"], ["audit"]])
+  return useMutation({ mutationFn: (v: { id: string; patch: PamPatch }) => api.updatePam(v.id, v.patch), onSuccess: inv })
+}
 
 // ---- Runs & signals ---------------------------------------------------------------------
 export const useRuns = () => useQuery({ queryKey: ["runs"], queryFn: () => api.listRuns(), refetchInterval: 5_000 })
@@ -83,10 +89,6 @@ export const useUserAction = () => {
   })
 }
 
-export const useDeactivatePam = () => {
-  const inv = useInvalidate([["pams"], ["pamSearch"], ["companies"], ["company"], ["audit"]])
-  return useMutation({ mutationFn: (v: { pamId: string; actor: string }) => api.deactivatePam(v.pamId), onSuccess: inv })
-}
 export const useReassign = () => {
   const inv = useInvalidate([["companies"], ["company"], ["pams"], ["pamSearch"], ["audit"]])
   return useMutation({ mutationFn: (v: { companyIds: string[]; toPamId: string; actor: string }) => api.reassignCompanies(v.companyIds, v.toPamId), onSuccess: inv })

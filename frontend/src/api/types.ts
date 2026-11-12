@@ -95,7 +95,6 @@ export interface Pam {
   email: string
   whatsapp: string
   active: boolean
-  capacity: number
   notifyEmail: boolean
   notifyWhatsapp: boolean
 }
@@ -301,6 +300,38 @@ export interface CostRow {
   cacheRate: number
 }
 
+/** Paid LLM calls as the provider billed them (each response's usage report, added up). */
+export interface UsageRow {
+  calls: number
+  /** Input tokens as the provider reported them. */
+  tokensIn: number
+  cacheRead: number
+  cacheWrite: number
+  tokensOut: number
+  /** Thinking tokens (already counted in output). */
+  reasoning: number
+  totalTokens: number
+  /** Tool invocations, e.g. web searches. */
+  toolCalls: number
+  inputCost: number
+  outputCost: number
+  cacheCost: number
+  toolCost: number
+  /** Billed beyond the itemised parts. */
+  otherCost: number
+  /** The amount actually charged (sum of each call's total). */
+  cost: number
+  /** From the provider's response. */
+  providerCost: number
+  /** Priced from our settings (the provider sent no cost, e.g. Gemini). */
+  estimatedCost: number
+  /** Calls recorded before the breakdown was tracked: total only. */
+  untrackedCost: number
+  untrackedCalls: number
+}
+
+export type UsageDay = UsageRow & { date: string; provider: string; model: string | null }
+
 export interface FinOpsReport {
   currency: "USD"
   from: string
@@ -314,6 +345,7 @@ export interface FinOpsReport {
   byPam: (CostRow & { id: string; name: string; email: string | null })[]
   topCompanies: (CostRow & { id: string; name: string })[]
   byModel: (CostRow & { category: "llm" | "messaging"; provider: string; model: string | null })[]
+  usage: { totals: UsageRow; daily: { ist: UsageDay[]; utc: UsageDay[] } }
 }
 
 export interface RunCosts {
@@ -375,18 +407,6 @@ export interface ImportRowIssue {
   severity: "error" | "warning"
 }
 
-export interface RebalanceMove {
-  companyId: string
-  fromPamId: string
-  toPamId: string
-  reason: string
-}
-
-export interface RebalanceResult {
-  pamId: string
-  moves: RebalanceMove[]
-}
-
 // ---------------------------------------------------------------------------
 // Scale contracts: everything list-shaped is paged, filtered, sorted and joined
 // on the server. The UI never receives or scans the full 10k / 5k datasets.
@@ -437,12 +457,14 @@ export interface PamOption {
   email: string
   active: boolean
   load: number
-  capacity: number
 }
 
 export interface PamCard extends Pam {
   load: number
 }
+
+/** PAM edit: only the fields sent change. */
+export type PamPatch = Partial<Pick<Pam, "name" | "email" | "whatsapp" | "notifyEmail" | "notifyWhatsapp">>
 
 export interface CompanyOption {
   id: string
@@ -1094,4 +1116,6 @@ export interface DigestRender {
   sentAt: string | null
   status: BoardDigestStatus | "none"
   recipient: string | null
+  /** Where a (re)send goes now: the PAM's current email (differs from `recipient` after a PAM edit). */
+  currentRecipient: string | null
 }

@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { getCoreRowModel, useReactTable, type ColumnDef, type PaginationState, type RowSelectionState, type SortingState, type VisibilityState } from "@tanstack/react-table"
-import { ArrowRight, Building2, Copy, Download,  Loader2, Mail, MessageCircle, MoreHorizontal, Pencil, Shuffle, UserMinus, Users, X } from "lucide-react"
+import { Building2, Copy, Download, FileSpreadsheet, Mail, MessageCircle, MoreHorizontal, Pencil, Users, X } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { EmptyState } from "@/components/common/EmptyState"
 import { StatusBadge } from "@/components/common/StatusBadge"
@@ -17,22 +16,18 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Toolbar, ToolbarSearch } from "@/components/data-table/Toolbar"
-import { Progress } from "@/components/ui/progress"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { api } from "@/api/client"
-import { useDeactivatePam, usePamPage } from "@/api/hooks"
-import { useSession } from "@/context/session"
+import { usePamPage } from "@/api/hooks"
 import { useDebounced } from "@/lib/use-debounced"
-import { initials, pct } from "@/lib/format"
+import { initials } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { PamCard } from "@/api/types"
 import { Page } from "@/components/common/layout"
+import { EditPamDialog } from "@/components/pams/EditPamDialog"
+import { useSession } from "@/context/session"
+import { can } from "@/lib/access"
 
 async function copy(text: string) {
   try {
@@ -44,10 +39,10 @@ async function copy(text: string) {
 }
 
 export default function Pams() {
-  const { user } = useSession()
   const navigate = useNavigate()
-  const deactivate = useDeactivatePam()
-  const [target, setTarget] = useState<PamCard | null>(null)
+  const { user } = useSession()
+  const canManage = can(user, "pams", "manage")
+  const [editing, setEditing] = useState<PamCard | null>(null)
 
   // 5,000 PAMs: searched, filtered, sorted and paged on the server (same model as Companies).
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }])
@@ -67,18 +62,6 @@ export default function Pams() {
     sort: sorting[0],
   })
   const page = query.data
-
-  // The rebalance plan is computed server-side against all 5,000 PAMs' live load.
-  const planQ = useQuery({ queryKey: ["rebalancePlan", target?.id], queryFn: () => api.previewRebalance(target!.id), enabled: !!target })
-  const plan = planQ.data
-  const name = (id: string) => plan?.names[id] ?? id
-
-  const confirm = async () => {
-    if (!target) return
-    const res = await deactivate.mutateAsync({ pamId: target.id, actor: user!.username })
-    toast.success(`${target.name} deactivated`, { description: `${res.moves.length} logos auto-reassigned. New PAMs receive them from the next cycle.` })
-    setTarget(null)
-  }
 
   const columns = useMemo<ColumnDef<PamCard>[]>(() => {
     const cols: ColumnDef<PamCard>[] = []
@@ -124,25 +107,7 @@ export default function Pams() {
         accessorKey: "load",
         meta: { label: "Logos" },
         header: ({ column }) => <DataTableColumnHeader column={column} title="Logos" />,
-        cell: ({ row }) => {
-          const p = row.original
-          const u = pct(p.load, p.capacity)
-          return (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex w-40 items-center gap-2.5">
-                  <Progress value={u} className={cn("h-1.5", u >= 100 && "[&>div]:bg-warning")} />
-                  <span className="tabular w-10 shrink-0 text-right text-xs text-muted-foreground">
-                    {p.load}/{p.capacity}
-                  </span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                {p.load} logos of {p.capacity} capacity ({u}%)
-              </TooltipContent>
-            </Tooltip>
-          )
-        },
+        cell: ({ row }) => <span className="tabular font-medium">{row.original.load.toLocaleString("en-IN")}</span>,
       },
       {
         id: "whatsapp",
@@ -199,17 +164,12 @@ export default function Pams() {
                   <DropdownMenuItem onClick={() => copy(p.email)}>
                     <Copy /> Copy email
                   </DropdownMenuItem>
-                  {(
+                  {canManage && (
                     <>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => toast.info("Edit PAM form opens here (prototype)")}>
+                      <DropdownMenuItem onClick={() => setEditing(p)}>
                         <Pencil /> Edit details
                       </DropdownMenuItem>
-                      {p.active && (
-                        <DropdownMenuItem variant="destructive" onClick={() => setTarget(p)}>
-                          <UserMinus /> Deactivate (PAM left)
-                        </DropdownMenuItem>
-                      )}
                     </>
                   )}
                 </DropdownMenuContent>
@@ -222,7 +182,7 @@ export default function Pams() {
     return cols
     // navigate is stable; columns rebuild when the role changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [canManage])
 
   const table = useReactTable({
     data: page?.rows ?? [],
@@ -259,11 +219,11 @@ export default function Pams() {
         description="Sales owners for logos. Each PAM gets one digest per cycle covering all their companies. Select a PAM to see their logos."
       />
       <Alert>
-        <Shuffle />
-        <AlertTitle>Automatic rebalancing is on</AlertTitle>
+        <FileSpreadsheet />
+        <AlertTitle>Uploads decide who owns each logo</AlertTitle>
         <AlertDescription>
-          When a PAM leaves (deactivated here or missing from an import), their logos move automatically to the least-loaded active PAMs, within capacity.
-          History and past results stay with each company.
+          Each upload maps logos to PAMs, and its research runs deliver to those PAMs. A newer upload can give a logo to a different PAM;
+          its history and past results stay with the company. To move logos by hand, select them on Companies and choose Reassign.
         </AlertDescription>
       </Alert>
 
@@ -334,7 +294,7 @@ export default function Pams() {
         ) : (
           <div className={cn("transition-opacity", query.isPlaceholderData && "opacity-60")} aria-busy={query.isFetching}>
             <DataTable
-            dataKey={JSON.stringify([pagination, sorting])}
+              dataKey={JSON.stringify([pagination, sorting])}
               table={table}
               stickyHeader
               minWidth="60rem"
@@ -351,51 +311,7 @@ export default function Pams() {
         )}
       </div>
 
-      <Dialog open={!!target} onOpenChange={(o) => !o && setTarget(null)}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Deactivate {target?.name}?</DialogTitle>
-            <DialogDescription>
-              {planQ.isLoading ? "Calculating the rebalance plan…" : `Their ${plan?.moves.length ?? 0} logos are reassigned automatically as shown.`} This runs as a single transaction and is
-              recorded in the audit log.
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-80 rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Company</TableHead>
-                  <TableHead>New PAM</TableHead>
-                  <TableHead className="pr-4">Why</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {plan?.moves.map((m) => (
-                  <TableRow key={m.companyId}>
-                    <TableCell className="whitespace-normal pl-4 font-medium">{name(m.companyId)}</TableCell>
-                    <TableCell>
-                      <span className="inline-flex items-center gap-1.5">
-                        <ArrowRight className="size-3.5 text-muted-foreground" />
-                        {name(m.toPamId)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="whitespace-normal pr-4 text-xs text-muted-foreground">{m.reason}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </ScrollArea>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setTarget(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirm} disabled={deactivate.isPending || planQ.isLoading}>
-              {deactivate.isPending && <Loader2 className="animate-spin" />}
-              Deactivate &amp; rebalance
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {editing && <EditPamDialog key={editing.id} pam={editing} onClose={() => setEditing(null)} />}
     </Page>
   )
 }

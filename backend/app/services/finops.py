@@ -51,7 +51,22 @@ def avg_paid_cost(uow: UnitOfWork, provider: str, model: str) -> float:
     return float(v) if v else EST_COST_PER_COMPANY
 
 
-def record_research(uow: UnitOfWork, res: ResearchResult, run: Run, values: dict[str, Any]) -> None:
+def _usage_cols(u: Any) -> dict[str, Any]:
+    """Ledger columns for the provider's usage breakdown (providers.Usage, or its dict form)."""
+    if u is None:
+        return {}
+    g = u.get if isinstance(u, dict) else lambda k, d=None: getattr(u, k, d)
+    rid = g("response_id")
+    return {
+        "cache_read_tokens": int(g("cache_read") or 0), "cache_write_tokens": int(g("cache_write") or 0),
+        "reasoning_tokens": int(g("reasoning") or 0), "tool_calls": int(g("tool_calls") or 0),
+        "input_cost": float(g("input_cost") or 0), "output_cost": float(g("output_cost") or 0),
+        "cache_cost": float(g("cache_cost") or 0), "tool_cost": float(g("tool_cost") or 0),
+        "cost_source": g("source") or "estimate", "response_id": str(rid)[:120] if rid else None, "usage_raw": g("raw"),
+    }
+
+
+def record_research(uow: UnitOfWork, res: ResearchResult, run: Run, values: dict[str, Any], usage: Any = None) -> None:
     cached = bool(values.get("cached"))
     cost = float(values.get("cost") or 0.0)
     tokens_in, tokens_out = int(values.get("tokens_in") or 0), int(values.get("tokens_out") or 0)
@@ -62,7 +77,7 @@ def record_research(uow: UnitOfWork, res: ResearchResult, run: Run, values: dict
         ts=utcnow(), category=COST_LLM, provider=run.provider, model=run.model, run_id=run.id,
         import_id=run.import_id, pam_id=res.pam_id, company_id=res.company_id, result_id=res.id, units=1,
         tokens_in=0 if cached else tokens_in, tokens_out=0 if cached else tokens_out, cost=cost, cached=cached,
-        saved=saved, outcome=values.get("status"),
+        saved=saved, outcome=values.get("status"), **({} if cached else _usage_cols(usage)),
     ))
     metrics.COST_USD.labels(COST_LLM, run.provider).inc(cost)
     if cached:
@@ -93,6 +108,7 @@ def record_email_ai(uow: UnitOfWork, *, notification_id: int, run: Run, pam_id: 
         ts=utcnow(), category=COST_LLM, provider=meta.get("provider") or "unknown", model=meta.get("model"), channel="email",
         run_id=run.id, import_id=run.import_id, pam_id=pam_id, notification_id=notification_id, units=1,
         tokens_in=int(meta.get("tokensIn") or 0), tokens_out=int(meta.get("tokensOut") or 0), cost=cost, outcome="email_ai",
+        **_usage_cols(meta.get("usage")),
     ))
     metrics.COST_USD.labels(COST_LLM, meta.get("provider") or "unknown").inc(cost)
 
@@ -176,16 +192,18 @@ def _sums():
 
 
 def _row(llm, msg, calls, hits, saved, tin, tout, signals, messages) -> dict[str, Any]:
+    # MySQL returns SUMs as Decimal (SQLite as int/float): normalise once so the maths below is plain float/int.
     llm, msg, saved = float(llm or 0), float(msg or 0), float(saved or 0)
-    researched = int(calls or 0) + int(hits or 0)
+    calls, hits, tin, tout, signals, messages = (int(x or 0) for x in (calls, hits, tin, tout, signals, messages))
+    researched = calls + hits
     total = llm + msg
     return {
         "llm": round(llm, 4), "messaging": round(msg, 4), "total": round(total, 4),
-        "calls": int(calls or 0), "cacheHits": int(hits or 0), "saved": round(saved, 4),
-        "tokensIn": int(tin or 0), "tokensOut": int(tout or 0), "signals": int(signals or 0), "messages": int(messages or 0),
+        "calls": calls, "cacheHits": hits, "saved": round(saved, 4),
+        "tokensIn": tin, "tokensOut": tout, "signals": signals, "messages": messages,
         "costPerCompany": round(total / researched, 4) if researched else None,
         "costPerSignal": round(total / signals, 4) if signals else None,
-        "cacheRate": round(int(hits or 0) * 100 / researched, 1) if researched else 0,
+        "cacheRate": round(hits * 100 / researched, 1) if researched else 0,
     }
 
 
@@ -196,6 +214,57 @@ def _breakdown(uow: UnitOfWork, lo: datetime, hi: datetime, key, limit: int = 50
         .group_by(key).order_by(total_cost.desc()).limit(limit)
     ).all()
     return [(r[0], _row(*r[1:])) for r in rows]
+
+
+_U_SUMS = ("tokensIn", "cacheRead", "cacheWrite", "tokensOut", "reasoning", "toolCalls",
+           "inputCost", "outputCost", "cacheCost", "toolCost", "cost")
+_U_COLS = (CostEntry.tokens_in, CostEntry.cache_read_tokens, CostEntry.cache_write_tokens, CostEntry.tokens_out,
+           CostEntry.reasoning_tokens, CostEntry.tool_calls, CostEntry.input_cost, CostEntry.output_cost,
+           CostEntry.cache_cost, CostEntry.tool_cost, CostEntry.cost)
+_SOURCE_KEY = {"provider": "providerCost", "estimate": "estimatedCost"}
+
+
+def _usage_acc() -> dict[str, Any]:
+    return {"calls": 0, **dict.fromkeys(_U_SUMS, 0), "providerCost": 0.0, "estimatedCost": 0.0,
+            "untrackedCost": 0.0, "untrackedCalls": 0}
+
+
+def _usage_add(acc: dict[str, Any], vals: tuple, source: str | None) -> None:
+    acc["calls"] += 1
+    for k, v in zip(_U_SUMS, vals, strict=True):
+        acc[k] += v or 0
+    acc[_SOURCE_KEY.get(source or "", "untrackedCost")] += vals[-1] or 0
+    acc["untrackedCalls"] += source is None
+
+
+def _usage_out(acc: dict[str, Any]) -> dict[str, Any]:
+    out = {k: round(float(v), 6) if isinstance(v, float) else int(v) for k, v in acc.items()}
+    out["totalTokens"] = out["tokensIn"] + out["tokensOut"]
+    # Whatever the provider billed beyond the itemised parts (and calls recorded before the breakdown existed).
+    parts = acc["inputCost"] + acc["outputCost"] + acc["cacheCost"] + acc["toolCost"]
+    out["otherCost"] = round(max(acc["cost"] - acc["untrackedCost"] - parts, 0.0), 6)
+    return out
+
+
+def usage_breakdown(uow: UnitOfWork, lo: datetime, hi: datetime, tz: ZoneInfo) -> dict[str, Any]:
+    """Paid LLM calls (cache hits spend nothing) as the provider billed them: totals plus one row per
+    day x provider x model, by IST day and by UTC day (provider consoles use UTC)."""
+    total = _usage_acc()
+    daily: dict[str, dict[tuple, dict[str, Any]]] = {"ist": defaultdict(_usage_acc), "utc": defaultdict(_usage_acc)}
+    rows = uow.session.execute(
+        select(CostEntry.ts, CostEntry.provider, CostEntry.model, CostEntry.cost_source, *_U_COLS)
+        .where(*_in_range(lo, hi), CostEntry.category == COST_LLM, CostEntry.cached.is_(False))
+    )
+    for ts, provider, model, source, *vals in rows:
+        ts = as_utc(ts)
+        _usage_add(total, vals, source)
+        for zone, day in (("ist", ts.astimezone(tz).date()), ("utc", ts.date())):
+            _usage_add(daily[zone][(day.isoformat(), provider, model)], vals, source)
+    return {
+        "totals": _usage_out(total),
+        "daily": {zone: [{"date": d, "provider": p, "model": m, **_usage_out(acc)} for (d, p, m), acc in sorted(rows_.items())]
+                  for zone, rows_ in daily.items()},
+    }
 
 
 def report(uow: UnitOfWork, start: str | None, end: str | None) -> dict[str, Any]:
@@ -272,12 +341,14 @@ def report(uow: UnitOfWork, start: str | None, end: str | None) -> dict[str, Any
                   for k, v in by_pam],
         "topCompanies": [{"id": str(k), "name": cos[k].name if k in cos else f"Company {k}", **v} for k, v in by_company],
         "byModel": [{"category": cat, "provider": p, "model": m, **_row(*rest)} for cat, p, m, *rest in model_rows],
+        "usage": usage_breakdown(uow, lo, hi, tz),
     }
 
 
 LEDGER_COLUMNS = ["ts", "category", "provider", "model", "channel", "run_id", "run_label", "upload_id", "upload_label",
                   "pam_id", "pam_name", "company_id", "company_name", "units", "tokens_in", "tokens_out", "cost_usd",
-                  "cached", "saved_usd", "outcome"]
+                  "cached", "saved_usd", "outcome", "cache_read_tokens", "cache_write_tokens", "reasoning_tokens", "tool_calls",
+                  "input_cost_usd", "output_cost_usd", "cache_cost_usd", "tool_cost_usd", "cost_source", "response_id"]
 
 
 def _safe(v: Any) -> Any:
@@ -301,7 +372,9 @@ def ledger_csv(uow: UnitOfWork, start: str | None, end: str | None) -> str:
         w.writerow([_safe(x) for x in (
             as_utc(e.ts).isoformat(), e.category, e.provider, e.model, e.channel, e.run_id, run_label, e.import_id, imp_label,
             e.pam_id, pam_name, e.company_id, co_name, e.units, e.tokens_in, e.tokens_out, f"{e.cost:.6f}",
-            "yes" if e.cached else "no", f"{e.saved:.6f}", e.outcome,
+            "yes" if e.cached else "no", f"{e.saved:.6f}", e.outcome, e.cache_read_tokens, e.cache_write_tokens,
+            e.reasoning_tokens, e.tool_calls, f"{e.input_cost:.6f}", f"{e.output_cost:.6f}", f"{e.cache_cost:.6f}",
+            f"{e.tool_cost:.6f}", e.cost_source or "not captured", e.response_id,
         )])
     return buf.getvalue()
 

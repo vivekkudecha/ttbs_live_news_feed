@@ -33,6 +33,8 @@ def test_success_cost_includes_searches_and_sources(p):
     out = call(p)
     assert out.sources == [{"title": "t.com", "url": "https://r/1"}]
     assert out.cost == pytest.approx(0.0003 + 0.0025 + 2 * 0.014)
+    # No cost in Gemini responses: the split is our estimate, and web searches are the tool calls.
+    assert out.usage.source == "estimate" and out.usage.tool_calls == 2 and out.usage.tool_cost == pytest.approx(0.028)
 
 
 @respx.mock

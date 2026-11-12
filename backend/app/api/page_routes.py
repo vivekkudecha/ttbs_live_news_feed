@@ -48,6 +48,16 @@ class PamQueryIn(sch.In):
     sort: SortIn | None = None
 
 
+class PamPatch(sch.In):
+    """PAM edit; only the fields sent change."""
+
+    name: str | None = Field(default=None, max_length=200)
+    email: str | None = Field(default=None, max_length=320)
+    whatsapp: str | None = Field(default=None, max_length=40)
+    notify_email: bool | None = None
+    notify_whatsapp: bool | None = None
+
+
 class ReassignIn(sch.In):
     company_ids: list[str] = Field(min_length=1, max_length=10_000)
     to_pam_id: str
@@ -209,6 +219,13 @@ def _accounts_key(kind: str) -> str:
     return f"{kind}:i{cache.version('imports')}:r{cache.version('runs')}"
 
 
+@router.patch("/pams/{pam_id}")
+def update_pam(pam_id: str, body: PamPatch, actor: str = Depends(current_actor)) -> dict[str, Any]:
+    with unit_of_work() as uow:
+        p = accounts.update_pam(uow, pam_id, body.model_dump(exclude_unset=True), actor)
+        return rm._pam_card(p, accounts.pam_profiles(uow))
+
+
 @router.get("/pams/search")
 def search_pams(
     q: str = "", limit: int = Query(20, ge=1, le=100), active_only: bool = Query(False, alias="activeOnly"),
@@ -222,18 +239,6 @@ def search_pams(
 def pams_by_ids(ids: str = "") -> list[dict[str, Any]]:
     with unit_of_work() as uow:
         return rm.get_pams(uow, [x for x in ids.split(",") if x])
-
-
-@router.get("/pams/{pam_id}/rebalance-plan")
-def rebalance_plan(pam_id: str) -> dict[str, Any]:
-    with unit_of_work() as uow:
-        return accounts.rebalance_plan(uow, pam_id)
-
-
-@router.post("/pams/{pam_id}/deactivate")
-def deactivate_pam(pam_id: str, actor: str = Depends(current_actor)) -> dict[str, Any]:
-    with unit_of_work() as uow:
-        return accounts.deactivate_pam(uow, pam_id, actor)
 
 
 # --- FinOps, templates, channels --------------------------------------------------------------------

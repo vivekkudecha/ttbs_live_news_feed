@@ -19,7 +19,7 @@ import httpx
 from app.core.config import get_settings
 from app.core.errors import ProviderError, RetryableProviderError
 from app.research.prompts import PromptSpec, default_spec
-from app.research.providers import AuthError, ResearchOutput, _retry_after
+from app.research.providers import AuthError, ResearchOutput, Usage, _retry_after
 
 _MODEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,120}$")
 # Gemini-family models that are not general text generators (no point offering them for research).
@@ -115,6 +115,20 @@ def _text_and_sources(data: dict[str, Any]) -> tuple[str, list[dict[str, str]], 
     return text, sources[:10], searches
 
 
+def _usage(data: dict[str, Any], searches: int) -> tuple[int, int, float, Usage]:
+    """Gemini `usageMetadata` carries tokens but no cost: priced from our settings (an estimate)."""
+    s = get_settings()
+    u = data.get("usageMetadata") or {}
+    tin, thoughts = int(u.get("promptTokenCount") or 0), int(u.get("thoughtsTokenCount") or 0)
+    tout = int(u.get("candidatesTokenCount") or 0) + thoughts
+    usage = Usage(
+        cache_read=int(u.get("cachedContentTokenCount") or 0), reasoning=thoughts, tool_calls=searches,
+        input_cost=tin / 1000 * s.gemini_price_in_per_1k, output_cost=tout / 1000 * s.gemini_price_out_per_1k,
+        tool_cost=searches * s.gemini_price_per_search, response_id=data.get("responseId"), raw=u or None,
+    )
+    return tin, tout, round(usage.input_cost + usage.output_cost + usage.tool_cost, 6), usage
+
+
 class GeminiProvider:
     key = "gemini"
 
@@ -134,24 +148,17 @@ class GeminiProvider:
         data = _post(self._client, self.model, body)
         latency = int((time.perf_counter() - t0) * 1000)
         text, sources, searches = _text_and_sources(data)
-        u = data.get("usageMetadata") or {}
-        tin = int(u.get("promptTokenCount") or 0)
-        tout = int(u.get("candidatesTokenCount") or 0) + int(u.get("thoughtsTokenCount") or 0)
-        cost = tin / 1000 * s.gemini_price_in_per_1k + tout / 1000 * s.gemini_price_out_per_1k + searches * s.gemini_price_per_search
-        return ResearchOutput(text=text, tokens_in=tin, tokens_out=tout, cost=round(cost, 6), latency_ms=latency, sources=sources)
+        tin, tout, cost, usage = _usage(data, searches)
+        return ResearchOutput(text=text, tokens_in=tin, tokens_out=tout, cost=cost, latency_ms=latency, sources=sources, usage=usage)
 
     def generate(self, prompt: str, *, system: str | None = None, max_tokens: int = 1024) -> ResearchOutput:
         """Plain completion with the configured model, no Google Search grounding (nothing to bill per query)."""
-        s = get_settings()
         t0 = time.perf_counter()
         data = _post(self._client, self.model, _body(prompt, max_tokens, system=system, search=False))
         latency = int((time.perf_counter() - t0) * 1000)
         text, _, _ = _text_and_sources(data)
-        u = data.get("usageMetadata") or {}
-        tin = int(u.get("promptTokenCount") or 0)
-        tout = int(u.get("candidatesTokenCount") or 0) + int(u.get("thoughtsTokenCount") or 0)
-        cost = tin / 1000 * s.gemini_price_in_per_1k + tout / 1000 * s.gemini_price_out_per_1k
-        return ResearchOutput(text=text, tokens_in=tin, tokens_out=tout, cost=round(cost, 6), latency_ms=latency)
+        tin, tout, cost, usage = _usage(data, 0)
+        return ResearchOutput(text=text, tokens_in=tin, tokens_out=tout, cost=cost, latency_ms=latency, usage=usage)
 
 
 def fetch_models(api_key: str) -> list[dict[str, str]]:

@@ -23,6 +23,25 @@ log = logging.getLogger(__name__)
 
 
 @dataclass
+class Usage:
+    """One call's usage as the provider reported it, split the way the provider bills it. The FinOps
+    ledger stores it as-is so its totals match the provider's console.
+    `source`: "provider" = the cost came from the response; "estimate" = priced from our settings."""
+
+    cache_read: int = 0  # input tokens served from the provider's prompt cache
+    cache_write: int = 0  # input tokens written to it
+    reasoning: int = 0  # thinking tokens (already part of output)
+    tool_calls: int = 0  # e.g. web searches
+    input_cost: float = 0.0
+    output_cost: float = 0.0
+    cache_cost: float = 0.0
+    tool_cost: float = 0.0
+    source: str = "estimate"
+    response_id: str | None = None
+    raw: dict[str, Any] | None = None  # the provider's usage object, verbatim
+
+
+@dataclass
 class ResearchOutput:
     text: str
     tokens_in: int = 0
@@ -31,6 +50,7 @@ class ResearchOutput:
     latency_ms: int = 0
     # Sources the provider grounded its answer on (e.g. Gemini groundingMetadata), beyond URLs in text.
     sources: list[dict[str, str]] = field(default_factory=list)
+    usage: Usage = field(default_factory=Usage)
 
 
 class ResearchProvider(Protocol):
@@ -154,10 +174,8 @@ class PerplexityProvider:
             raise ProviderError(f"perplexity response status={status}: {str(data.get('error'))[:300]}")
 
         text = _output_text(data)
-        tin, tout, cost = _usage(data)
-        if cost is None:
-            cost = tin / 1000 * s.perplexity_price_in_per_1k + tout / 1000 * s.perplexity_price_out_per_1k
-        return ResearchOutput(text=text, tokens_in=tin, tokens_out=tout, cost=round(cost, 6), latency_ms=latency)
+        tin, tout, cost, usage = _usage(data, s.perplexity_price_in_per_1k, s.perplexity_price_out_per_1k)
+        return ResearchOutput(text=text, tokens_in=tin, tokens_out=tout, cost=cost, latency_ms=latency, usage=usage)
 
     def generate(self, prompt: str, *, system: str | None = None, max_tokens: int = 1024) -> ResearchOutput:
         """Plain completion with the configured model, no web search tool."""
@@ -177,10 +195,8 @@ class PerplexityProvider:
         except ValueError as e:
             raise RetryableProviderError("perplexity returned non-JSON body") from e
         text = _output_text(data)
-        tin, tout, cost = _usage(data)
-        if cost is None:
-            cost = tin / 1000 * s.perplexity_price_in_per_1k + tout / 1000 * s.perplexity_price_out_per_1k
-        return ResearchOutput(text=text, tokens_in=tin, tokens_out=tout, cost=round(cost, 6), latency_ms=latency)
+        tin, tout, cost, usage = _usage(data, s.perplexity_price_in_per_1k, s.perplexity_price_out_per_1k)
+        return ResearchOutput(text=text, tokens_in=tin, tokens_out=tout, cost=cost, latency_ms=latency, usage=usage)
 
 
 def fetch_models(api_key: str) -> list[dict[str, str]]:
@@ -235,18 +251,40 @@ def _output_text(data: dict[str, Any]) -> str:
     raise RetryableProviderError("perplexity response had no output text")
 
 
-def _usage(data: dict[str, Any]) -> tuple[int, int, float | None]:
+def _num(v: Any) -> float | None:
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _usage(data: dict[str, Any], price_in: float, price_out: float) -> tuple[int, int, float, Usage]:
+    """Perplexity Agent API `usage`: tokens, cache, tool calls and cost exactly as reported. Priced from
+    our settings only when the response carries no cost."""
     u = data.get("usage") or {}
     tin = int(u.get("input_tokens") or u.get("prompt_tokens") or 0)
     tout = int(u.get("output_tokens") or u.get("completion_tokens") or 0)
-    raw = u.get("cost")
-    if isinstance(raw, dict):
-        raw = raw.get("total_cost", raw.get("total"))
-    try:
-        cost = float(raw) if raw is not None else None
-    except (TypeError, ValueError):
-        cost = None
-    return tin, tout, cost
+    det = u.get("input_tokens_details") or {}
+    tools = {k: t for k, t in (u.get("tool_calls_details") or {}).items() if isinstance(t, dict)}
+    usage = Usage(
+        cache_read=int(det.get("cache_read_input_tokens") or det.get("cached_tokens") or 0),
+        cache_write=int(det.get("cache_creation_input_tokens") or 0),
+        reasoning=int((u.get("output_tokens_details") or {}).get("reasoning_tokens") or 0),
+        tool_calls=sum(int(t.get("invocation") or 0) for t in tools.values()),
+        response_id=str(data["id"]) if data.get("id") else None, raw=u or None,
+    )
+    c = u.get("cost")
+    total = _num(c.get("total_cost", c.get("total")) if isinstance(c, dict) else c)
+    if total is None:  # no cost in the response: our list-price estimate
+        usage.input_cost, usage.output_cost = tin / 1000 * price_in, tout / 1000 * price_out
+        return tin, tout, round(usage.input_cost + usage.output_cost, 6), usage
+    c = c if isinstance(c, dict) else {}
+    usage.source = "provider"
+    usage.input_cost, usage.output_cost = _num(c.get("input_cost")) or 0.0, _num(c.get("output_cost")) or 0.0
+    usage.cache_cost = (_num(c.get("cache_creation_cost")) or 0.0) + (_num(c.get("cache_read_cost")) or 0.0)
+    usage.tool_cost = _num(c.get("tool_calls_cost")) or sum(_num(v) or 0.0 for v in (c.get("tool_calls_cost_details") or {}).values()) \
+        or sum(_num(t.get("cost_usd")) or 0.0 for t in tools.values())
+    return tin, tout, round(total, 6), usage
 
 
 class NotConfigured(ProviderError):

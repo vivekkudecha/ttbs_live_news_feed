@@ -60,7 +60,6 @@ class Settings(BaseSettings):
     # Python): 10M rows ≈ 600 MB on the worker during the check.
     import_max_rows: int = 10_000_000
     import_default_country_code: str = "91"
-    pam_default_capacity: int = 500
     import_chunk_size: int = 1000  # rows saved per transaction (one resumable step)
     import_analyze_batch: int = 2000  # rows compared with the database per query while checking a file
     import_preview_ttl_hours: int = 24  # checked-but-never-saved uploads (and their files) are discarded after this

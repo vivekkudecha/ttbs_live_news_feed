@@ -29,7 +29,7 @@ MODULES: tuple[Module, ...] = (
     Module("signals", "Signals", "Signals feed."),
     Module("runs", "Research runs", "Start, cancel and retry runs; resend digests; run details."),
     Module("companies", "Companies (Logos)", "Browse companies and reassign them between PAMs."),
-    Module("pams", "PAMs", "Browse PAMs, rebalance and deactivate them."),
+    Module("pams", "PAMs", "Browse PAMs and the logos each owns."),
     Module("imports", "Uploads", "Upload, edit, save and download datasets."),
     Module("integrations", "Providers & channels", "AI provider keys and models, the research prompt, email (Microsoft Graph) settings and email templates."),
     Module("costs", "Costs (FinOps)", "Spend reports and the cost ledger export."),

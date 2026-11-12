@@ -58,6 +58,7 @@ import { fmtDate, fmtDateTime, initials } from "@/lib/format"
 import { fmtMs, kindLabel } from "@/lib/telemetry"
 import { cn } from "@/lib/utils"
 import type { AssignmentReason, CompanyDetail, LogoTimeline, ProcessEvent } from "@/api/types"
+import { DigestRecipient } from "@/components/runs/board/DigestPreviewDialog"
 import { LogoDrawerContext, type LogoDrawerApi, type LogoTarget } from "./logo-drawer-context"
 
 // ---- Provider ---------------------------------------------------------------------------------------
@@ -552,9 +553,7 @@ function DigestTab({ runId, pamId, pamName, active }: { runId: string; pamId: st
     <div className="space-y-4 animate-in fade-in-0 duration-300">
       <div className="flex flex-wrap items-start gap-3 rounded-xl bg-muted/50 px-4 py-3 text-sm">
         <div className="min-w-0 flex-1 space-y-1">
-          <p>
-            <span className="inline-block w-16 text-muted-foreground">To</span> <span className="break-all">{d.recipient ?? "—"}</span>
-          </p>
+          <DigestRecipient d={d} />
           <p>
             <span className="inline-block w-16 text-muted-foreground">Subject</span> <span className="font-medium">{d.subject}</span>
           </p>
@@ -603,7 +602,7 @@ function DigestTab({ runId, pamId, pamName, active }: { runId: string; pamId: st
 
 const reasonLabel: Record<AssignmentReason, { label: string; icon: typeof Shuffle }> = {
   import: { label: "Excel/CSV import", icon: FileSpreadsheet },
-  rebalance: { label: "Automatic rebalance", icon: Shuffle },
+  rebalance: { label: "Rebalanced (PAM left)", icon: Shuffle }, // older history only
   manual: { label: "Manual reassignment", icon: ArrowRightLeft },
 }
 

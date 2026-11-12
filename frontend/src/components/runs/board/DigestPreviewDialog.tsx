@@ -7,6 +7,18 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { usePamDigest } from "@/api/hooks"
 import { errorMessage } from "@/api/http"
 import { fmtDateTime } from "@/lib/format"
+import type { DigestRender } from "@/api/types"
+
+/** The digest's "To" line; after a PAM edit it also says where a resend now goes. */
+export function DigestRecipient({ d }: { d: DigestRender }) {
+  const moved = d.asSent && d.currentRecipient && d.currentRecipient !== d.recipient
+  return (
+    <p>
+      <span className="inline-block w-16 text-muted-foreground">To</span> <span className="break-all">{d.recipient ?? "—"}</span>
+      {moved && <span className="ml-16 block text-xs text-muted-foreground">Resend goes to {d.currentRecipient}</span>}
+    </p>
+  )
+}
 
 export function DigestPreviewDialog({
   runId,
@@ -37,9 +49,7 @@ export function DigestPreviewDialog({
           </DialogDescription>
           {d && (
             <div className="mt-2 space-y-1 rounded-lg bg-muted/50 px-3 py-2 text-xs">
-              <p>
-                <span className="inline-block w-16 text-muted-foreground">To</span> {d.recipient ?? "—"}
-              </p>
+              <DigestRecipient d={d} />
               <p className="flex items-center">
                 <span className="inline-block w-16 text-muted-foreground">Subject</span>
                 <span className="font-medium">{d.subject}</span>

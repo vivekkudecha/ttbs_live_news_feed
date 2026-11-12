@@ -42,10 +42,31 @@ def test_success_parses_text_usage_and_cost(provider):
 
 
 @respx.mock
+def test_usage_breakdown_is_kept_as_the_provider_billed_it(provider):
+    usage = {
+        "input_tokens": 12000, "output_tokens": 700, "total_tokens": 12700,
+        "input_tokens_details": {"cache_creation_input_tokens": 300, "cache_read_input_tokens": 9000},
+        "tool_calls_details": {"web_search": {"invocation": 3, "cost_usd": 0.015}},
+        "cost": {"currency": "USD", "input_cost": 0.003, "output_cost": 0.0035, "cache_creation_cost": 0.0004,
+                 "cache_read_cost": 0.0009, "tool_calls_cost": 0.015, "total_cost": 0.0228},
+    }
+    respx.post(URL).respond(200, json={"id": "resp_123", "output": [{"type": "message", "content": [{"type": "output_text", "text": TEXT}]}],
+                                       "usage": usage})
+    out = call(provider)
+    u = out.usage
+    assert (out.tokens_in, out.tokens_out, out.cost) == (12000, 700, 0.0228)
+    assert (u.cache_read, u.cache_write, u.tool_calls, u.source, u.response_id) == (9000, 300, 3, "provider", "resp_123")
+    assert (u.input_cost, u.output_cost, u.tool_cost) == (0.003, 0.0035, 0.015) and u.cache_cost == pytest.approx(0.0013)
+    assert u.raw == usage
+
+
+@respx.mock
 def test_cost_falls_back_to_pricing(provider):
     respx.post(URL).respond(200, json={"output": [{"type": "message", "content": [{"type": "output_text", "text": TEXT}]}],
                                        "usage": {"input_tokens": 1000, "output_tokens": 1000}})
-    assert call(provider).cost == pytest.approx(0.001 + 0.005)
+    out = call(provider)
+    assert out.cost == pytest.approx(0.001 + 0.005) and out.usage.source == "estimate"
+    assert (out.usage.input_cost, out.usage.output_cost) == pytest.approx((0.001, 0.005))
 
 
 @respx.mock

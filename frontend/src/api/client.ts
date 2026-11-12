@@ -14,9 +14,10 @@ import type {
   LiveBatch,
   LiveSnapshot,
   PamOption,
+  PamCard,
   PamPage,
+  PamPatch,
   PamQuery,
-  RebalanceResult,
   Run,
   RunStatus,
   SignalCategory,
@@ -64,11 +65,10 @@ export const api = {
 
   // ---- PAMs ------------------------------------------------------------------------------
   queryPams: (q: PamQuery) => request<PamPage>("POST", "/pams/query", q),
+  updatePam: (id: string, v: PamPatch) => request<PamCard>("PATCH", `/pams/${id}`, v),
   searchPams: (q: string, opts: { limit?: number; activeOnly?: boolean; excludeId?: string } = {}) =>
     request<PamOption[]>("GET", `/pams/search${qs({ q, limit: opts.limit ?? 20, activeOnly: opts.activeOnly, excludeId: opts.excludeId })}`),
   getPams: (ids: string[]) => request<PamOption[]>("GET", `/pams/by-ids${qs({ ids: ids.join(",") })}`),
-  previewRebalance: (pamId: string) => request<RebalanceResult & { names: Record<string, string> }>("GET", `/pams/${pamId}/rebalance-plan`),
-  deactivatePam: (pamId: string) => request<RebalanceResult>("POST", `/pams/${pamId}/deactivate`),
 
   // ---- Runs, signals, digest -------------------------------------------------------------
   dashboard: (pamId?: string) => request<DashboardSummary>("GET", `/dashboard${qs({ pamId })}`),

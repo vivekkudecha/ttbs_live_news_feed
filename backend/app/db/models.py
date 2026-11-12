@@ -113,7 +113,7 @@ class Company(TimestampMixin, Base):
 
 class CompanyAssignment(Base):
     """Who owned a company when (SCD type 2): exactly one open row (valid_to IS NULL) per assigned
-    company. Written by imports, manual reassignment and PAM deactivation rebalancing."""
+    company. Written by imports and manual reassignment (older rows may also say "rebalance")."""
 
     __tablename__ = "company_assignments"
     __table_args__ = (Index("ix_company_assignments_company_open", "company_id", "valid_to"),)
@@ -595,6 +595,19 @@ class CostEntry(Base):
     cached: Mapped[bool] = mapped_column(Boolean, default=False)
     saved: Mapped[float] = mapped_column(Float, default=0.0)  # USD avoided (cache hits)
     outcome: Mapped[str | None] = mapped_column(String(20))  # signal | no_signal | failed | sent
+    # LLM calls: the provider's own usage report, split the way it bills (research/providers.Usage).
+    # Rows written before 0014 have none of this (cost_source NULL).
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    reasoning_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    tool_calls: Mapped[int] = mapped_column(Integer, default=0)  # e.g. web searches
+    input_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    output_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    cache_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    tool_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    cost_source: Mapped[str | None] = mapped_column(String(12))  # provider (from the response) | estimate (our prices)
+    response_id: Mapped[str | None] = mapped_column(String(120))  # the provider's id for the call
+    usage_raw: Mapped[dict[str, Any] | None] = mapped_column()  # the provider's usage object, verbatim
     part_month: Mapped[int] = mapped_column(Integer, default=part.default_by_ts, doc=PART_DOC)
 
 

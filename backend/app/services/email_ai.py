@@ -8,7 +8,7 @@ retries never pay twice. No web search is used: the AI only rewrites the researc
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from app.core.config import get_settings
@@ -39,10 +39,11 @@ class AiResult:
     tokens_out: int = 0
     cost: float = 0.0
     latency_ms: int = 0
+    usage: providers.Usage | None = None
 
     def meta(self) -> dict[str, Any]:
         return {"provider": self.provider, "model": self.model, "tokensIn": self.tokens_in, "tokensOut": self.tokens_out,
-                "cost": self.cost, "latencyMs": self.latency_ms}
+                "cost": self.cost, "latencyMs": self.latency_ms, "usage": asdict(self.usage) if self.usage else None}
 
 
 def _facts(ctx: dict[str, Any], limit: int = 40) -> str:
@@ -79,4 +80,5 @@ def summarize(prompt_tpl: str | None, max_words: int, ctx: dict[str, Any]) -> Ai
     ratelimit.acquire()  # shares the research rate limit: summaries never starve or exceed it
     out = provider.generate(prompt, system=SYSTEM, max_tokens=get_settings().email_ai_max_output_tokens)
     return AiResult(text=_trim_words(out.text, max_words), provider=provider.key, model=provider.model,
-                    tokens_in=out.tokens_in, tokens_out=out.tokens_out, cost=out.cost, latency_ms=out.latency_ms)
+                    tokens_in=out.tokens_in, tokens_out=out.tokens_out, cost=out.cost, latency_ms=out.latency_ms,
+                    usage=out.usage)

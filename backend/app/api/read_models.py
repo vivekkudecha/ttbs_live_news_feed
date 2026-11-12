@@ -447,9 +447,7 @@ def dashboard(uow: UnitOfWork, pam_id: str | None) -> dict[str, Any]:
 
 def pam_options(uow: UnitOfWork, pams: list[Pam]) -> list[dict[str, Any]]:
     loads = accounts.pam_profiles(uow)
-    cap = get_settings().pam_default_capacity
-    return [{"id": str(p.id), "name": p.name, "email": p.email, "active": p.active,
-             "load": loads.get(p.id, 0), "capacity": cap} for p in pams]
+    return [{"id": str(p.id), "name": p.name, "email": p.email, "active": p.active, "load": loads.get(p.id, 0)} for p in pams]
 
 
 def _signal_stats(uow: UnitOfWork, company_ids: list[int] | None = None) -> dict[int, tuple[int, date | None]]:
@@ -602,16 +600,15 @@ def company_detail(uow: UnitOfWork, company_id: str) -> dict[str, Any] | None:
 # --- PAMs -----------------------------------------------------------------------------------------
 
 
-def _pam_card(p: Pam, loads: dict[int, int], cap: int) -> dict[str, Any]:
+def _pam_card(p: Pam, loads: dict[int, int]) -> dict[str, Any]:
     return {"id": str(p.id), "name": p.name, "email": p.email, "whatsapp": p.whatsapp or "", "active": p.active,
-            "capacity": cap, "notifyEmail": p.notify_email, "notifyWhatsapp": p.notify_whatsapp, "load": loads.get(p.id, 0)}
+            "notifyEmail": p.notify_email, "notifyWhatsapp": p.notify_whatsapp, "load": loads.get(p.id, 0)}
 
 
 def pam_base(uow: UnitOfWork) -> dict[str, Any]:
     """Every PAM as a card (JSON-shaped), cached once for all users; `pams_view` filters per request."""
     loads = accounts.pam_profiles(uow)
-    cap = get_settings().pam_default_capacity
-    cards = [_pam_card(p, loads, cap) for p in uow.session.scalars(select(Pam))]
+    cards = [_pam_card(p, loads) for p in uow.session.scalars(select(Pam))]
     return {"cards": cards, "activeTotal": sum(1 for c in cards if c["active"])}
 
 

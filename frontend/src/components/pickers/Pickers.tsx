@@ -56,7 +56,7 @@ function SearchShell({
   )
 }
 
-const pamMeta = (p: PamOption) => `${p.load}/${p.capacity} logos`
+const pamMeta = (p: PamOption) => `${p.load.toLocaleString("en-IN")} ${p.load === 1 ? "logo" : "logos"}`
 
 /** Single PAM selector. `value=""` with `allLabel` acts as "All PAMs". */
 export function PamPicker({

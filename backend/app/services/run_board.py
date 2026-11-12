@@ -27,7 +27,6 @@ from app.core.timeutil import as_utc, utcnow
 from app.db.models import (
     NOTE_PENDING,
     NOTE_SENDING,
-    NOTE_SKIPPED,
     RES_FAILED,
     RES_NO_SIGNAL,
     RES_PENDING,
@@ -387,8 +386,9 @@ def retry(uow: UnitOfWork, run_id: int, actor: str, result_ids: list[str] | None
 
 
 def resend(uow: UnitOfWork, run_id: int, actor: str, pam_ids: list[str], channel: str | None = None) -> dict[str, int]:
-    """Resend the selected PAMs' digests, rebuilt from the current results. Rows already queued or
-    being sent, and rows without a recipient, are left as they are (counted in `skipped`)."""
+    """Resend the selected PAMs' digests, rebuilt from the current results and the PAM's current details.
+    Rows already queued or being sent, and PAMs that can't receive this channel (opted out, no number),
+    are left as they are (counted in `skipped`)."""
     from app.services import notifications
 
     s = uow.session
@@ -401,11 +401,11 @@ def resend(uow: UnitOfWork, run_id: int, actor: str, pam_ids: list[str], channel
         conds.append(Notification.channel == channel)
     sent = skipped = 0
     for note in list(s.scalars(select(Notification).where(*conds))):
-        if note.status in (NOTE_PENDING, NOTE_SENDING) or (note.status == NOTE_SKIPPED and not note.recipient):
+        try:
+            notifications.resend(uow, note.id, actor)
+            sent += 1
+        except Conflict:
             skipped += 1
-            continue
-        notifications.resend(uow, note.id, actor)
-        sent += 1
     return {"requeued": sent, "skipped": skipped}
 
 
@@ -417,10 +417,11 @@ def digest_preview(uow: UnitOfWork, run: Run, pam_id: int) -> dict[str, Any]:
     s = uow.session
     note = s.scalars(select(Notification).where(Notification.run_id == run.id, Notification.part_month == run.part_month,
                                                 Notification.pam_id == pam_id, Notification.channel == "email")).first()
+    current = runs._recipient(s.get(Pam, pam_id), "email")[0]  # where a (re)send goes now
     if note is not None and note.rendered and note.status == "sent":
         r = note.rendered
         return {"subject": r.get("subject"), "html": r.get("html"), "text": r.get("text"), "asSent": True, "sentAt": _iso(note.sent_at),
-                "status": note.status, "recipient": note.recipient}
+                "status": note.status, "recipient": note.recipient, "currentRecipient": current}
     pam, signals, payload = runs.pam_digest(uow, run, pam_id)
     if pam is None:
         raise NotFound("PAM not found")
@@ -428,4 +429,4 @@ def digest_preview(uow: UnitOfWork, run: Run, pam_id: int) -> dict[str, Any]:
     ai = "[The AI summary is written when the email is sent.]" if tpl.get("ai_enabled") else ""
     out = email_templates.render(tpl, email_templates.context(payload, ai))
     return out | {"asSent": False, "sentAt": None, "status": note.status if note else "none",
-                  "recipient": note.recipient if note else pam.email}
+                  "recipient": current, "currentRecipient": current}

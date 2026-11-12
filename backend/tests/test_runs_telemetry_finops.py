@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.errors import RetryableProviderError
 from app.core.timeutil import utcnow
-from app.db.models import CostEntry, ImportBatch, ProcessEvent, ResearchResult
+from app.db.models import CostEntry, ImportBatch, Pam, ProcessEvent, ResearchResult
 from app.db.session import unit_of_work
 from app.research import providers
 from tests.conftest import GOOD_ROWS, research, upload
@@ -53,8 +53,12 @@ def test_each_upload_runs_only_its_logos_for_its_own_pams(client):
 def test_uploaded_pam_that_left_falls_back_to_current_owner(client):
     a = upload(client).json()
     aarav = _pam(client, "aarav@ttbs.example")
-    out = client.post(f"/api/v1/pams/{aarav}/deactivate").json()
-    assert out  # Aarav's logos were rebalanced to an active PAM
+    # A PAM left before uploads alone decided ownership: inactive, logos already with someone else.
+    priya = _pam(client, "priya@ttbs.example")
+    companies = client.post("/api/v1/companies/query", json={"pamIds": [str(aarav)]}).json()["rows"]
+    assert client.post("/api/v1/companies/reassign", json={"companyIds": [c["id"] for c in companies], "toPamId": str(priya)}).status_code == 200
+    with unit_of_work() as uow:
+        uow.session.get(Pam, int(aarav)).active = False
     run = research(client, a["id"], []).json()
     owners = _owner_by_company(run["id"])
     assert aarav not in owners.values() and None not in owners.values()
@@ -182,6 +186,41 @@ def test_cost_ledger_and_report(client, monkeypatch):
     assert client.get("/api/v1/finops?from=2026-11-05&to=2026-11-01").status_code == 422
 
 
+def test_finops_shows_the_providers_usage_breakdown(client, monkeypatch):
+    """Each paid call keeps the provider's usage report; FinOps totals and daily rows add it up exactly,
+    cache hits add nothing, and the ledger CSV carries every part."""
+    real = providers.FakeProvider.research
+
+    def billed(self, company, ws, we, prompt=None):
+        out = real(self, company, ws, we)
+        out.tokens_in, out.tokens_out, out.cost = 12000, 700, 0.0228
+        out.usage = providers.Usage(cache_read=9000, cache_write=300, tool_calls=3, input_cost=0.003, output_cost=0.0035,
+                                    cache_cost=0.0013, tool_cost=0.015, source="provider", response_id=f"resp_{company}",
+                                    raw={"input_tokens": 12000})
+        return out
+
+    monkeypatch.setattr(providers.FakeProvider, "research", billed)
+    imp = upload(client).json()
+    research(client, imp["id"], [])
+    research(client, imp["id"], [])  # all cache hits: no tokens, nothing billed
+
+    u = client.get("/api/v1/finops").json()["usage"]
+    t = u["totals"]
+    assert (t["calls"], t["tokensIn"], t["cacheRead"], t["cacheWrite"], t["tokensOut"], t["totalTokens"], t["toolCalls"]) == (
+        3, 36000, 27000, 900, 2100, 38100, 9)
+    assert (t["cost"], t["providerCost"], t["estimatedCost"], t["untrackedCalls"]) == (0.0684, 0.0684, 0.0, 0)
+    assert (t["inputCost"], t["outputCost"], t["cacheCost"], t["toolCost"], t["otherCost"]) == (0.009, 0.0105, 0.0039, 0.045, 0.0)
+    for zone in ("ist", "utc"):
+        [day] = u["daily"][zone]
+        assert (day["provider"], day["calls"], day["totalTokens"], day["cost"]) == ("fake", 3, 38100, 0.0684)
+
+    lines = client.get("/api/v1/finops/ledger.csv").text.lstrip("\ufeff").splitlines()
+    head = lines[0].split(",")
+    paid = [dict(zip(head, ln.split(","), strict=True)) for ln in lines[1:] if ",no," in ln]
+    assert len(paid) == 3 and {p["cost_source"] for p in paid} == {"provider"}
+    assert {p["cache_read_tokens"] for p in paid} == {"9000"} and all(p["response_id"].startswith("resp_") for p in paid)
+
+
 def test_csv_export_guards_against_formula_injection(client):
     # Excel formula cells never get in through an upload (read as cached values → rejected), but a
     # CSV upload or a later rename can carry text starting with "=": the export must neutralise it.
@@ -214,3 +253,15 @@ def test_rows_before_run_correlation_still_verify(client):
     research(client, imp["id"], [])
     assert client.get("/api/v1/audit/verify").json() == {"ok": True, "checked": client.get("/api/v1/audit").json()["total"]}
     assert GOOD_ROWS
+
+
+def test_cost_row_handles_mysql_decimal_sums():
+    """MySQL returns SUM() as Decimal (SQLite as int/float); the report used to crash on float / Decimal."""
+    from decimal import Decimal
+
+    from app.services.finops import _row
+
+    r = _row(Decimal("0.4197"), Decimal("0"), Decimal(100), Decimal(200), Decimal("0.8394"), Decimal(1270112), Decimal(71306),
+             Decimal(42), Decimal(18))
+    assert (r["total"], r["signals"], r["costPerSignal"], r["costPerCompany"], r["cacheRate"]) == (0.4197, 42, 0.01, 0.0014, 66.7)
+    assert all(type(r[k]) is int for k in ("calls", "cacheHits", "tokensIn", "tokensOut", "signals", "messages"))

@@ -33,7 +33,6 @@ from app.db.models import (
     NOTE_PENDING,
     NOTE_SENDING,
     NOTE_SENT,
-    NOTE_SKIPPED,
     DeadLetter,
     Notification,
     NotificationAttempt,
@@ -257,11 +256,11 @@ def resend(uow: UnitOfWork, notification_id: int, actor: str) -> Notification:
         raise NotFound(f"Notification {notification_id} not found")
     if note.status in (NOTE_PENDING, NOTE_SENDING):
         raise Conflict("Notification is already queued")
-    if note.status == NOTE_SKIPPED and not note.recipient:
-        raise Conflict(f"Cannot resend: {note.last_error}")
-    from app.services import runs  # the digest is rebuilt from the run's current results (a retry may have added signals)
+    # Rebuilt from the run's current results (a retry may have added signals) and the PAM's current details.
+    from app.services import runs
 
-    runs.refresh_payload(uow, note)
+    if reason := runs.refresh_payload(uow, note):
+        raise Conflict(f"Cannot resend: {reason}")
     _requeue(uow, note)
     audit.record(uow, "notify.resend", "notification", note.id, {"channel": note.channel, "pam_id": note.pam_id},
                  actor=actor, run_id=note.run_id)
