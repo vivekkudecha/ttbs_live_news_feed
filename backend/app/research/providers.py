@@ -14,6 +14,7 @@ import httpx
 
 from app.core.config import get_settings
 from app.core.errors import ProviderError, RetryableProviderError
+from app.research import ratelimit
 from app.research.prompts import PromptSpec, default_spec
 
 if TYPE_CHECKING:
@@ -114,11 +115,30 @@ def _client(api_key: str, timeout: float) -> httpx.Client:
     )
 
 
+# 429 `error.type` (docs.perplexity.ai/guides/usage-tiers): request limit (QPS) or token budget (TPM/TPH).
+_RATE_LIMITS = {"request_rate_limit_exceeded": "request", "token_rate_limit_exceeded": "token"}
+
+
+def _error_type(resp: httpx.Response) -> str:
+    try:
+        err = resp.json().get("error")
+        return str(err.get("type") or "") if isinstance(err, dict) else ""
+    except (ValueError, AttributeError):
+        return ""
+
+
 def _raise_for(resp: httpx.Response) -> None:
     if resp.status_code in (401, 403):
         raise AuthError(f"Perplexity rejected the API key (HTTP {resp.status_code})")
+    retry_after = _retry_after(resp.headers.get("Retry-After"))
+    if resp.status_code == 429 and (kind := _RATE_LIMITS.get(_error_type(resp))):
+        # Pause every worker on this key, then re-queue this call: rejected requests are not billed.
+        delay = ratelimit.rejected(PerplexityProvider.key, retry_after, kind)
+        raise ratelimit.Throttled(f"perplexity HTTP 429 {kind} rate limit", retry_after=delay, kind=kind)
     if resp.status_code == 429 or resp.status_code >= 500:
-        raise RetryableProviderError(f"perplexity HTTP {resp.status_code}", retry_after=_retry_after(resp.headers.get("Retry-After")))
+        if resp.status_code == 429:
+            ratelimit.pause(PerplexityProvider.key, retry_after or 1.0)
+        raise RetryableProviderError(f"perplexity HTTP {resp.status_code} {_error_type(resp)}".strip(), retry_after=retry_after)
     if resp.status_code != 200:
         # Other 4xx: bad request / unknown model / quota. Retrying the same payload will not help.
         raise ProviderError(f"perplexity HTTP {resp.status_code}: {_error_text(resp)}")
@@ -164,6 +184,7 @@ class PerplexityProvider:
             raise RetryableProviderError(f"perplexity network error: {type(e).__name__}") from e
         latency = int((time.perf_counter() - t0) * 1000)
         _raise_for(resp)
+        ratelimit.observe(self.key, resp.headers)  # the key's real request limit (usage tier)
         try:
             data = resp.json()
         except ValueError as e:
@@ -190,6 +211,7 @@ class PerplexityProvider:
             raise RetryableProviderError(f"perplexity network error: {type(e).__name__}") from e
         latency = int((time.perf_counter() - t0) * 1000)
         _raise_for(resp)
+        ratelimit.observe(self.key, resp.headers)  # the key's real request limit (usage tier)
         try:
             data = resp.json()
         except ValueError as e:
@@ -230,6 +252,7 @@ def ping(api_key: str, model: str) -> int:
     except (httpx.TimeoutException, httpx.TransportError) as e:
         raise RetryableProviderError(f"Cannot reach Perplexity ({type(e).__name__})") from e
     _raise_for(resp)
+    ratelimit.observe(PerplexityProvider.key, resp.headers)  # "Test connection" also learns the key's limit
     return int((time.perf_counter() - t0) * 1000)
 
 

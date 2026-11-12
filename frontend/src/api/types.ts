@@ -681,6 +681,8 @@ export interface LlmConfig {
   lastCheckLatencyMs: number | null
   updatedAt: string | null
   updatedBy: string | null
+  /** The request limit research is paced at: the provider's own (from its response headers) or our default. */
+  rateLimit: { limitPerSecond: number; source: "provider" | "settings"; pacedPerSecond: number; nextSlotInS: number } | null
 }
 
 export interface LlmSettings {

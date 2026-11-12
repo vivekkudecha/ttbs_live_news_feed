@@ -4,11 +4,13 @@ Celery's in-memory retry state, so they survive worker restarts and are visible 
 import logging
 import random
 import time
+from datetime import timedelta
 
 from app.core import cache, metrics
 from app.core.config import get_settings
 from app.core.context import job_id_var
 from app.core.errors import ProviderError, RetryableProviderError
+from app.core.timeutil import as_utc, utcnow
 from app.db.models import RES_FAILED, RES_NO_SIGNAL, RES_SIGNAL, Run
 from app.db.session import unit_of_work
 from app.research import ratelimit
@@ -45,7 +47,7 @@ def research_company(result_id: int) -> str:
         job_id_var.set(run.id)
         run_id, import_id, company_id, pam_id = run.id, run.import_id, res.company_id, res.pam_id
         company_name, name_key = res.company.name, res.company.name_key
-        window_start, window_end, attempt = run.window_start, run.window_end, res.attempts
+        window_start, window_end, attempt, run_started = run.window_start, run.window_end, res.attempts, run.started_at
         prompt = research_prompts.spec_for(uow, run.prompt_version)  # pinned at run start; immutable
         over_budget = run.budget_cap is not None and run.cost >= run.budget_cap
 
@@ -75,10 +77,12 @@ def research_company(result_id: int) -> str:
 
     t0 = time.perf_counter()
     try:
-        ratelimit.acquire("llm")
+        ratelimit.acquire(provider.key)  # the provider's own limit (learned from its responses)
         t0 = time.perf_counter()
         out = provider.research(company_name, window_start, window_end, prompt)
         parsed = parse_research(out.text, prompt.categories)
+    except ratelimit.Throttled as e:
+        return _wait_for_slot(result_id, attempt, e, run_started, ctx)
     except RetryableProviderError as e:
         return _retry_or_fail(result_id, attempt, str(e), e.retry_after, s.research_max_retries, ctx, _ms(t0))
     except ProviderError as e:
@@ -129,17 +133,39 @@ def _ms(t0: float) -> int:
     return int((time.perf_counter() - t0) * 1000)
 
 
+def _wait_for_slot(result_id: int, attempt: int, e: ratelimit.Throttled, run_started, ctx: dict) -> str:
+    """Rate limited, by our bucket (no slot soon) or by the provider (429): not a failure. The logo goes
+    back in the queue for when the bucket has room, without spending a retry attempt. It fails only
+    after RESEARCH_RATE_LIMITED_MAX_HOURS of waiting (e.g. a key that stays throttled)."""
+    hours = get_settings().research_rate_limited_max_hours
+    if run_started and utcnow() - as_utc(run_started) > timedelta(hours=hours):
+        with unit_of_work() as uow:
+            runs.complete_result(uow, result_id, {"status": RES_FAILED, "error": f"rate limited for over {hours} h: {e}"[:1000]})
+        return "failed"
+    delay = float(e.retry_after or 1.0)
+    with unit_of_work() as uow:
+        provider_said = e.kind != "bucket"
+        runs.release_for_retry(uow, result_id, str(e) if provider_said else None, delay_s=delay, refund_attempt=True)
+        if provider_said:  # a real 429: show it on the logo's timeline (our own pacing is not an event)
+            telemetry.event(uow, "research.attempt", telemetry.RETRY, attempt=attempt,
+                            message=f"{e}: everyone paused, back in the queue in {delay:.0f}s (no attempt used)",
+                            retry_in_s=round(delay, 1), rate_limit=e.kind, **ctx)
+        uow.after_commit(lambda: research_company.apply_async((result_id,), countdown=delay))
+    metrics.RESEARCH_ATTEMPTS.labels(ctx["provider"], ctx["model"], "throttled").inc()
+    return "throttled"
+
+
 def _retry_or_fail(result_id: int, attempt: int, error: str, retry_after: float | None, max_retries: int,
                    ctx: dict | None = None, duration_ms: int | None = None) -> str:
     if attempt > max_retries:
         with unit_of_work() as uow:
-            runs.complete_result(uow, result_id, {"status": RES_FAILED, "error": f"gave up after {attempt} attempts: {error}"[:1000],
+            runs.complete_result(uow, result_id, {"status": RES_FAILED, "error": f"{runs.RETRY_EXHAUSTED} {attempt} attempts: {error}"[:1000],
                                                   "latency_ms": duration_ms or 0})
         return "failed"
     delay = backoff(attempt, retry_after)
     log.info("research retry scheduled", extra={"result_id": result_id, "attempt": attempt, "delay_s": round(delay, 1), "err": error})
     with unit_of_work() as uow:
-        runs.release_for_retry(uow, result_id, f"attempt {attempt}: {error}")
+        runs.release_for_retry(uow, result_id, f"attempt {attempt}: {error}", delay_s=delay)
         telemetry.event(uow, "research.attempt", telemetry.RETRY, attempt=attempt, duration_ms=duration_ms,
                         message=f"{error[:300]} (retry in {delay:.0f}s)", retry_in_s=round(delay, 1), **(ctx or {}))
         uow.after_commit(lambda: research_company.apply_async((result_id,), countdown=delay))

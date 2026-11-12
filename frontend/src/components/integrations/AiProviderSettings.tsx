@@ -237,6 +237,18 @@ function ProviderCard({ cfg: c, activeLabel }: { cfg: LlmConfig; activeLabel: st
                   )}
                 </dd>
               </div>
+              {c.rateLimit && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Rate limit</dt>
+                  <dd className="tabular font-medium" title={`Research is paced at ${c.rateLimit.pacedPerSecond} requests/s (90% of the limit), shared by every worker`}>
+                    {c.rateLimit.limitPerSecond} req/s
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      {c.rateLimit.source === "provider" ? `reported by ${c.label}` : "default until the provider reports your tier"}
+                      {c.rateLimit.nextSlotInS > 1 && ` · paused ${Math.ceil(c.rateLimit.nextSlotInS)}s`}
+                    </span>
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt className="text-xs text-muted-foreground">Updated</dt>
                 <dd className="font-medium">

@@ -209,7 +209,7 @@ class Run(TimestampMixin, Base):
     """One research job over a scope of companies."""
 
     __tablename__ = "runs"
-    __table_args__ = (Index("ix_runs_status_scheduled_for", "status", "scheduled_for"),)
+    __table_args__ = (Index("ix_runs_status_scheduled_for", "status", "scheduled_for"), Index("ix_runs_recover_at", "recover_at"))
 
     id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
     label: Mapped[str] = mapped_column(String(300))
@@ -238,6 +238,9 @@ class Run(TimestampMixin, Base):
     cache_hits: Mapped[int] = mapped_column(Integer, default=0)
     cost: Mapped[float] = mapped_column(Float, default=0.0)
     error: Mapped[str | None] = mapped_column(Text)
+    # Automatic retry of logos whose retries ran out (runs._plan_recovery): rounds done, next one due.
+    recovery_round: Mapped[int] = mapped_column(Integer, default=0)
+    recover_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Month of `scheduled_for`: every job, notification and retry of this run lives in this month's partition.
     part_month: Mapped[int] = mapped_column(Integer, default=part.default_for_run, doc=PART_DOC)
 

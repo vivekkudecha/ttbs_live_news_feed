@@ -11,6 +11,7 @@ os.environ.update(
     FAKE_LATENCY_MS="0",
     FAKE_FAILURE_RATE="0",
     FAKE_SIGNAL_RATE="1.0",
+    LLM_RATE_PER_SECOND="1000",  # the provider bucket is exercised, but never makes a test wait
     BROKER_URL="redis://127.0.0.1:1/0",  # unreachable on purpose
     REDIS_CACHE_URL="redis://127.0.0.1:1/0",
     LOG_LEVEL="WARNING",

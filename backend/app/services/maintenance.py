@@ -18,8 +18,11 @@ from app.core.timeutil import utcnow
 from app.db.models import (
     NOTE_PENDING,
     NOTE_SENDING,
+    RES_FAILED,
     RES_PENDING,
     RES_RUNNING,
+    RUN_FAILED,
+    RUN_PARTIAL,
     RUN_QUEUED,
     RUN_RUNNING,
     RUN_SCHEDULED,
@@ -96,10 +99,12 @@ def recover_stuck() -> dict[str, int]:
             runs._enqueue_research(uow, running)
             stats["results_running"] = len(running)
 
-        # Pending results whose queue message was lost.
+        # Pending results whose queue message was lost: only in runs that stopped making progress. A
+        # rate-limited run drains its queue slowly but steadily (its updated_at moves with every logo).
         pending = list(s.scalars(
             select(ResearchResult.id).join(Run, Run.id == ResearchResult.run_id)
-            .where(Run.status == RUN_RUNNING, ResearchResult.status == RES_PENDING, ResearchResult.enqueued_at <= stale).limit(BATCH)
+            .where(Run.status == RUN_RUNNING, Run.updated_at <= stale, ResearchResult.status == RES_PENDING,
+                   ResearchResult.enqueued_at <= stale).limit(BATCH)
         ))
         if pending:
             s.execute(update(ResearchResult).where(ResearchResult.id.in_(pending)).values(enqueued_at=now))
@@ -141,9 +146,35 @@ def recover_stuck() -> dict[str, int]:
     return stats
 
 
+def recover_failed_runs() -> list[int]:
+    """Runs whose automatic recovery round is due (runs._plan_recovery): re-research the logos that
+    failed only because their retries ran out. Each round is one more chance; the run re-finishes and
+    plans the next round itself while rounds remain."""
+    from app.services import run_board
+
+    done: list[int] = []
+    with unit_of_work() as uow:
+        s = uow.session
+        due = _skip_locked(select(Run).where(Run.recover_at.is_not(None), Run.recover_at <= utcnow()).limit(BATCH), uow)
+        for run in s.scalars(due):
+            run.recover_at = None
+            if run.status not in (RUN_PARTIAL, RUN_FAILED):
+                continue  # retried by hand meanwhile, or cancelled
+            ids = [str(i) for i in s.scalars(select(ResearchResult.id).where(
+                ResearchResult.run_id == run.id, ResearchResult.part_month == run.part_month,
+                ResearchResult.status == RES_FAILED, ResearchResult.error.like(f"{runs.RETRY_EXHAUSTED}%")))]
+            if ids:
+                run.recovery_round += 1
+                s.flush()
+                run_board.retry(uow, run.id, "system", result_ids=ids)
+                done.append(run.id)
+    return done
+
+
 def tick() -> dict:
     return {
         "runs_promoted": promote_scheduled_runs(),
         "schedules_fired": schedules.fire_due(),
         "recovered": recover_stuck(),
+        "runs_auto_retried": recover_failed_runs(),
     }

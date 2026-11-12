@@ -18,6 +18,7 @@ import httpx
 
 from app.core.config import get_settings
 from app.core.errors import ProviderError, RetryableProviderError
+from app.research import ratelimit
 from app.research.prompts import PromptSpec, default_spec
 from app.research.providers import AuthError, ResearchOutput, Usage, _retry_after
 
@@ -52,7 +53,10 @@ def _raise_for(resp: httpx.Response) -> None:
     if resp.status_code in (401, 403) or "API_KEY_INVALID" in status or "API key not valid" in message:
         raise AuthError(f"Gemini rejected the API key (HTTP {resp.status_code})")
     if resp.status_code == 429 or resp.status_code >= 500:
-        raise RetryableProviderError(f"gemini HTTP {resp.status_code} {status}".strip(), retry_after=_retry_after(resp.headers.get("Retry-After")))
+        retry_after = _retry_after(resp.headers.get("Retry-After"))
+        if resp.status_code == 429:  # hold every worker; Gemini also uses 429 for exhausted quotas, so attempts still count
+            ratelimit.pause("gemini", retry_after or 5.0)
+        raise RetryableProviderError(f"gemini HTTP {resp.status_code} {status}".strip(), retry_after=retry_after)
     raise ProviderError(f"gemini HTTP {resp.status_code}: {message or status}")
 
 

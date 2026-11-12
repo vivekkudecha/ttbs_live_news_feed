@@ -370,12 +370,37 @@ def complete_result(uow: UnitOfWork, result_id: int, values: dict[str, Any], *, 
     uow.after_commit(lambda: cache.bump("runs", f"run:{run.id}"))
 
 
-def release_for_retry(uow: UnitOfWork, result_id: int, error: str) -> None:
-    uow.session.execute(
-        update(ResearchResult)
-        .where(ResearchResult.id == result_id, ResearchResult.status == RES_RUNNING)
-        .values(status=RES_PENDING, error=error[:1000], enqueued_at=utcnow())
-    )
+def release_for_retry(uow: UnitOfWork, result_id: int, error: str | None, *, delay_s: float = 0.0,
+                      refund_attempt: bool = False) -> None:
+    """running -> pending, due again in `delay_s` (`enqueued_at` is that due time, so the stuck-work
+    sweeper never mistakes a scheduled wait for a lost task). `refund_attempt`: the try did not count
+    (rate limited, by our bucket or by the provider)."""
+    values: dict[str, Any] = {"status": RES_PENDING, "error": error[:1000] if error else None,
+                              "enqueued_at": utcnow() + timedelta(seconds=delay_s)}
+    if refund_attempt:
+        values["attempts"] = ResearchResult.attempts - 1
+    uow.session.execute(update(ResearchResult).where(ResearchResult.id == result_id, ResearchResult.status == RES_RUNNING).values(**values))
+
+
+RETRY_EXHAUSTED = "gave up after"  # error prefix of logos that failed only because retries ran out
+
+
+def _plan_recovery(uow: UnitOfWork, run: Run) -> None:
+    """A run finished with logos whose retries ran out (provider outage, 5xx...): retry them again
+    automatically later, up to RESEARCH_RECOVERY_ROUNDS times (maintenance.recover_failed_runs)."""
+    s_ = get_settings()
+    if run.recovery_round >= s_.research_recovery_rounds:
+        return
+    retryable = uow.session.scalar(select(func.count(ResearchResult.id)).where(
+        ResearchResult.run_id == run.id, ResearchResult.part_month == run.part_month,
+        ResearchResult.status == RES_FAILED, ResearchResult.error.like(f"{RETRY_EXHAUSTED}%")))
+    if not retryable:
+        return
+    delay = s_.research_recovery_first_delay_min * 3 ** run.recovery_round
+    run.recover_at = utcnow() + timedelta(minutes=delay)
+    telemetry.event(uow, "run.recovery_planned", telemetry.INFO, run_id=run.id, import_id=run.import_id,
+                    message=f"{retryable} logos failed after their retries; retrying them automatically in {delay} min "
+                            f"(round {run.recovery_round + 1} of {s_.research_recovery_rounds})")
 
 
 def finalize(uow: UnitOfWork, run: Run) -> None:
@@ -391,6 +416,8 @@ def finalize(uow: UnitOfWork, run: Run) -> None:
     if not won:
         return
     uow.session.refresh(run)
+    if final != RUN_COMPLETED:
+        _plan_recovery(uow, run)
     audit.record(
         uow, "run.finish", "run", run.id,
         {"status": final, "companies": run.total, "signals": run.with_signal, "failed": run.failed,

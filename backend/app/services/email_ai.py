@@ -77,7 +77,7 @@ def summarize(prompt_tpl: str | None, max_words: int, ctx: dict[str, Any]) -> Ai
     instruction = (prompt_tpl or DEFAULT_PROMPT).replace("{pam_name}", ctx["pam"]["first_name"] or "the PAM") \
         .replace("{max_words}", str(max_words))
     prompt = f"{instruction}\n\nFacts:\n{_facts(ctx)}"
-    ratelimit.acquire()  # shares the research rate limit: summaries never starve or exceed it
+    ratelimit.acquire(provider.key, max_wait_s=120)  # the research bucket: summaries never exceed the provider's limit
     out = provider.generate(prompt, system=SYSTEM, max_tokens=get_settings().email_ai_max_output_tokens)
     return AiResult(text=_trim_words(out.text, max_words), provider=provider.key, model=provider.model,
                     tokens_in=out.tokens_in, tokens_out=out.tokens_out, cost=out.cost, latency_ms=out.latency_ms,

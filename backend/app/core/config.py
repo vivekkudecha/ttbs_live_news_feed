@@ -75,7 +75,18 @@ class Settings(BaseSettings):
     research_window_days: int = 10
     research_max_retries: int = 5
     research_backoff_cap_s: int = 120
-    llm_rate_per_second: int = 45  # Perplexity allows 50/s; keep headroom (from test.py)
+    # Rate limit (research/ratelimit.py): the provider's own limit, learned from its response headers
+    # (Perplexity: x-ratelimit-limit per usage tier). Until then this applies: 1/s = Perplexity Tier 0.
+    llm_rate_per_second: float = 1.0
+    llm_rate_headroom: float = 0.9  # pace at 90% of the limit (clock skew, other clients of the same key)
+    llm_max_inline_wait_s: float = 15.0  # a worker waits this long for a slot; beyond that the logo is re-queued
+    llm_rate_limit_ttl_s: int = 86_400  # forget a learned limit after a day (tier upgrades show up anyway)
+    llm_token_slowdown_s: int = 600  # after a token-budget 429 (TPM/TPH), run at half speed this long
+    research_rate_limited_max_hours: int = 24  # a logo waits on rate limits at most this long, then fails
+    # Logos that still fail after their retries (outage, 5xx) are retried again automatically, the whole
+    # run at once, after 10, 30, 90 minutes (first delay x 3^round).
+    research_recovery_rounds: int = 3
+    research_recovery_first_delay_min: int = 10
 
     # Master key for encrypting stored credentials (see app/core/secrets.py).
     secrets_key: SecretStr | None = None

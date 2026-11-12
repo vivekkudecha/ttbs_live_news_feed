@@ -37,7 +37,7 @@ from app.db.models import (
     Run,
 )
 from app.db.session import unit_of_work
-from app.research import providers
+from app.research import providers, ratelimit
 from app.services import audit, finops, imports, llm_config, notifications, runs, telemetry
 
 router = APIRouter(prefix="/api/v1")
@@ -534,7 +534,10 @@ AiProvider = Literal["perplexity", "gemini"]
 def _llm_out() -> dict[str, Any]:
     labels = {k: s.label for k, s in providers.registry().items()}
     with unit_of_work() as uow:
-        return sch.llm_settings_out(llm_config.list_rows(uow), labels, mode=get_settings().llm_provider)
+        out = sch.llm_settings_out(llm_config.list_rows(uow), labels, mode=get_settings().llm_provider)
+    for p in out["providers"]:  # the request limit research runs are paced at (research/ratelimit.py)
+        p["rateLimit"] = ratelimit.status(p["provider"])
+    return out
 
 
 @router.get("/settings/llm")
