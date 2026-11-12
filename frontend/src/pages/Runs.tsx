@@ -22,7 +22,6 @@ import {
   RotateCcw,
   Search,
   Table2,
-  Sparkles,
   TriangleAlert,
   Users,
 } from "lucide-react"
@@ -49,11 +48,14 @@ import {
   useQueues,
   useRetryFailed,
   useRun,
+  useRunCosts,
 } from "@/api/hooks"
 import { useDebounced } from "@/lib/use-debounced"
-import { durationMin, fmtDate, fmtDateTime, pct, fmtRelative } from "@/lib/format"
+import { durationMin, fmtDate, fmtDateTime, fmtUsd, pct, fmtRelative } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Job, JobPage } from "@/api/types"
+import { ModelName } from "@/components/common/ModelName"
+import { TokenBreakdown } from "@/components/finops/TokenBreakdown"
 import { AuditTab, EventsTab, TimelineTab } from "@/components/runs/RunInsights"
 import { RunBoard } from "@/components/runs/board/RunBoard"
 import { useLogoDrawer } from "@/components/logo/logo-drawer-context"
@@ -380,10 +382,22 @@ function Meta({ icon: Icon, children }: { icon: typeof Clock; children: ReactNod
   )
 }
 
+/** One figure in the run header: label, value, and a muted line under it. */
+function Figure({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="tabular mt-0.5 text-lg font-medium">{children}</dd>
+      {hint && <dd className="truncate text-xs text-muted-foreground">{hint}</dd>}
+    </div>
+  )
+}
+
 function ProgressHero({ j, rate }: { j: Job; rate?: number | null }) {
   const p = pct(j.done, j.companies)
   const running = j.status === "running" || j.status === "queued"
   const left = eta(j.companies - j.done, rate)
+  const costs = useRunCosts(j.id, running).data?.totals // the run's cost ledger: tokens as billed
   return (
     <Card>
       <CardContent className="space-y-4">
@@ -423,15 +437,33 @@ function ProgressHero({ j, rate }: { j: Job; rate?: number | null }) {
           </div>
         )}
 
+        <dl className="grid grid-cols-2 gap-4 rounded-lg bg-muted/40 p-3 sm:grid-cols-4">
+          <Figure label="Model">
+            <ModelName provider={j.provider} model={j.model} className="[&_code]:text-sm" />
+          </Figure>
+          <Figure label="Tokens used" hint={costs && `${n(costs.tokensIn)} in · ${n(costs.tokensOut)} out`}>
+            {costs ? (
+              <TokenBreakdown row={costs} provider={j.provider}>
+                {n(costs.tokensIn + costs.tokensOut)}
+              </TokenBreakdown>
+            ) : (
+              "—"
+            )}
+          </Figure>
+          <Figure label="AI cost" hint={costs?.costPerSignal != null ? `${fmtUsd(costs.costPerSignal, 4)} per signal` : undefined}>
+            {costs ? fmtUsd(costs.total, costs.total >= 1 ? 2 : 4) : "—"}
+          </Figure>
+          <Figure label="Paid calls" hint={`${n(j.cacheHits)} from cache`}>
+            {costs ? n(costs.calls) : "—"}
+          </Figure>
+        </dl>
+
         <div className="flex flex-wrap gap-x-6 gap-y-2">
           {j.windowStart && (
             <Meta icon={CalendarClock}>
               News {fmtDate(j.windowStart)} – {fmtDate(j.windowEnd)}
             </Meta>
           )}
-          <Meta icon={Sparkles}>
-            {j.provider} · <code className="text-xs">{j.model}</code>
-          </Meta>
           {j.startedAt && (
             <Meta icon={Clock}>
               Started {fmtDateTime(j.startedAt)}
@@ -512,8 +544,6 @@ export function RunDetail() {
                 </Link>
               </>
             )}
-            {" · "}
-            {j.provider} {j.model}
           </>
         }
         back={{ to: `/schedules/${j.scheduleId ?? "unscheduled"}`, label: "Back to its schedule" }}

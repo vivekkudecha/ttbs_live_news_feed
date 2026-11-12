@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useActivateLlm, useLlmSettings, useLoadLlmModels, useRemoveLlmConfig, useSaveLlmConfig, useTestLlmConfig } from "@/api/hooks"
 import { errorMessage } from "@/api/http"
 import type { AiProvider, LlmConfig, LlmModel } from "@/api/types"
+import { ownerLabel, shortModel } from "@/lib/models"
 
 const META: Record<AiProvider, { icon: typeof Bot; description: string; keyPlaceholder: string; keyHelp: string }> = {
   perplexity: {
@@ -38,18 +39,6 @@ const META: Record<AiProvider, { icon: typeof Bot; description: string; keyPlace
   },
 }
 
-const MODEL_OWNERS: Record<string, string> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-  google: "Google",
-  xai: "xAI",
-  perplexity: "Perplexity",
-  moonshotai: "Moonshot AI",
-  "z-ai": "Z.ai",
-  nvidia: "NVIDIA",
-}
-const ownerLabel = (k: string) => MODEL_OWNERS[k] ?? k.charAt(0).toUpperCase() + k.slice(1)
-const shortModel = (id: string | null) => (id?.includes("/") ? id.split("/").slice(1).join("/") : id) ?? ""
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"
 

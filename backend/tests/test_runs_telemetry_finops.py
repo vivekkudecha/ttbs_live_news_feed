@@ -186,9 +186,9 @@ def test_cost_ledger_and_report(client, monkeypatch):
     assert client.get("/api/v1/finops?from=2026-11-05&to=2026-11-01").status_code == 422
 
 
-def test_finops_shows_the_providers_usage_breakdown(client, monkeypatch):
-    """Each paid call keeps the provider's usage report; FinOps totals and daily rows add it up exactly,
-    cache hits add nothing, and the ledger CSV carries every part."""
+def test_ledger_keeps_the_providers_usage_breakdown(client, monkeypatch):
+    """Each paid call keeps the provider's usage report in the ledger (cache hits add nothing), the
+    ledger CSV carries every part, and the run table shows the model and its tokens."""
     real = providers.FakeProvider.research
 
     def billed(self, company, ws, we, prompt=None):
@@ -204,15 +204,15 @@ def test_finops_shows_the_providers_usage_breakdown(client, monkeypatch):
     research(client, imp["id"], [])
     research(client, imp["id"], [])  # all cache hits: no tokens, nothing billed
 
-    u = client.get("/api/v1/finops").json()["usage"]
-    t = u["totals"]
-    assert (t["calls"], t["tokensIn"], t["cacheRead"], t["cacheWrite"], t["tokensOut"], t["totalTokens"], t["toolCalls"]) == (
-        3, 36000, 27000, 900, 2100, 38100, 9)
-    assert (t["cost"], t["providerCost"], t["estimatedCost"], t["untrackedCalls"]) == (0.0684, 0.0684, 0.0, 0)
-    assert (t["inputCost"], t["outputCost"], t["cacheCost"], t["toolCost"], t["otherCost"]) == (0.009, 0.0105, 0.0039, 0.045, 0.0)
-    for zone in ("ist", "utc"):
-        [day] = u["daily"][zone]
-        assert (day["provider"], day["calls"], day["totalTokens"], day["cost"]) == ("fake", 3, 38100, 0.0684)
+    with unit_of_work() as uow:
+        paid = uow.session.scalars(select(CostEntry).where(CostEntry.cached.is_(False))).all()
+    assert len(paid) == 3 and {(e.cache_read_tokens, e.cache_write_tokens, e.tool_calls, e.cost_source) for e in paid} == {(9000, 300, 3, "provider")}
+    assert {(e.input_cost, e.output_cost, e.cache_cost, e.tool_cost) for e in paid} == {(0.003, 0.0035, 0.0013, 0.015)}
+    run = client.get("/api/v1/finops").json()["byRun"][0]
+    assert (run["provider"], run["model"], run["tokensIn"] + run["tokensOut"]) == ("fake", "fake-model", 38100)
+    u = run["usage"]  # the token popover: what the provider reported, added up
+    assert (u["cacheRead"], u["cacheWrite"], u["toolCalls"], u["untrackedCalls"], u["estimatedCost"]) == (27000, 900, 9, 0, 0.0)
+    assert (u["inputCost"], u["outputCost"], u["cacheCost"], u["toolCost"]) == (0.009, 0.0105, 0.0039, 0.045)
 
     lines = client.get("/api/v1/finops/ledger.csv").text.lstrip("\ufeff").splitlines()
     head = lines[0].split(",")

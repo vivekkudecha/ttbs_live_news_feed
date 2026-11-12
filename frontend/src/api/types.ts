@@ -298,39 +298,26 @@ export interface CostRow {
   costPerCompany: number | null
   costPerSignal: number | null
   cacheRate: number
+  /** The provider's own usage report, added up (the token popover). */
+  usage: CostUsage
 }
 
-/** Paid LLM calls as the provider billed them (each response's usage report, added up). */
-export interface UsageRow {
-  calls: number
-  /** Input tokens as the provider reported them. */
-  tokensIn: number
+export interface CostUsage {
   cacheRead: number
   cacheWrite: number
-  tokensOut: number
-  /** Thinking tokens (already counted in output). */
+  /** Thinking tokens, already part of output. */
   reasoning: number
-  totalTokens: number
-  /** Tool invocations, e.g. web searches. */
+  /** e.g. web searches */
   toolCalls: number
   inputCost: number
   outputCost: number
   cacheCost: number
   toolCost: number
-  /** Billed beyond the itemised parts. */
-  otherCost: number
-  /** The amount actually charged (sum of each call's total). */
-  cost: number
-  /** From the provider's response. */
-  providerCost: number
-  /** Priced from our settings (the provider sent no cost, e.g. Gemini). */
+  /** Priced from our settings (the provider sent no cost). */
   estimatedCost: number
-  /** Calls recorded before the breakdown was tracked: total only. */
-  untrackedCost: number
+  /** Paid calls recorded before the breakdown was tracked: totals only. */
   untrackedCalls: number
 }
-
-export type UsageDay = UsageRow & { date: string; provider: string; model: string | null }
 
 export interface FinOpsReport {
   currency: "USD"
@@ -340,12 +327,20 @@ export interface FinOpsReport {
   budget: { monthly: number; monthSpend: number; forecast: number; softLimitPct: number; hardCap: boolean; usedPct: number }
   prices: { emailPerMessage: number; whatsappPerMessage: number }
   series: { date: string; llm: number; messaging: number; saved: number }[]
-  byRun: (CostRow & { id: string; label: string; status: RunStatus | null; importId: string | null; startedAt: string | null; companies: number | null })[]
+  byRun: (CostRow & {
+    id: string
+    label: string
+    status: RunStatus | null
+    importId: string | null
+    startedAt: string | null
+    companies: number | null
+    provider: string | null
+    model: string | null
+  })[]
   byUpload: (CostRow & { id: string; label: string; fileName: string | null })[]
   byPam: (CostRow & { id: string; name: string; email: string | null })[]
   topCompanies: (CostRow & { id: string; name: string })[]
   byModel: (CostRow & { category: "llm" | "messaging"; provider: string; model: string | null })[]
-  usage: { totals: UsageRow; daily: { ist: UsageDay[]; utc: UsageDay[] } }
 }
 
 export interface RunCosts {

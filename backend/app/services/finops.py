@@ -188,13 +188,27 @@ def _sums():
         func.coalesce(func.sum(CostEntry.tokens_out), 0),
         func.coalesce(func.sum(case((llm & (CostEntry.outcome == RES_SIGNAL), 1), else_=0)), 0),
         func.coalesce(func.sum(case((CostEntry.category == COST_MESSAGING, 1), else_=0)), 0),
+        # The provider's own breakdown (research/providers.Usage), for the token popover.
+        *(func.coalesce(func.sum(c), 0) for c in (
+            CostEntry.cache_read_tokens, CostEntry.cache_write_tokens, CostEntry.reasoning_tokens, CostEntry.tool_calls,
+            CostEntry.input_cost, CostEntry.output_cost, CostEntry.cache_cost, CostEntry.tool_cost)),
+        func.coalesce(func.sum(case((CostEntry.cost_source == "estimate", CostEntry.cost), else_=0.0)), 0.0),
+        # Paid calls recorded before the breakdown was tracked (0014): totals only.
+        func.coalesce(func.sum(case((llm & CostEntry.cached.is_(False) & CostEntry.cost_source.is_(None), 1), else_=0)), 0),
     )
 
 
-def _row(llm, msg, calls, hits, saved, tin, tout, signals, messages) -> dict[str, Any]:
+def _row(llm, msg, calls, hits, saved, tin, tout, signals, messages,
+         cache_read=0, cache_write=0, reasoning=0, tools=0, c_in=0, c_out=0, c_cache=0, c_tools=0, estimated=0, untracked=0) -> dict[str, Any]:
     # MySQL returns SUMs as Decimal (SQLite as int/float): normalise once so the maths below is plain float/int.
     llm, msg, saved = float(llm or 0), float(msg or 0), float(saved or 0)
     calls, hits, tin, tout, signals, messages = (int(x or 0) for x in (calls, hits, tin, tout, signals, messages))
+    usage = {
+        "cacheRead": int(cache_read or 0), "cacheWrite": int(cache_write or 0), "reasoning": int(reasoning or 0),
+        "toolCalls": int(tools or 0), "inputCost": round(float(c_in or 0), 6), "outputCost": round(float(c_out or 0), 6),
+        "cacheCost": round(float(c_cache or 0), 6), "toolCost": round(float(c_tools or 0), 6),
+        "estimatedCost": round(float(estimated or 0), 6), "untrackedCalls": int(untracked or 0),
+    }
     researched = calls + hits
     total = llm + msg
     return {
@@ -204,6 +218,7 @@ def _row(llm, msg, calls, hits, saved, tin, tout, signals, messages) -> dict[str
         "costPerCompany": round(total / researched, 4) if researched else None,
         "costPerSignal": round(total / signals, 4) if signals else None,
         "cacheRate": round(hits * 100 / researched, 1) if researched else 0,
+        "usage": usage,
     }
 
 
@@ -214,57 +229,6 @@ def _breakdown(uow: UnitOfWork, lo: datetime, hi: datetime, key, limit: int = 50
         .group_by(key).order_by(total_cost.desc()).limit(limit)
     ).all()
     return [(r[0], _row(*r[1:])) for r in rows]
-
-
-_U_SUMS = ("tokensIn", "cacheRead", "cacheWrite", "tokensOut", "reasoning", "toolCalls",
-           "inputCost", "outputCost", "cacheCost", "toolCost", "cost")
-_U_COLS = (CostEntry.tokens_in, CostEntry.cache_read_tokens, CostEntry.cache_write_tokens, CostEntry.tokens_out,
-           CostEntry.reasoning_tokens, CostEntry.tool_calls, CostEntry.input_cost, CostEntry.output_cost,
-           CostEntry.cache_cost, CostEntry.tool_cost, CostEntry.cost)
-_SOURCE_KEY = {"provider": "providerCost", "estimate": "estimatedCost"}
-
-
-def _usage_acc() -> dict[str, Any]:
-    return {"calls": 0, **dict.fromkeys(_U_SUMS, 0), "providerCost": 0.0, "estimatedCost": 0.0,
-            "untrackedCost": 0.0, "untrackedCalls": 0}
-
-
-def _usage_add(acc: dict[str, Any], vals: tuple, source: str | None) -> None:
-    acc["calls"] += 1
-    for k, v in zip(_U_SUMS, vals, strict=True):
-        acc[k] += v or 0
-    acc[_SOURCE_KEY.get(source or "", "untrackedCost")] += vals[-1] or 0
-    acc["untrackedCalls"] += source is None
-
-
-def _usage_out(acc: dict[str, Any]) -> dict[str, Any]:
-    out = {k: round(float(v), 6) if isinstance(v, float) else int(v) for k, v in acc.items()}
-    out["totalTokens"] = out["tokensIn"] + out["tokensOut"]
-    # Whatever the provider billed beyond the itemised parts (and calls recorded before the breakdown existed).
-    parts = acc["inputCost"] + acc["outputCost"] + acc["cacheCost"] + acc["toolCost"]
-    out["otherCost"] = round(max(acc["cost"] - acc["untrackedCost"] - parts, 0.0), 6)
-    return out
-
-
-def usage_breakdown(uow: UnitOfWork, lo: datetime, hi: datetime, tz: ZoneInfo) -> dict[str, Any]:
-    """Paid LLM calls (cache hits spend nothing) as the provider billed them: totals plus one row per
-    day x provider x model, by IST day and by UTC day (provider consoles use UTC)."""
-    total = _usage_acc()
-    daily: dict[str, dict[tuple, dict[str, Any]]] = {"ist": defaultdict(_usage_acc), "utc": defaultdict(_usage_acc)}
-    rows = uow.session.execute(
-        select(CostEntry.ts, CostEntry.provider, CostEntry.model, CostEntry.cost_source, *_U_COLS)
-        .where(*_in_range(lo, hi), CostEntry.category == COST_LLM, CostEntry.cached.is_(False))
-    )
-    for ts, provider, model, source, *vals in rows:
-        ts = as_utc(ts)
-        _usage_add(total, vals, source)
-        for zone, day in (("ist", ts.astimezone(tz).date()), ("utc", ts.date())):
-            _usage_add(daily[zone][(day.isoformat(), provider, model)], vals, source)
-    return {
-        "totals": _usage_out(total),
-        "daily": {zone: [{"date": d, "provider": p, "model": m, **_usage_out(acc)} for (d, p, m), acc in sorted(rows_.items())]
-                  for zone, rows_ in daily.items()},
-    }
 
 
 def report(uow: UnitOfWork, start: str | None, end: str | None) -> dict[str, Any]:
@@ -332,7 +296,8 @@ def report(uow: UnitOfWork, start: str | None, end: str | None) -> dict[str, Any
             {"id": str(k), "label": runs[k].label if k in runs else f"Run {k}", "status": runs[k].status if k in runs else None,
              "importId": str(runs[k].import_id) if k in runs and runs[k].import_id else None,
              "startedAt": as_utc(runs[k].started_at).isoformat() if k in runs and runs[k].started_at else None,
-             "companies": runs[k].total if k in runs else None, **v}
+             "companies": runs[k].total if k in runs else None,
+             "provider": runs[k].provider if k in runs else None, "model": runs[k].model if k in runs else None, **v}
             for k, v in by_run
         ],
         "byUpload": [{"id": str(k), "label": imps[k].label if k in imps else f"Upload {k}", "fileName": imps[k].file_name if k in imps else None, **v}
@@ -341,7 +306,6 @@ def report(uow: UnitOfWork, start: str | None, end: str | None) -> dict[str, Any
                   for k, v in by_pam],
         "topCompanies": [{"id": str(k), "name": cos[k].name if k in cos else f"Company {k}", **v} for k, v in by_company],
         "byModel": [{"category": cat, "provider": p, "model": m, **_row(*rest)} for cat, p, m, *rest in model_rows],
-        "usage": usage_breakdown(uow, lo, hi, tz),
     }
 
 

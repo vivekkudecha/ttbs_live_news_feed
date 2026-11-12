@@ -10,7 +10,8 @@ import { PageHeader } from "@/components/common/PageHeader"
 import { StatCard } from "@/components/common/StatCard"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { CostTable } from "@/components/finops/CostTable"
-import { UsageBreakdown } from "@/components/finops/UsageBreakdown"
+import { DataTableColumnHeader } from "@/components/data-table/DataTableColumnHeader"
+import { ModelName } from "@/components/common/ModelName"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -93,13 +94,20 @@ export default function Costs() {
       ) : !f.data ? (
         <Skeleton className="h-96" />
       ) : (
-        <Report d={f.data} stale={f.isPlaceholderData} />
+        <Report d={f.data} stale={f.isPlaceholderData} range={`${range.from}_${range.to}`} />
       )}
     </div>
   )
 }
 
-function Report({ d, stale }: { d: NonNullable<ReturnType<typeof useFinops>["data"]>; stale: boolean }) {
+/** Status filter options for the runs in view, in a stable order. */
+const STATUS_ORDER = ["completed", "partial", "failed", "running", "queued", "scheduled", "cancelled", "unknown"]
+const statusOptions = (present: string[]) =>
+  [...new Set(present)]
+    .sort((a, b) => STATUS_ORDER.indexOf(a) - STATUS_ORDER.indexOf(b))
+    .map((v) => ({ value: v, label: v === "partial" ? "Partly failed" : v.charAt(0).toUpperCase() + v.slice(1) }))
+
+function Report({ d, stale, range }: { d: NonNullable<ReturnType<typeof useFinops>["data"]>; stale: boolean; range: string }) {
   const t = d.totals
   const b = d.budget
   const series = d.series.map((p) => ({ ...p, label: new Date(`${p.date}T00:00:00Z`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", timeZone: "UTC" }) }))
@@ -185,8 +193,6 @@ function Report({ d, stale }: { d: NonNullable<ReturnType<typeof useFinops>["dat
         </Card>
       </Split>
 
-      <UsageBreakdown totals={d.usage.totals} daily={d.usage.daily} />
-
       <Tabs defaultValue="runs">
         <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="runs">By run</TabsTrigger>
@@ -199,10 +205,28 @@ function Report({ d, stale }: { d: NonNullable<ReturnType<typeof useFinops>["dat
           <CostTable
             id="runs"
             title="Cost by run"
-            description="Each research run in the range, most expensive first"
+            description="Each research run in the range"
+            noun="runs"
+            nameLabel="Run"
+            range={range}
+            facets={[
+              { id: "status", title: "Status", options: statusOptions(d.byRun.map((r) => r.status ?? "unknown")), of: (r) => r.status ?? "unknown" },
+              { id: "model", title: "Model", options: [...new Set(d.byRun.map((r) => r.model ?? "—"))].map((m) => ({ value: m, label: m })), of: (r) => r.model ?? "—" },
+            ]}
+            columns={[
+              {
+                id: "model",
+                accessorFn: (r) => r.model ?? "",
+                meta: { label: "Model" },
+                header: ({ column }) => <DataTableColumnHeader column={column} title="Model" />,
+                cell: ({ row }) => <ModelName provider={row.original.provider} model={row.original.model} />,
+              },
+            ]}
             rows={d.byRun.map((r) => ({
+              ...r,
               key: r.id,
               text: `#${r.id} ${r.label}`,
+              search: r.model ?? "",
               name: (
                 <Link to={`/runs/${r.id}`} className="hover:underline">
                   #{r.id} {r.label}
@@ -213,7 +237,6 @@ function Report({ d, stale }: { d: NonNullable<ReturnType<typeof useFinops>["dat
                   {r.status && <StatusBadge status={r.status} />} {r.companies != null && `${n(r.companies)} logos`} {r.startedAt && `· ${fmtDate(r.startedAt)}`}
                 </span>
               ),
-              ...r,
             }))}
           />
         </TabsContent>
@@ -222,37 +245,76 @@ function Report({ d, stale }: { d: NonNullable<ReturnType<typeof useFinops>["dat
             id="uploads"
             title="Cost by upload"
             description="All runs of each upload, including re-runs"
+            noun="uploads"
+            nameLabel="Upload"
+            range={range}
             rows={d.byUpload.map((u) => ({
+              ...u,
               key: u.id,
               text: u.label,
+              search: u.fileName ?? "",
               name: (
                 <Link to={`/imports?open=${u.id}`} className="hover:underline">
                   {u.label}
                 </Link>
               ),
               sub: u.fileName,
-              ...u,
             }))}
           />
         </TabsContent>
         <TabsContent value="pams" className="mt-4">
-          <CostTable id="pams" title="Cost by PAM" description="Research of each PAM's logos plus their digests" rows={d.byPam.map((p) => ({ ...p, key: p.id, name: p.name, sub: p.email }))} />
+          <CostTable
+            id="pams"
+            title="Cost by PAM"
+            description="Research of each PAM's logos plus their digests"
+            noun="PAMs"
+            nameLabel="PAM"
+            range={range}
+            rows={d.byPam.map((p) => ({ ...p, key: p.id, text: p.name, search: p.email ?? "", name: p.name, sub: p.email }))}
+          />
         </TabsContent>
         <TabsContent value="models" className="mt-4">
           <CostTable
             id="models"
             title="Cost by model and channel"
             description="Research AI models and delivery channels"
-            rows={d.byModel.map((m) => ({
-              key: `${m.category}-${m.provider}-${m.model}`,
-              name: m.category === "llm" ? `${m.provider} · ${m.model ?? "—"}` : `${m.provider === "whatsapp" ? "WhatsApp" : "Email"} messages`,
-              sub: m.category === "llm" ? "Research (LLM)" : `${n(m.messages)} sent via ${m.model ?? "adapter"}`,
-              ...m,
-            }))}
+            noun="models and channels"
+            nameLabel="Model or channel"
+            range={range}
+            facets={[
+              {
+                id: "type",
+                title: "Type",
+                options: [
+                  { value: "llm", label: "Research (AI)" },
+                  { value: "messaging", label: "Messaging" },
+                ],
+                of: (m) => m.category,
+              },
+            ]}
+            rows={d.byModel.map((m) => {
+              const text = m.category === "llm" ? `${m.provider} · ${m.model ?? "—"}` : `${m.provider === "whatsapp" ? "WhatsApp" : "Email"} messages`
+              return {
+                ...m,
+                key: `${m.category}-${m.provider}-${m.model}`,
+                text,
+                name: text,
+                sub: m.category === "llm" ? "Research (AI)" : `${n(m.messages)} sent via ${m.model ?? "adapter"}`,
+              }
+            })}
           />
         </TabsContent>
         <TabsContent value="logos" className="mt-4">
-          <CostTable id="logos" title="Most expensive logos" description="Top 25 logos by research spend in the range" rows={d.topCompanies.map((c) => ({ ...c, key: c.id, name: c.name }))} />
+          <CostTable
+            id="logos"
+            title="Most expensive logos"
+            description="Top 25 logos by research spend in the range"
+            noun="logos"
+            nameLabel="Logo"
+            range={range}
+            hidden={["messaging"]}
+            rows={d.topCompanies.map((c) => ({ ...c, key: c.id, text: c.name, name: c.name }))}
+          />
         </TabsContent>
       </Tabs>
     </Page>
