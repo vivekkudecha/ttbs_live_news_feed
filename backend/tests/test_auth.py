@@ -192,6 +192,9 @@ def test_admin_user_lifecycle(client):
 
     reset = client.post(f"/api/v1/users/{uid}/reset-password").json()
     assert reset["temporaryPassword"] != temp
+    me = client.get("/api/v1/auth/me").json()["user"]["id"]
+    own = client.post(f"/api/v1/users/{me}/reset-password")  # would lock the admin out: change it instead
+    assert own.status_code == 403 and own.json()["error"]["code"] == "self_lockout"
     with anon_client() as c:
         assert sign_in(c, "frank", temp).status_code == 401
         assert sign_in(c, "frank", reset["temporaryPassword"]).status_code == 200

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { Copy, KeyRound, Loader2, LogOut, MoreHorizontal, Pencil, ShieldCheck, Unlock, UserPlus, UserX, UserCheck } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/common/PageHeader"
@@ -229,6 +230,7 @@ const CONFIRM_TEXT: Record<Confirm["kind"], { title: string; body: string; cta: 
 
 export default function Users() {
   const { user: me } = useSession()
+  const navigate = useNavigate()
   const update = useUpdateUser()
   const action = useUserAction()
   const [dialog, setDialog] = useState<{ editing: ManagedUser | null } | null>(null)
@@ -298,9 +300,16 @@ export default function Users() {
                 <DropdownMenuItem onClick={() => setDialog({ editing: u })}>
                   <Pencil /> Edit details & access
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setConfirm({ user: u, kind: "reset" })}>
-                  <KeyRound /> Reset password
-                </DropdownMenuItem>
+                {self ? (
+                  // Resetting your own password would sign you out with a one-time password: change it instead.
+                  <DropdownMenuItem onClick={() => navigate("/change-password")}>
+                    <KeyRound /> Change my password
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={() => setConfirm({ user: u, kind: "reset" })}>
+                    <KeyRound /> Reset password
+                  </DropdownMenuItem>
+                )}
                 {u.locked && (
                   <DropdownMenuItem onClick={() => void unlock(u)}>
                     <Unlock /> Unlock

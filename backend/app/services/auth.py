@@ -364,7 +364,12 @@ def update_user(user_id: int, data: dict[str, Any], *, actor_id: int) -> dict[st
         return user_out(user, admin_view=True)
 
 
-def reset_password(user_id: int) -> dict[str, Any]:
+def reset_password(user_id: int, *, actor_id: int) -> dict[str, Any]:
+    """Admin action for someone who forgot their password: a one-time temporary password, all their
+    sessions ended. Not for your own account (it would sign you out with a password only shown once):
+    change your own from the account menu instead."""
+    if user_id == actor_id:
+        raise Forbidden("You cannot reset your own password. Use Change password in your account menu.", code="self_lockout")
     temp = passwords.generate_temporary()
     with unit_of_work() as uow:
         user = _get(uow, user_id)

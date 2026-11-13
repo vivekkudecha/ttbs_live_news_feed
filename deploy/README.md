@@ -40,6 +40,7 @@ change it at first sign-in.
 | `deploy/nginx/nginx.conf` | Gateway: routing, rate limits, size limits, CSP, caching policy. |
 | `deploy/nginx/headers.conf` | Security headers (and the HSTS line to enable with HTTPS). |
 | `deploy/nginx/tools.conf` | dev/uat routes: `/phpmyadmin/`, `/docs`. Left out of prod images. |
+| `deploy/host-nginx/live-news-feed-uat.conf` | Host (system) nginx vhost: TLS for `live-news-feed-uat.ai.tatatel.co.in`, forwards to the uat gateway on `127.0.0.1:5175`. Copy into `/etc/nginx/conf.d/`. |
 | `deploy/phpmyadmin.php` | phpMyAdmin hardening (no root login, no server info). |
 | `backend/Dockerfile`, `deploy/nginx/Dockerfile` | The two images built from this repo. |
 

@@ -144,8 +144,8 @@ def update_user(user_id: str, body: UserPatchIn, p: Principal = Depends(current_
 
 
 @router.post("/users/{user_id}/reset-password")
-def reset_password(user_id: str) -> dict[str, Any]:
-    return auth.reset_password(_uid(user_id))
+def reset_password(user_id: str, p: Principal = Depends(current_principal)) -> dict[str, Any]:
+    return auth.reset_password(_uid(user_id), actor_id=p.user_id)
 
 
 @router.post("/users/{user_id}/unlock")

@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <!-- Absolute: a relative href would resolve under the current client route (/companies/123). -->
+    <link rel="icon" href="/favicon.ico" sizes="any" vite-ignore />
+    <link rel="icon" type="image/png" href="/favicon.png" vite-ignore />
+    <link rel="apple-touch-icon" href="/favicon.png" vite-ignore />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TTBS Signals</title>
     <meta name="description" content="TTBS Live News Feed: sales signals for every logo, delivered to PAMs." />

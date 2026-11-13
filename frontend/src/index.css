@@ -4,7 +4,7 @@
 @import "@fontsource-variable/inter/wght.css";
 
 @custom-variant dark (&:is(.dark *));
-/* Viewport-height steps: the sidebar tightens so every item fits without a scrollbar. */
+/* Viewport-height steps: the sidebar tightens so every item fits; it scrolls only as a last resort. */
 @custom-variant short (@media (max-height: 860px));
 @custom-variant tiny (@media (max-height: 740px));
 
@@ -213,6 +213,9 @@
 
 @layer utilities {
   .tabular { font-variant-numeric: tabular-nums; }
+  /* Sidebar list: scrolls only when it must; the thin scrollbar shows while hovered or focused. */
+  .sidebar-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  .sidebar-scroll:hover, .sidebar-scroll:focus-within { scrollbar-color: var(--sidebar-border) transparent; }
   .bg-brand-gradient { background-image: var(--brand-gradient); }
   .text-brand-gradient { background-image: var(--brand-gradient); background-clip: text; color: transparent; }
   /* Interactive surface: lifts and glows on hover. */

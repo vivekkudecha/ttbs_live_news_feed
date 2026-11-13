@@ -10,7 +10,7 @@ the server.**
 |---|---|---|---|---|
 | Built JS/CSS/fonts/images | `/assets/index-Cdv42ky3.js` | `public, max-age=31536000, immutable` | gateway | File names contain a content hash: a new build produces new names, so a cached copy can never be stale. One year = the maximum that matters. |
 | SPA shell | `/`, `/index.html`, any client route | `no-cache` (+ `ETag`) | gateway | Always revalidated (a cheap 304 when unchanged), so a deploy is visible on the next load and the shell always points at the current asset names. |
-| Other public files | `/favicon.svg` | `public, max-age=86400` | gateway | Rarely changes; one day bounds the staleness. |
+| Other public files | `/favicon.ico`, `/favicon.png` | `public, max-age=86400` | gateway | Rarely changes; one day bounds the staleness. |
 | **Every API response** | `/api/v1/...` (data, errors, downloads, health) | `no-store` + `Pragma: no-cache` | backend middleware (`app/main.py`) | Per-user, permission-checked, frequently changing and partly sensitive (audit, costs, uploads). `no-store` forbids browsers, proxies and CDNs from keeping any copy, including the back/forward cache after sign-out. |
 | Rate-limit answers (429) | | `no-store` | gateway | Never reuse a refusal. |
 | phpMyAdmin (dev/uat) | `/phpmyadmin/...` | phpMyAdmin's own headers | phpMyAdmin | Tool-managed. |
