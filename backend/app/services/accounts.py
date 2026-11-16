@@ -5,13 +5,13 @@ number of active logos they own.
 from typing import Any
 
 from email_validator import EmailNotValidError, validate_email
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.core import cache
 from app.core.config import get_settings
 from app.core.errors import Conflict, NotFound, ValidationFailed
 from app.core.timeutil import utcnow
-from app.db.models import Company, Pam
+from app.db.models import Company, DatasetCompany, Pam
 from app.db.session import UnitOfWork
 from app.services import assignments, audit
 from app.services.imports import normalize_whatsapp
@@ -48,8 +48,15 @@ def reassign(uow: UnitOfWork, company_ids: list[str], to_pam_id: str, actor: str
         raise NotFound("Some companies were not found")
     now = utcnow()
     moved = sum(assignments.assign(uow, c, to.id, reason="manual", actor=actor, ts=now) for c in companies)
-    audit.record(uow, "company.reassign", "pam", to.id, {"to": to.name, "companies": len(companies), "moved": moved}, actor=actor)
-    uow.after_commit(lambda: cache.bump("accounts"))
+    # Runs take each logo's PAM from its upload's mapping: a manual reassign is the newest word, so it
+    # applies to every upload holding these logos (their next runs deliver to the new PAM). A later
+    # upload that maps them differently decides again.
+    remapped = uow.session.execute(
+        update(DatasetCompany).where(DatasetCompany.company_id.in_(ids), DatasetCompany.pam_id != to.id).values(pam_id=to.id)
+    ).rowcount
+    audit.record(uow, "company.reassign", "pam", to.id,
+                 {"to": to.name, "companies": len(companies), "moved": moved, "upload_rows": remapped}, actor=actor)
+    uow.after_commit(lambda: cache.bump("accounts", "imports"))
     return moved
 
 

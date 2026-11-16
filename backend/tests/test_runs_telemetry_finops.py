@@ -53,17 +53,33 @@ def test_each_upload_runs_only_its_logos_for_its_own_pams(client):
 def test_uploaded_pam_that_left_falls_back_to_current_owner(client):
     a = upload(client).json()
     aarav = _pam(client, "aarav@ttbs.example")
-    # A PAM left before uploads alone decided ownership: inactive, logos already with someone else.
+    # A PAM left before uploads alone decided ownership: inactive, logos already with someone else
+    # (moved by the old rebalancing, which left the upload's own mapping untouched).
     priya = _pam(client, "priya@ttbs.example")
-    companies = client.post("/api/v1/companies/query", json={"pamIds": [str(aarav)]}).json()["rows"]
-    assert client.post("/api/v1/companies/reassign", json={"companyIds": [c["id"] for c in companies], "toPamId": str(priya)}).status_code == 200
+    from app.db.models import Company
+
     with unit_of_work() as uow:
         uow.session.get(Pam, int(aarav)).active = False
+        for c in uow.session.scalars(select(Company).where(Company.pam_id == int(aarav))):
+            c.pam_id = int(priya)
     run = research(client, a["id"], []).json()
     owners = _owner_by_company(run["id"])
     assert aarav not in owners.values() and None not in owners.values()
     start = client.get(f"/api/v1/runs/{run['id']}/events?kind=run.start").json()["rows"][0]
     assert start["attrs"]["rerouted"] == 2 and "current owner" in start["message"]
+
+
+def test_reassigned_logos_go_to_the_new_pam_on_the_next_run_of_their_upload(client):
+    a = upload(client).json()
+    aarav, priya = _pam(client, "aarav@ttbs.example"), _pam(client, "priya@ttbs.example")
+    assert _owner_by_company(research(client, a["id"], []).json()["id"])["Pine Labs Pvt Ltd"] == aarav
+
+    pine = client.get("/api/v1/companies/search?q=pine").json()[0]["id"]
+    assert client.post("/api/v1/companies/reassign", json={"companyIds": [pine], "toPamId": str(priya)}).status_code == 200
+    owners = _owner_by_company(research(client, a["id"], []).json()["id"])  # the same upload, run again
+    assert owners["Pine Labs Pvt Ltd"] == priya and owners["Zomato Hyperpure"] == aarav  # only the reassigned logo moved
+    rows = client.get(f"/api/v1/imports/{a['id']}/rows?q=pine").json()["rows"]
+    assert rows[0]["pamName"] == "Priya Nair"  # the upload's view shows it too
 
 
 def test_run_waits_for_the_upload_to_be_saved(client):
@@ -270,3 +286,28 @@ def test_cost_row_handles_mysql_decimal_sums():
              Decimal(42), Decimal(18))
     assert (r["total"], r["signals"], r["costPerSignal"], r["costPerCompany"], r["cacheRate"]) == (0.4197, 42, 0.01, 0.0014, 66.7)
     assert all(type(r[k]) is int for k in ("calls", "cacheHits", "tokensIn", "tokensOut", "signals", "messages"))
+
+
+def test_migration_0017_applies_earlier_manual_reassignments_to_uploads(client):
+    """Reassignments made before reassign updated uploads: the data fix moves them into the upload."""
+    import importlib.util
+    from pathlib import Path
+
+    from app.db.models import DatasetCompany
+    from app.db.session import get_engine
+
+    a = upload(client).json()
+    aarav, priya = _pam(client, "aarav@ttbs.example"), _pam(client, "priya@ttbs.example")
+    pine = client.get("/api/v1/companies/search?q=pine").json()[0]["id"]
+    client.post("/api/v1/companies/reassign", json={"companyIds": [pine], "toPamId": str(priya)})
+    with unit_of_work() as uow:  # as the old reassign left it: the upload still says Aarav
+        row = uow.session.scalars(select(DatasetCompany).where(DatasetCompany.company_id == int(pine))).one()
+        row.pam_id = int(aarav)
+
+    spec = importlib.util.spec_from_file_location("m0017", Path("migrations/versions/0017_manual_reassign_to_uploads.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    with get_engine().begin() as conn:
+        assert mod.sync(conn) == 1
+        assert mod.sync(conn) == 0  # idempotent
+    assert _owner_by_company(research(client, a["id"], []).json()["id"])["Pine Labs Pvt Ltd"] == priya
