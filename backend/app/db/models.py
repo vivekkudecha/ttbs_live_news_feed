@@ -89,6 +89,9 @@ class LlmProviderConfig(TimestampMixin, Base):
     key_hint: Mapped[str] = mapped_column(String(40))  # "pplx-…a1b2"
     model: Mapped[str] = mapped_column(String(200))  # "anthropic/claude-sonnet-5"
     model_provider: Mapped[str] = mapped_column(String(60))  # "anthropic" (owned_by)
+    # A cheaper model for PRIORITY ACTIONS (no web search: it only reads the research). None = research model.
+    priority_model: Mapped[str | None] = mapped_column(String(200))
+    priority_model_provider: Mapped[str | None] = mapped_column(String(60))
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_check_ok: Mapped[bool] = mapped_column(Boolean, default=True)
     last_check_error: Mapped[str | None] = mapped_column(Text)
@@ -484,6 +487,35 @@ class ResearchPromptVersion(Base):
     created_by: Mapped[str] = mapped_column(String(100))
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     activated_by: Mapped[str | None] = mapped_column(String(100))
+    priority_rules: Mapped[str | None] = mapped_column(Text)  # None = built-in PRIORITY_RULES
+    priority_limit: Mapped[int | None] = mapped_column(Integer)  # actions per PAM; None/0 = all signals
+    research_version: Mapped[int | None] = mapped_column(Integer)  # see PromptSpec.research_version
+
+
+PRIORITY_PENDING, PRIORITY_READY, PRIORITY_FAILED = "pending", "ready", "failed"
+
+
+class PamPriority(TimestampMixin, Base):
+    """PRIORITY ACTIONS of one PAM in one run (services/priorities.py): the AI's ranked "Why now? /
+    Action:" list over that PAM's signals. The digest waits for it; `signals_key` ties it to the
+    signals it was written from, so a retry that changes them writes it again."""
+
+    __tablename__ = "pam_priorities"
+    __table_args__ = (
+        UniqueConstraint("run_id", "pam_id", name="uq_pam_priorities_run_pam"),
+        Index("ix_pam_priorities_status_updated", "status", "updated_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(BigInteger)
+    pam_id: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[str] = mapped_column(String(10), default=PRIORITY_PENDING)
+    signals_key: Mapped[str] = mapped_column(String(64))
+    actions: Mapped[list[Any]] = mapped_column(default=list)  # [{rank, companyId, resultId, company, whyNow, action}]
+    provider: Mapped[str | None] = mapped_column(String(40))
+    model: Mapped[str | None] = mapped_column(String(200))
+    error: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class AuditLog(Base):

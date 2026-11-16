@@ -35,6 +35,7 @@ class ActiveConfig:
     api_key: str
     model: str
     model_provider: str
+    priority_model: str | None = None  # PRIORITY ACTIONS; None = the research model
 
 
 def spec(provider: str) -> providers.ProviderSpec:
@@ -78,7 +79,8 @@ def load_active(uow: UnitOfWork | None = None) -> ActiveConfig | None:
     row = get_active_row(uow)
     if row is None:
         return None
-    return ActiveConfig(provider=row.provider, api_key=_decrypt(row), model=row.model, model_provider=row.model_provider)
+    return ActiveConfig(provider=row.provider, api_key=_decrypt(row), model=row.model, model_provider=row.model_provider,
+                        priority_model=row.priority_model)
 
 
 def _saved_key(provider: str) -> str | None:
@@ -190,6 +192,35 @@ def save(provider: str, api_key: str | None, model: str, actor: str) -> LlmProvi
         )
         uow.after_commit(lambda: cache.bump("llm"))
     log.info("llm config saved", extra={"provider": provider, "model": model, "key_changed": key_changed})
+    return row
+
+
+def save_priority_model(provider: str, model: str | None, actor: str) -> LlmProviderConfig:
+    """The model that writes PRIORITY ACTIONS (it only reads the research, no web search, so a small,
+    cheap model is enough). Verified like the research model; empty = use the research model."""
+    model = (model or "").strip()
+    with unit_of_work() as uow:
+        row = get_row(uow, provider)
+        if row is None:
+            raise NotFound(f"{spec(provider).label} is not configured yet")
+        key = _decrypt(row)
+    match = None
+    if model:
+        match = next((m for m in list_models(provider, key) if m["id"] == model), None)
+        if match is None:
+            raise ValidationFailed(f"Model '{model}' is not available for this key", details={"field": "priorityModel"}, code="unknown_model")
+        _ping(provider, key, model)
+    with unit_of_work() as uow:
+        row = get_row(uow, provider)
+        if row is None:
+            raise NotFound(f"{spec(provider).label} is not configured yet")
+        before = row.priority_model
+        row.priority_model, row.priority_model_provider = (model, match["provider"]) if match else (None, None)
+        row.updated_by = actor
+        uow.session.flush()
+        audit.record(uow, "llm.priority_model", "llm_provider", row.id,
+                     {"provider": provider, "from": before, "to": row.priority_model}, actor=actor)
+        uow.after_commit(lambda: cache.bump("llm"))
     return row
 
 

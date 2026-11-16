@@ -3,6 +3,7 @@ failures into retryable vs permanent happens here so the task layer stays provid
 
 import logging
 import random
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -98,6 +99,11 @@ class FakeProvider:
     def generate(self, prompt: str, *, system: str | None = None, max_tokens: int = 1024) -> ResearchOutput:
         if random.random() < get_settings().fake_failure_rate:
             raise RetryableProviderError("fake transient failure", retry_after=0.1)
+        if "Why now?" in prompt:  # PRIORITY ACTIONS: one entry per company block, in the order given
+            names = re.findall(r"^(.+)\nCategory:", prompt, flags=re.M)
+            text = "\n\n".join(f"{n}\nWhy now? Fresh {n.title()} trigger needs connectivity now.\nAction: Pitch SD-WAN and Managed SOC to the CIO."
+                                for n in names)
+            return ResearchOutput(text=text, tokens_in=max(1, len(prompt) // 4), tokens_out=40 * max(len(names), 1), cost=0.0)
         text = "Focus first on the accounts with fresh expansion news; each has a clear TTBS angle and a named next step below."
         return ResearchOutput(text=text, tokens_in=max(1, len(prompt) // 4), tokens_out=24, cost=0.0)
 
@@ -349,9 +355,10 @@ def _build(provider: str, api_key: str, model: str) -> ResearchProvider:
     return registry()[provider].build(api_key, model)
 
 
-def get_provider(uow: "UnitOfWork | None" = None) -> ResearchProvider:
+def get_provider(uow: "UnitOfWork | None" = None, purpose: str = "research") -> ResearchProvider:
     """Provider for new research calls: the ONE active AI saved in the database (key + model).
-    Nothing comes from the environment except LLM_PROVIDER=fake for offline dev/tests."""
+    Nothing comes from the environment except LLM_PROVIDER=fake for offline dev/tests.
+    `purpose="priority"`: the same AI with its priority-actions model, when one is set."""
     if get_settings().llm_provider == "fake":
         return _fake()
     from app.services import llm_config  # avoid import cycle
@@ -359,7 +366,8 @@ def get_provider(uow: "UnitOfWork | None" = None) -> ResearchProvider:
     cfg = llm_config.load_active(uow)
     if cfg is None:
         raise NotConfigured("No research AI is active: add an API key and choose a model under Providers & channels")
-    return _build(cfg.provider, cfg.api_key, cfg.model)
+    model = cfg.priority_model if purpose == "priority" and cfg.priority_model else cfg.model
+    return _build(cfg.provider, cfg.api_key, model)
 
 
 def clear_cache() -> None:

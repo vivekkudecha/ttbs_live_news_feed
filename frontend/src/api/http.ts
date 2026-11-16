@@ -16,6 +16,7 @@ import type {
   AiProvider,
   LlmModelList,
   LlmSettings,
+  PamPriorities,
   ProcessEvent,
   QueueStats,
   RunCosts,
@@ -177,6 +178,7 @@ export const backend = {
   companyRunTimeline: (id: string, companyId: string) => request<LogoTimeline>("GET", `/runs/${id}/board/companies/${companyId}/timeline`),
   pamDigest: (id: string, pamId: string) => request<DigestRender>("GET", `/runs/${id}/board/pams/${pamId}/digest`),
   boardRetry: (id: string, body: { resultIds?: string[]; pamIds?: string[] }) => request<{ requeued: number }>("POST", `/runs/${id}/board/retry`, body),
+  retryPriorities: (id: string, pamId: string) => request<PamPriorities>("POST", `/runs/${id}/board/pams/${pamId}/priorities/retry`),
   boardResend: (id: string, body: { pamIds: string[]; channel?: DeliveryChannel }) =>
     request<{ requeued: number; skipped: number }>("POST", `/runs/${id}/board/resend`, body),
   runCosts: (id: string) => request<RunCosts>("GET", `/runs/${id}/costs`),
@@ -192,6 +194,7 @@ export const backend = {
   llmSettings: () => request<LlmSettings>("GET", "/settings/llm"),
   llmModels: (p: AiProvider, apiKey?: string) => request<LlmModelList>("POST", `/settings/llm/${p}/models`, apiKey ? { apiKey } : {}),
   saveLlmConfig: (p: AiProvider, v: { apiKey?: string; model: string }) => request<LlmSettings>("PUT", `/settings/llm/${p}`, v),
+  savePriorityModel: (p: AiProvider, model: string | null) => request<LlmSettings>("PUT", `/settings/llm/${p}/priority-model`, { model }),
   activateLlm: (p: AiProvider) => request<LlmSettings>("POST", `/settings/llm/${p}/activate`),
   testLlmConfig: (p: AiProvider) => request<LlmSettings & { ok: boolean; error: string | null }>("POST", `/settings/llm/${p}/test`),
   removeLlmConfig: (p: AiProvider) => request<void>("DELETE", `/settings/llm/${p}`),

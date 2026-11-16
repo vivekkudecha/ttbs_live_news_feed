@@ -23,6 +23,7 @@ import { useActivateLlm, useLlmSettings, useLoadLlmModels, useRemoveLlmConfig, u
 import { errorMessage } from "@/api/http"
 import type { AiProvider, LlmConfig, LlmModel } from "@/api/types"
 import { ownerLabel, shortModel } from "@/lib/models"
+import { PriorityModelPicker } from "./PriorityModelPicker"
 
 const META: Record<AiProvider, { icon: typeof Bot; description: string; keyPlaceholder: string; keyHelp: string }> = {
   perplexity: {
@@ -250,6 +251,7 @@ function ProviderCard({ cfg: c, activeLabel }: { cfg: LlmConfig; activeLabel: st
                 <AlertDescription>{c.lastCheckError}</AlertDescription>
               </Alert>
             )}
+            <PriorityModelPicker c={c} />
             {(
               <div className="flex flex-wrap gap-2">
                 {!c.active && (

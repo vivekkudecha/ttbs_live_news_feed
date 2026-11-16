@@ -34,7 +34,7 @@ from app.db.models import (
     Run,
 )
 from app.db.session import UnitOfWork
-from app.research.prompts import PROMPT_VERSION
+from app.research.prompts import PRIORITY_RULES, PROMPT_VERSION
 from app.services import accounts, runs
 from app.services import finops as finops_svc
 
@@ -779,7 +779,9 @@ def templates(uow: UnitOfWork) -> list[dict[str, Any]]:
                 {"key": "opportunity", "label": "Opportunity type", "instruction": "1-2 short lines; TTBS offering"},
                 {"key": "outreach", "label": "Recommended outreach approach", "instruction": "1-2 short lines; sales action"},
             ],
-            "priorityPrompt": v.system_instruction,
+            "systemInstruction": v.system_instruction,
+            "priorityRules": v.priority_rules or PRIORITY_RULES,  # PRIORITY ACTIONS (services/priorities.py)
+            "priorityLimit": v.priority_limit or 0,
             "excelColumns": ["Company", "Category", "Key signals", "Opportunity type", "Recommended outreach approach", "Sources"],
         }
 

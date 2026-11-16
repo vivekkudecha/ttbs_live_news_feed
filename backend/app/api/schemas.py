@@ -175,6 +175,10 @@ def notification_out(n: Notification) -> dict[str, Any]:
     }
 
 
+class LlmPriorityModelIn(In):
+    model: str | None = Field(default=None, max_length=200)  # empty = use the research model
+
+
 class LlmModelsIn(In):
     # Omit to list models with the saved key. Never echoed back or logged.
     api_key: str | None = Field(default=None, max_length=400)
@@ -197,7 +201,8 @@ def llm_settings_out(rows: dict[str, LlmProviderConfig], labels: dict[str, str],
 def llm_config_out(row: LlmProviderConfig | None, *, provider: str, label: str) -> dict[str, Any]:
     base: dict[str, Any] = {"provider": provider, "label": label, "configured": row is not None, "active": bool(row and row.active)}
     if row is None:
-        return base | {"keyHint": None, "model": None, "modelProvider": None, "verifiedAt": None,
+        return base | {"keyHint": None, "model": None, "modelProvider": None, "verifiedAt": None, "priorityModel": None,
+                       "priorityModelProvider": None,
                        "lastCheckOk": None, "lastCheckError": None, "lastCheckLatencyMs": None, "updatedAt": None, "updatedBy": None}
     return base | {
         "keyHint": row.key_hint,
@@ -209,6 +214,8 @@ def llm_config_out(row: LlmProviderConfig | None, *, provider: str, label: str) 
         "lastCheckLatencyMs": row.last_check_latency_ms,
         "updatedAt": iso(row.updated_at),
         "updatedBy": row.updated_by,
+        "priorityModel": row.priority_model,
+        "priorityModelProvider": row.priority_model_provider,
     }
 
 

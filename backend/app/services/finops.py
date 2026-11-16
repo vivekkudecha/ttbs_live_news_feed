@@ -101,6 +101,17 @@ def record_message(uow: UnitOfWork, *, notification_id: int, run: Run, pam_id: i
     metrics.COST_USD.labels(COST_MESSAGING, channel).inc(price)
 
 
+def record_ai_call(uow: UnitOfWork, *, run: Run, pam_id: int | None, outcome: str, provider: str, model: str | None, out: Any) -> None:
+    """An AI call made for a PAM beyond research (e.g. PRIORITY ACTIONS), with the provider's usage breakdown."""
+    cost = float(out.cost or 0.0)
+    uow.session.add(CostEntry(
+        ts=utcnow(), category=COST_LLM, provider=provider, model=model, run_id=run.id, import_id=run.import_id, pam_id=pam_id,
+        units=1, tokens_in=int(out.tokens_in or 0), tokens_out=int(out.tokens_out or 0), cost=cost, outcome=outcome,
+        **_usage_cols(getattr(out, "usage", None)),
+    ))
+    metrics.COST_USD.labels(COST_LLM, provider).inc(cost)
+
+
 def record_email_ai(uow: UnitOfWork, *, notification_id: int, run: Run, pam_id: int, meta: dict[str, Any]) -> None:
     """The AI summary written for one email digest (LLM cost, attributed to the run and PAM)."""
     cost = float(meta.get("cost") or 0.0)
@@ -181,7 +192,7 @@ def _sums():
     return (
         func.coalesce(func.sum(case((llm, CostEntry.cost), else_=0.0)), 0.0),
         func.coalesce(func.sum(case((CostEntry.category == COST_MESSAGING, CostEntry.cost), else_=0.0)), 0.0),
-        func.coalesce(func.sum(case((llm & CostEntry.cached.is_(False), 1), else_=0)), 0),
+        func.coalesce(func.sum(case((llm & CostEntry.cached.is_(False) & CostEntry.company_id.is_not(None), 1), else_=0)), 0),
         func.coalesce(func.sum(case((llm & CostEntry.cached.is_(True), 1), else_=0)), 0),
         func.coalesce(func.sum(CostEntry.saved), 0.0),
         func.coalesce(func.sum(CostEntry.tokens_in), 0),

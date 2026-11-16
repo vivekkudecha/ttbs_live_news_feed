@@ -64,6 +64,7 @@ import { cn } from "@/lib/utils"
 import type { BoardLogo, Page } from "@/api/types"
 import { DIGEST_STATUS, GROUP_SORT, LOGO_SORT, RESULT_STATUS, categoryLabel, download, n, pamKey, toCsv } from "./board-utils"
 import { boardColumns, type BoardCtx, type BoardRow, type PamRow } from "./columns"
+import { PriorityActions } from "./PriorityActions"
 import { DigestPreviewDialog } from "./DigestPreviewDialog"
 import { useLogoDrawer } from "@/components/logo/logo-drawer-context"
 import { useBoardUrl } from "./useBoardUrl"
@@ -137,7 +138,8 @@ export function RunBoard({
     queryFn: () => backend.boardGroups(runId, { ...base, page: url.page, pageSize: size, sort: groupSort?.id, desc: groupSort?.desc }),
     placeholderData: keepPreviousData,
     enabled: grouped,
-    refetchInterval: poll,
+    // Priority actions can still be being written just after the run finishes: keep polling until they are.
+    refetchInterval: (q) => poll || (q.state.data?.rows.some((g) => g.priorities?.status === "pending") ? 4_000 : false),
   })
   const flat = useQuery({
     queryKey: ["board", runId, "logos", base, logoSort, url.page, size],
@@ -180,7 +182,9 @@ export function RunBoard({
       const page = subByKey.get(k)
       if (!page) return { ...g, subRows: [{ kind: "loading", id: `loading-${k}` }] }
       const more = page.total > page.rows.length ? [{ kind: "more" as const, id: `more-${k}`, pamKey: k, shown: page.rows.length, total: page.total }] : []
-      return { ...g, subRows: [...page.rows, ...more] }
+      // PRIORITY ACTIONS close the PAM's group, as they close the PAM's digest.
+      const pri = g.priorities && g.pamId ? [{ kind: "priorities" as const, id: `priorities-${k}`, pamId: g.pamId, data: g.priorities }] : []
+      return { ...g, subRows: [...page.rows, ...more, ...pri] }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grouped, flat.data, groupRows, expanded, ...subs.map((s) => s.data)])
@@ -506,6 +510,8 @@ export function RunBoard({
             dataKey={viewKey}
             onRowClick={(r) => (r.kind === "pam" ? toggle(pamKey(r)) : r.kind === "logo" ? openLogo(r) : undefined)}
             onMore={(k, shown) => setExpanded((e) => ({ ...e, [k]: shown + SUB_PAGE }))}
+            runId={runId}
+            onOpenCompany={(companyId) => drawer.open({ companyId, runId, siblings: logoOrder })}
             activeId={activeLogo}
             empty={
               <EmptyState icon={Search} title="Nothing matches">
@@ -634,9 +640,13 @@ function BoardTable({
   dataKey,
   onRowClick,
   onMore,
+  runId,
+  onOpenCompany,
   activeId,
   empty,
 }: {
+  runId: string
+  onOpenCompany: (companyId: string) => void
   table: ReturnType<typeof useReactTable<BoardRow>>
   density: "comfortable" | "compact"
   dataKey: string
@@ -712,6 +722,14 @@ function BoardTable({
                         <Skeleton className="h-8 w-2/3" />
                         <Skeleton className="h-8 w-1/2 opacity-70" />
                       </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              if (r.kind === "priorities")
+                return (
+                  <TableRow key={row.id} className="hover:bg-transparent">
+                    <TableCell colSpan={span} className="py-2 pl-14 pr-4">
+                      <PriorityActions runId={runId} pamId={r.pamId} data={r.data} onOpenCompany={onOpenCompany} />
                     </TableCell>
                   </TableRow>
                 )

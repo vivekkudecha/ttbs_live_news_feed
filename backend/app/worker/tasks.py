@@ -68,7 +68,7 @@ def research_company(result_id: int) -> str:
            "provider": provider.key, "model": provider.model}
 
     # Model is part of the key: switching models must not serve another model's answers.
-    cache_key = f"research:{name_key}:{window_end.isoformat()}:p{prompt.version}:{provider.key}:{provider.model}"
+    cache_key = f"research:{name_key}:{window_end.isoformat()}:p{prompt.cache_version}:{provider.key}:{provider.model}"
     hit = cache.get_json(cache_key)
     if hit:
         with unit_of_work() as uow:
@@ -172,6 +172,14 @@ def _retry_or_fail(result_id: int, attempt: int, error: str, retry_after: float 
     if ctx:
         metrics.RESEARCH_ATTEMPTS.labels(ctx["provider"], ctx["model"], telemetry.RETRY).inc()
     return "retry"
+
+
+@celery_app.task(name="research.pam_priorities")
+def pam_priorities(run_id: int, pam_id: int) -> str:
+    """PRIORITY ACTIONS for one PAM once its research is done; then its digest (services/priorities.py)."""
+    from app.services import priorities
+
+    return priorities.generate(run_id, pam_id)
 
 
 @celery_app.task(name="notify.send")

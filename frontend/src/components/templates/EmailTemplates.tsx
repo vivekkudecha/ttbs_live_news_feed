@@ -53,6 +53,7 @@ const VARIABLES: [string, string][] = [
   ["{{ s.opportunity_text | rich }} {{ s.outreach_text | rich }}", "Opportunity and outreach without inline URLs"],
   ["{% for l in s.links %}{{ l.label }} {{ l.url }}{% endfor %}", "Sources plus URLs from the text, each once"],
   ["{{ ai_summary }}", "AI summary (empty when off or failed)"],
+  ["{% for a in priority_actions %}", "PRIORITY ACTIONS, strongest first: a.company, a.why_now, a.action (empty when none)"],
   ["{{ generated_at }}", "Send date"],
 ]
 

@@ -86,6 +86,7 @@ class Settings(BaseSettings):
     # Logos that still fail after their retries (outage, 5xx) are retried again automatically, the whole
     # run at once, after 10, 30, 90 minutes (first delay x 3^round).
     research_recovery_rounds: int = 3
+    priority_max_output_tokens: int = 4_000  # PRIORITY ACTIONS answer (one per PAM)
     research_recovery_first_delay_min: int = 10
 
     # Master key for encrypting stored credentials (see app/core/secrets.py).

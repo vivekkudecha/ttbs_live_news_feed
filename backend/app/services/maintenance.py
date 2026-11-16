@@ -61,7 +61,7 @@ def recover_stuck() -> dict[str, int]:
     now = utcnow()
     stale = now - timedelta(minutes=s_.stuck_after_minutes)
     stats = {"runs": 0, "results_running": 0, "results_pending": 0, "notifications": 0, "imports": 0, "file_checks": 0,
-             "previews_discarded": 0}
+             "previews_discarded": 0, "priorities": 0}
     with unit_of_work() as uow:
         s = uow.session
         # Dataset uploads whose worker died or whose queue message was lost: resume from the cursor.
@@ -110,6 +110,20 @@ def recover_stuck() -> dict[str, int]:
             s.execute(update(ResearchResult).where(ResearchResult.id.in_(pending)).values(enqueued_at=now))
             runs._enqueue_research(uow, pending)
             stats["results_pending"] = len(pending)
+
+        # PRIORITY ACTIONS whose task was lost (the PAM's digest waits for them).
+        from app.db.models import PRIORITY_PENDING, PamPriority
+
+        lost = s.execute(select(PamPriority.run_id, PamPriority.pam_id)
+                         .where(PamPriority.status == PRIORITY_PENDING, PamPriority.updated_at <= stale).limit(BATCH)).all()
+        if lost:
+            from app.worker.tasks import pam_priorities
+
+            # Touch updated_at (onupdate) so the next sweep waits again instead of re-queuing every tick.
+            s.execute(update(PamPriority).where(PamPriority.status == PRIORITY_PENDING, PamPriority.updated_at <= stale,
+                                                PamPriority.run_id.in_([r for r, _ in lost])).values(attempts=PamPriority.attempts))
+            uow.after_commit(lambda: [pam_priorities.apply_async((r, p)) for r, p in lost])
+            stats["priorities"] = len(lost)
 
         # Notifications: stuck in 'sending', or pending and due (covers lost messages and backoff retries).
         # A stuck email also loses its quota reservation, so the dispatcher hands it out again.

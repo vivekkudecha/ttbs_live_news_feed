@@ -159,9 +159,11 @@ def test_cost_ledger_and_report(client, monkeypatch):
 
     with unit_of_work() as uow:
         ledger = uow.session.scalars(select(CostEntry)).all()
-    llm = [e for e in ledger if e.category == "llm"]
+    llm = [e for e in ledger if e.category == "llm" and e.outcome != "priority_actions"]
     msgs = [e for e in ledger if e.category == "messaging"]
     assert len(llm) == 6 and sum(e.cached for e in llm) == 3 and len(msgs) == 4
+    # PRIORITY ACTIONS: one AI call per PAM in the first run; the cached re-run reuses those answers.
+    assert sorted(e.run_id for e in ledger if e.outcome == "priority_actions") == [int(run1)] * 2
     assert all(e.import_id == int(imp["id"]) and e.pam_id for e in ledger)
 
     f = client.get("/api/v1/finops").json()
@@ -180,7 +182,7 @@ def test_cost_ledger_and_report(client, monkeypatch):
     csv = client.get("/api/v1/finops/ledger.csv")
     assert csv.headers["content-type"].startswith("text/csv") and "attachment" in csv.headers["content-disposition"]
     lines = csv.text.lstrip("﻿").splitlines()
-    assert lines[0].startswith("ts,category,provider") and len(lines) == 11
+    assert lines[0].startswith("ts,category,provider") and len(lines) == 13  # 6 research + 4 messages + 2 priority actions
 
     assert client.get("/api/v1/finops?from=2026-13-01").status_code == 422
     assert client.get("/api/v1/finops?from=2026-11-05&to=2026-11-01").status_code == 422
@@ -205,18 +207,21 @@ def test_ledger_keeps_the_providers_usage_breakdown(client, monkeypatch):
     research(client, imp["id"], [])  # all cache hits: no tokens, nothing billed
 
     with unit_of_work() as uow:
-        paid = uow.session.scalars(select(CostEntry).where(CostEntry.cached.is_(False))).all()
+        paid = uow.session.scalars(select(CostEntry).where(CostEntry.cached.is_(False), CostEntry.company_id.is_not(None))).all()
     assert len(paid) == 3 and {(e.cache_read_tokens, e.cache_write_tokens, e.tool_calls, e.cost_source) for e in paid} == {(9000, 300, 3, "provider")}
     assert {(e.input_cost, e.output_cost, e.cache_cost, e.tool_cost) for e in paid} == {(0.003, 0.0035, 0.0013, 0.015)}
-    run = client.get("/api/v1/finops").json()["byRun"][0]
-    assert (run["provider"], run["model"], run["tokensIn"] + run["tokensOut"]) == ("fake", "fake-model", 38100)
+    with unit_of_work() as uow:
+        pri = sum(e.tokens_in + e.tokens_out for e in uow.session.scalars(select(CostEntry).where(CostEntry.outcome == "priority_actions")))
+    run = client.get("/api/v1/finops").json()["byRun"][0]  # the run's tokens: research plus its PAMs' priority actions
+    assert (run["provider"], run["model"], run["tokensIn"] + run["tokensOut"]) == ("fake", "fake-model", 38100 + pri) and pri > 0
     u = run["usage"]  # the token popover: what the provider reported, added up
     assert (u["cacheRead"], u["cacheWrite"], u["toolCalls"], u["untrackedCalls"], u["estimatedCost"]) == (27000, 900, 9, 0, 0.0)
     assert (u["inputCost"], u["outputCost"], u["cacheCost"], u["toolCost"]) == (0.009, 0.0105, 0.0039, 0.045)
 
     lines = client.get("/api/v1/finops/ledger.csv").text.lstrip("\ufeff").splitlines()
     head = lines[0].split(",")
-    paid = [dict(zip(head, ln.split(","), strict=True)) for ln in lines[1:] if ",no," in ln]
+    rows = [dict(zip(head, ln.split(","), strict=True)) for ln in lines[1:]]
+    paid = [r for r in rows if r["cached"] == "no" and r["outcome"] != "priority_actions"]
     assert len(paid) == 3 and {p["cost_source"] for p in paid} == {"provider"}
     assert {p["cache_read_tokens"] for p in paid} == {"9000"} and all(p["response_id"].startswith("resp_") for p in paid)
 

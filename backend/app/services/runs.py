@@ -452,7 +452,11 @@ def pam_digest(uow: UnitOfWork, run: Run, pam_id: int) -> tuple[Pam | None, list
         select(ResearchResult).where(*in_run, ResearchResult.pam_id == pam_id, ResearchResult.status == RES_SIGNAL).order_by(ResearchResult.id)
     ))
     total = s.scalar(select(func.count(ResearchResult.id)).where(*in_run, ResearchResult.pam_id == pam_id)) or 0
-    return pam, signals, build_digest(run, pam, signals, total)
+    payload = build_digest(run, pam, signals, total)
+    from app.services import priorities  # (imports this module)
+
+    payload["priority_actions"] = priorities.current(uow, run, pam_id, signals)  # PRIORITY ACTIONS, when written
+    return pam, signals, payload
 
 
 def _eligibility(pam: Pam | None, channel: str, has_signals: bool, send_when_no_signals: bool) -> tuple[str, str | None, str | None]:
@@ -480,6 +484,12 @@ def maybe_queue_pam_digest(uow: UnitOfWork, run: Run, pam_id: int) -> list[int]:
     if open_count:
         return []
     pam, signals, payload = pam_digest(uow, run, pam_id)
+    from app.services import priorities
+
+    actions = priorities.gate(uow, run, pam_id, signals)
+    if actions is None:
+        return []  # PRIORITY ACTIONS are being written; that task writes the digest when done
+    payload["priority_actions"] = actions
     total = payload["total"]
     from app.services import email_config  # delivery policy is set in the UI
 
@@ -526,7 +536,8 @@ def maybe_queue_pam_digest(uow: UnitOfWork, run: Run, pam_id: int) -> list[int]:
 
 def _same_digest(a: dict[str, Any] | None, b: dict[str, Any]) -> bool:
     a = a or {}
-    return a.get("signals") == b.get("signals") and a.get("total") == b.get("total") and a.get("items") == b.get("items")
+    return (a.get("signals") == b.get("signals") and a.get("total") == b.get("total") and a.get("items") == b.get("items")
+            and (a.get("priority_actions") or []) == (b.get("priority_actions") or []))
 
 
 def _refresh_digest(uow: UnitOfWork, run: Run, pam_id: int, channel: str, payload: dict[str, Any],

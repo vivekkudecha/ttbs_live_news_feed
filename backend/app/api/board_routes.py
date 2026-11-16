@@ -58,6 +58,14 @@ def board_digest(run_id: int, pam_id: int) -> dict[str, Any]:
         return run_board.digest_preview(uow, run_board.get_run(uow, run_id), pam_id)
 
 
+@router.post("/runs/{run_id}/board/pams/{pam_id}/priorities/retry")
+def board_priorities_retry(run_id: int, pam_id: int, actor: str = Depends(current_actor)) -> dict[str, Any] | None:
+    from app.services import priorities
+
+    with unit_of_work() as uow:
+        return priorities.retry(uow, run_board.get_run(uow, run_id).id, pam_id, actor)
+
+
 class RetryIn(BaseModel):
     result_ids: list[str] = Field(default_factory=list, alias="resultIds", max_length=run_board.MAX_BULK)
     pam_ids: list[str] = Field(default_factory=list, alias="pamIds", max_length=run_board.MAX_BULK)

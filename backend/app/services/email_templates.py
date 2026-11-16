@@ -135,6 +135,9 @@ def context(payload: dict[str, Any], ai_summary: str = "") -> dict[str, Any]:
         "signals": [_sections(i) for i in items if isinstance(i, dict)],
         "counts": {"signals": payload.get("signals", len(items)), "total": payload.get("total", len(items))},
         "ai_summary": ai_summary,
+        # PRIORITY ACTIONS (services/priorities.py), strongest first: shown after all signals.
+        "priority_actions": [{"rank": a.get("rank"), "company": a.get("company") or "", "why_now": a.get("whyNow") or "",
+                              "action": a.get("action") or ""} for a in payload.get("priority_actions") or [] if isinstance(a, dict)],
         "generated_at": utcnow().strftime("%d %b %Y"),
     }
 
@@ -151,6 +154,12 @@ SAMPLE_PAYLOAD: dict[str, Any] = {
         {"company": "Havells India", "category": "Digital transformation",
          "key_signals": "ERP migration to cloud announced", "opportunity": "**Cloud connect** and SIP trunking",
          "outreach": "Email the IT head with a migration case study", "sources": []},
+    ],
+    "priority_actions": [
+        {"rank": 1, "company": "Pine Labs Pvt Ltd", "whyNow": "Opening a new Pune campus for 1,200 staff; the site needs links from day one.",
+         "action": "Approach the CIO with ILL + SD-WAN iFLX and Managed SOC for the new campus."},
+        {"rank": 2, "company": "Havells India", "whyNow": "ERP moving to the cloud this quarter, raising uptime and security needs.",
+         "action": "Pitch Smart Cloud connectivity and CloudMon to the IT head with a migration case study."},
     ],
 }
 
@@ -252,7 +261,10 @@ def ensure_default(uow: UnitOfWork) -> None:
 # Earlier built-in bodies (sha256 of html_tpl, text_tpl). A template still exactly equal to one of them
 # was never edited, so it moves to the current built-in body (recorded as a new version).
 _PREVIOUS_BUILTINS = {("af7cddfacabfa4287dc6f231be20c6d5c276b234154d0cd280f916a91fae9fa5",
-                       "a822bf84b7f737d554c4ec0c459b3dad859204a4d06ce7ed382bb4f95a57326d")}
+                       "a822bf84b7f737d554c4ec0c459b3dad859204a4d06ce7ed382bb4f95a57326d"),
+                      # before PRIORITY ACTIONS were added at the end
+                      ("ca9f0f8d42927c6c5be844e00b7b5d868890c9a700890e95b27042dd24c1565b",
+                       "ef1ff37e4e2e106a99c2804de739e617b7ea1360cd067082d4133c22b6e301b9")}
 _builtin_checked = False
 
 
@@ -275,7 +287,7 @@ def _upgrade_builtin(uow: UnitOfWork) -> None:
                 t.version += 1
                 t.updated_by = "system"
                 s.flush()
-                _version(uow, t, "system", "Built-in default updated: findings shown as sections")
+                _version(uow, t, "system", "Built-in default updated: findings as sections, priority actions at the end")
                 s.flush()
             uow.after_commit(lambda: cache.bump("email"))
         except IntegrityError:  # another process upgraded it first
@@ -466,6 +478,22 @@ _DEFAULT_HTML = """<!doctype html>
     </table>
   </td></tr>
   {% endfor %}
+  {% if priority_actions %}
+  <tr><td style="padding:16px 28px 8px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff7f0;border:1px solid #f6d9c2;border-radius:10px">
+      <tr><td style="padding:16px 18px;font-size:14px;line-height:1.55">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#c25e14">Priority actions</div>
+        {% for a in priority_actions %}
+        <div style="{{ 'margin-top:10px' if loop.first else 'margin-top:14px;padding-top:12px;border-top:1px solid #f6d9c2' }}">
+          <div style="font-weight:700;text-transform:uppercase;letter-spacing:.01em">{{ a.company }}</div>
+          {% if a.why_now %}<div style="margin-top:3px"><strong style="color:#c25e14">Why now?</strong> {{ a.why_now }}</div>{% endif %}
+          {% if a.action %}<div style="margin-top:2px"><strong style="color:#18865a">Action:</strong> {{ a.action }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </td></tr>
+    </table>
+  </td></tr>
+  {% endif %}
   <tr><td style="padding:20px 28px 28px;font-size:12px;color:#586777">
     Sent automatically by TTBS Live News Feed{% if run.label %} · {{ run.label }}{% endif %}. Reply to this email if something looks wrong.
   </td></tr>
@@ -505,12 +533,24 @@ Sources:
 {% endif %}
 
 {% endfor %}
+{% if priority_actions %}
+PRIORITY ACTIONS
+
+{% for a in priority_actions %}
+{{ a.company | upper }}
+{% if a.why_now %}Why now? {{ a.why_now }}
+{% endif %}{% if a.action %}Action: {{ a.action }}
+{% endif %}
+
+{% endfor %}
+{% endif %}
 """
 
 
 DEFAULT_TEMPLATE: dict[str, Any] = {
     "name": "PAM digest (default)",
-    "description": "Built-in digest: greeting, optional AI summary, one card per account with its key signals, opportunity, outreach and sources.",
+    "description": ("Built-in digest: greeting, optional AI summary, one card per account with its key signals, opportunity, "
+                    "outreach and sources, then the PAM's priority actions."),
     "subject_tpl": "TTBS signals: {{ counts.signals }} of your {{ counts.total }} accounts need attention ({{ run.window_end }})",
     "html_tpl": _DEFAULT_HTML,
     "text_tpl": _DEFAULT_TEXT,

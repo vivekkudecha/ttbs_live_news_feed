@@ -1,6 +1,7 @@
 /** A PAM's email digest for the run: exactly as sent, or (not sent yet / outdated) rendered now from the current results. */
 import { Mail, Send } from "lucide-react"
 import { StatusBadge } from "@/components/common/StatusBadge"
+import { EmailFrame } from "@/components/common/EmailFrame"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -67,7 +68,7 @@ export function DigestPreviewDialog({
           ) : !d ? (
             <Skeleton className="h-[32rem]" />
           ) : d.html ? (
-            <iframe title="Digest email" sandbox="" srcDoc={d.html} className="h-[32rem] w-full rounded-lg border bg-white" />
+            <EmailFrame title="Digest email" html={d.html} />
           ) : (
             <pre className="whitespace-pre-wrap rounded-lg border p-4 text-sm">{d.text}</pre>
           )}

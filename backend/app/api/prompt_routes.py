@@ -9,7 +9,7 @@ from app.api import schemas as sch
 from app.api.deps import current_actor
 from app.db.models import ResearchPromptVersion
 from app.db.session import unit_of_work
-from app.research.prompts import PLACEHOLDERS, REQUIRED_LABELS, REQUIRED_PLACEHOLDERS, default_spec
+from app.research.prompts import PLACEHOLDERS, PRIORITY_RULES, REQUIRED_LABELS, REQUIRED_PLACEHOLDERS, default_spec
 from app.services import research_prompts
 
 router = APIRouter(prefix="/api/v1")
@@ -23,6 +23,8 @@ class PromptIn(sch.In):
     output_rules: str = Field(max_length=research_prompts.MAX_TEXT)
     categories: list[str] = Field(max_length=50)
     window_days: int
+    priority_rules: str | None = Field(default=None, max_length=research_prompts.MAX_TEXT)
+    priority_limit: int = 0
     note: str | None = Field(default=None, max_length=500)
 
 
@@ -40,18 +42,20 @@ def version_out(v: ResearchPromptVersion, full: bool = True) -> dict[str, Any]:
     out: dict[str, Any] = {
         "version": v.version, "active": v.active, "note": v.note, "createdAt": iso(v.created_at), "createdBy": v.created_by,
         "activatedAt": iso(v.activated_at), "activatedBy": v.activated_by, "windowDays": v.window_days,
-        "categories": list(v.categories or []),
+        "categories": list(v.categories or []), "priorityLimit": v.priority_limit or 0,
     }
     if full:
         out |= {"systemInstruction": v.system_instruction, "researchPrompt": v.research_prompt,
-                "ttbsContext": v.ttbs_context, "outputRules": v.output_rules}
+                "ttbsContext": v.ttbs_context, "outputRules": v.output_rules,
+                "priorityRules": v.priority_rules or PRIORITY_RULES}
     return out
 
 
 def _defaults() -> dict[str, Any]:
     d = default_spec()
     return {"systemInstruction": d.system, "researchPrompt": d.research_prompt, "ttbsContext": d.ttbs_context,
-            "outputRules": d.output_rules, "categories": list(d.categories), "windowDays": d.window_days}
+            "outputRules": d.output_rules, "categories": list(d.categories), "windowDays": d.window_days,
+            "priorityRules": d.priority_rules, "priorityLimit": d.priority_limit}
 
 
 @router.get("/research-prompt")
@@ -64,7 +68,8 @@ def get_prompt() -> dict[str, Any]:
             "versions": [version_out(v, full=False) for v in versions],
             "placeholders": [{"key": k, "description": d, "required": k in REQUIRED_PLACEHOLDERS} for k, d in PLACEHOLDERS.items()],
             "requiredLabels": list(REQUIRED_LABELS),
-            "limits": {"windowDays": list(research_prompts.WINDOW_DAYS), "maxCategories": research_prompts.MAX_CATEGORIES},
+            "limits": {"windowDays": list(research_prompts.WINDOW_DAYS), "maxCategories": research_prompts.MAX_CATEGORIES,
+                       "priorityLimit": list(research_prompts.PRIORITY_LIMIT)},
             "defaults": _defaults(),
         }
 

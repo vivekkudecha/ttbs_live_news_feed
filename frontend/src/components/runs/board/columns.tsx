@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { fmtDateTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { BoardFacets, BoardLogo, BoardPam } from "@/api/types"
+import type { BoardFacets, BoardLogo, BoardPam, PamPriorities } from "@/api/types"
 import { Avatar, DigestBadges, Findings, OutcomeBar } from "./cells"
 import { DIGEST_STATUS, RESULT_STATUS, categoryLabel, n, pamKey } from "./board-utils"
 import type { BoardView } from "./useBoardUrl"
@@ -42,7 +42,9 @@ import type { BoardView } from "./useBoardUrl"
 export type PamRow = BoardPam & { subRows?: BoardRow[] }
 export type MoreRow = { kind: "more"; id: string; pamKey: string; shown: number; total: number }
 export type LoadingRow = { kind: "loading"; id: string }
-export type BoardRow = PamRow | BoardLogo | MoreRow | LoadingRow
+/** PRIORITY ACTIONS panel, after a PAM's logos when the group is open. */
+export type PrioritiesRow = { kind: "priorities"; id: string; pamId: string; data: PamPriorities }
+export type BoardRow = PamRow | BoardLogo | MoreRow | LoadingRow | PrioritiesRow
 
 export interface BoardCtx {
   view: BoardView

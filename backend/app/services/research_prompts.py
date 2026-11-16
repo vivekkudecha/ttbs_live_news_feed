@@ -19,6 +19,7 @@ from app.db.models import ResearchPromptVersion
 from app.db.session import UnitOfWork, unit_of_work
 from app.research.prompts import (
     PLACEHOLDERS,
+    PRIORITY_RULES,
     REQUIRED_LABELS,
     REQUIRED_PLACEHOLDERS,
     TOKEN,
@@ -29,16 +30,32 @@ from app.services import audit
 
 log = logging.getLogger(__name__)
 
-FIELDS = ("system_instruction", "research_prompt", "ttbs_context", "output_rules", "categories", "window_days")
+# What research asks (a change here is a new research_version: cached answers no longer apply) ...
+RESEARCH_FIELDS = ("system_instruction", "research_prompt", "ttbs_context", "output_rules", "categories", "window_days")
+# ... and what PRIORITY ACTIONS use (a change keeps cached research answers).
+FIELDS = (*RESEARCH_FIELDS, "priority_rules", "priority_limit")
+PRIORITY_LIMIT = (0, 50)  # 0 = one action for every signal
 MAX_TEXT = 50_000
 MAX_SYSTEM = 4_000
 MAX_CATEGORIES = 20
 WINDOW_DAYS = (1, 90)
 
+def _value(row: ResearchPromptVersion, f: str) -> Any:
+    """A stored field, with the built-in default for versions saved before priority actions existed."""
+    v = getattr(row, f)
+    if f == "priority_rules":
+        return v or PRIORITY_RULES
+    if f == "priority_limit":
+        return v or 0
+    return v
+
+
 def to_spec(row: ResearchPromptVersion) -> PromptSpec:
     return PromptSpec(version=row.version, system=row.system_instruction, research_prompt=row.research_prompt,
                       ttbs_context=row.ttbs_context, output_rules=row.output_rules,
-                      categories=tuple(row.categories or ()), window_days=row.window_days)
+                      categories=tuple(row.categories or ()), window_days=row.window_days,
+                      priority_rules=_value(row, "priority_rules"), priority_limit=_value(row, "priority_limit"),
+                      research_version=row.research_version or row.version)
 
 
 def ensure_default(uow: UnitOfWork) -> None:
@@ -53,7 +70,8 @@ def ensure_default(uow: UnitOfWork) -> None:
             s.add(ResearchPromptVersion(
                 version=d.version, system_instruction=d.system, research_prompt=d.research_prompt,
                 ttbs_context=d.ttbs_context, output_rules=d.output_rules, categories=list(d.categories),
-                window_days=d.window_days, active=True, note="Built-in default", created_at=now, created_by="system",
+                window_days=d.window_days, priority_rules=d.priority_rules, priority_limit=d.priority_limit,
+                research_version=d.version, active=True, note="Built-in default", created_at=now, created_by="system",
                 activated_at=now, activated_by="system"))
             s.flush()
     except IntegrityError:  # seeded concurrently by another worker
@@ -129,6 +147,18 @@ def clean(data: dict[str, Any]) -> dict[str, Any]:
         errors["window_days"] = f"Between {WINDOW_DAYS[0]} and {WINDOW_DAYS[1]} days"
     vals["window_days"] = days
 
+    rules = str(data.get("priority_rules") or "").replace("\r\n", "\n").strip()
+    if len(rules) > MAX_TEXT:
+        errors["priority_rules"] = f"At most {MAX_TEXT:,} characters"
+    vals["priority_rules"] = rules or PRIORITY_RULES  # blank = the built-in rules
+    try:
+        limit = int(data.get("priority_limit") or 0)
+    except (TypeError, ValueError):
+        limit = -1
+    if not PRIORITY_LIMIT[0] <= limit <= PRIORITY_LIMIT[1]:
+        errors["priority_limit"] = f"Between {PRIORITY_LIMIT[0]} (all signals) and {PRIORITY_LIMIT[1]}"
+    vals["priority_limit"] = limit
+
     if not errors:
         problems: dict[str, list[str]] = {}
         for f in ("research_prompt", "ttbs_context", "output_rules"):
@@ -157,7 +187,8 @@ def clean(data: dict[str, Any]) -> dict[str, Any]:
 def _spec(vals: dict[str, Any], version: int) -> PromptSpec:
     return PromptSpec(version=version, system=vals["system_instruction"], research_prompt=vals["research_prompt"],
                       ttbs_context=vals["ttbs_context"], output_rules=vals["output_rules"],
-                      categories=tuple(vals["categories"]), window_days=vals["window_days"])
+                      categories=tuple(vals["categories"]), window_days=vals["window_days"],
+                      priority_rules=vals.get("priority_rules") or PRIORITY_RULES, priority_limit=vals.get("priority_limit") or 0)
 
 
 # --- commands ------------------------------------------------------------------------------------
@@ -167,8 +198,9 @@ def save(data: dict[str, Any], actor: str, *, activate: bool = True) -> Research
     vals = clean(data)
     with unit_of_work() as uow:
         cur = active_row(uow)
-        if all(getattr(cur, f) == vals[f] for f in FIELDS):
+        if all(_value(cur, f) == vals[f] for f in FIELDS):
             raise ValidationFailed("No changes compared with the active version")
+        research_changed = any(_value(cur, f) != vals[f] for f in RESEARCH_FIELDS)
         s = uow.session
         version = (s.scalar(select(func.max(ResearchPromptVersion.version))) or 0) + 1
         now = utcnow()
@@ -176,11 +208,12 @@ def save(data: dict[str, Any], actor: str, *, activate: bool = True) -> Research
             s.execute(update(ResearchPromptVersion).where(ResearchPromptVersion.active.is_(True)).values(active=False))
             s.flush()
         row = ResearchPromptVersion(**{f: vals[f] for f in FIELDS}, version=version, active=activate, note=vals["note"],
+                                    research_version=version if research_changed else (cur.research_version or cur.version),
                                     created_at=now, created_by=actor,
                                     activated_at=now if activate else None, activated_by=actor if activate else None)
         s.add(row)
         s.flush()
-        changed = [f for f in FIELDS if getattr(cur, f) != vals[f]]
+        changed = [f for f in FIELDS if _value(cur, f) != vals[f]]
         audit.record(uow, "research.prompt.save", "research_prompt", version,
                      {"version": version, "from": cur.version, "changed": changed, "activated": activate, "note": vals["note"]},
                      actor=actor)

@@ -116,6 +116,32 @@ REQUIRED_LABELS = ("Category:", "Key signals:", "Opportunity type:", "Recommende
 TOKEN = re.compile(r"\{([a-z_]+)\}")
 
 
+# PRIORITY ACTIONS (services/priorities.py): after a PAM's research, one AI call ranks that PAM's
+# signals into "Why now? / Action:" entries (the original script's last step, per PAM).
+PRIORITY_SYSTEM = (
+    "You are a senior B2B sales strategist for Tata Tele Business Services. "
+    "Convert research findings into a concise, prioritized sales-action list."
+)
+PRIORITY_RULES = """
+Create a prioritized TTBS sales action list for this PAM from the company research results above.
+
+Return ONLY entries in this exact format, strongest first:
+
+COMPANY NAME
+Why now? <1-2 short lines explaining the immediate trigger, urgency and TTBS-relevant need>
+Action: <1-2 short lines with a specific sales action, target stakeholder and TTBS offerings>
+
+Rules:
+1. Rank companies by strength and recency of trigger: fresh news, funding, expansion, contracts, leadership changes, cloud/AI/cybersecurity initiatives.
+2. Give highest priority to companies with clear, recent, actionable signals.
+3. Companies with 'Details not found' should be ignored.
+4. Keep every entry short, direct and sales-ready.
+5. Mention only TTBS-relevant offerings: ILL, SD-WAN, P2P, Managed Wi-Fi, CloudMon, Smart Cloud, Azure, managed SOC, endpoint security, DLP, email security, VAPT, Smartflo CCaaS/CPaaS/UCaaS, WhatsApp Business, Microsoft 365/Google Workspace.
+6. Do not include source links, tables, explanations, or extra commentary.
+7. Write COMPANY NAME exactly as it appears in the research results, on its own line, without numbering or formatting.
+""".strip()
+
+
 @dataclass(frozen=True)
 class PromptSpec:
     version: int
@@ -125,6 +151,15 @@ class PromptSpec:
     output_rules: str
     categories: tuple[str, ...]
     window_days: int
+    priority_rules: str = PRIORITY_RULES
+    priority_limit: int = 0  # actions per PAM; 0 = one for every signal
+    # The last version that changed what research asks (a priority-only edit keeps it): the result-cache key,
+    # so editing the priority rules never makes cached research answers stale.
+    research_version: int = 0
+
+    @property
+    def cache_version(self) -> int:
+        return self.research_version or self.version
 
     def render(self, company: str, window_start: str, window_end: str) -> str:
         values = {"ttbs_context": self.ttbs_context.strip(), "output_rules": self.output_rules.strip(),

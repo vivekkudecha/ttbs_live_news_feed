@@ -4,15 +4,18 @@
  * failed permanently or ran out of attempts land in the dead-letter queue, where an operator can
  * requeue them (after fixing the cause) or discard them with a note. Everything is audited.
  */
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { Inbox, Loader2, MailWarning, RotateCcw, Search, Settings2, XCircle } from "lucide-react"
+import { AtSign, Inbox, Loader2, Mail, MailWarning, MessageCircle, RotateCcw, Search, Settings2, UserRound, XCircle } from "lucide-react"
 import { PageHeader } from "@/components/common/PageHeader"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { EmptyState } from "@/components/common/EmptyState"
 import { Page } from "@/components/common/layout"
+import { DrawerCloseButton } from "@/components/common/DrawerCloseButton"
+import { EmailFrame } from "@/components/common/EmailFrame"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -210,31 +213,50 @@ function OutboxTab() {
   )
 }
 
+/** A small labelled figure in the drawer's summary strip. */
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 truncate text-sm font-medium">{children}</dd>
+    </div>
+  )
+}
+
 function DetailSheet({ id, onClose }: { id: string | null; onClose: () => void }) {
   const d = useNotificationDetail(id)
   const resend = useResendNotification()
   const n = d.data
+  const ChannelIcon = n?.channel === "whatsapp" ? MessageCircle : Mail
+  const canResend = n && (n.status === "failed" || n.status === "skipped")
   return (
     <Sheet open={!!id} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
-        <SheetHeader>
-          <SheetTitle>{n?.subject ?? "Delivery"}</SheetTitle>
-          <SheetDescription>
-            {n ? (
-              <>
-                To {n.pamName} &lt;{n.recipient}&gt; · {n.channel} · run #{n.runId}
-                {n.templateVersion ? ` · template v${n.templateVersion}` : ""}
-              </>
-            ) : (
-              "Loading…"
-            )}
-          </SheetDescription>
-        </SheetHeader>
-        {n && (
-          <div className="space-y-5 px-4 pb-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge status={n.status === "sending" ? "processing" : n.status} />
-              {(n.status === "failed" || n.status === "skipped") && (
+      <SheetContent showCloseButton={false} className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-[min(52rem,94vw)]">
+        <div className="h-1 shrink-0 bg-brand-gradient" aria-hidden="true" />
+        <SheetHeader className="gap-4 border-b px-6 pb-4 pt-5">
+          <div className="flex items-start gap-4">
+            <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <ChannelIcon className="size-5" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-1">
+              <SheetTitle className="text-lg font-semibold leading-snug tracking-tight">{n ? (n.subject ?? "WhatsApp digest") : "Loading…"}</SheetTitle>
+              <SheetDescription asChild>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                  {n?.pamName && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <UserRound className="size-3.5" /> {n.pamName}
+                    </span>
+                  )}
+                  {n?.recipient && (
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <AtSign className="size-3.5 shrink-0" /> <span className="truncate">{n.recipient}</span>
+                    </span>
+                  )}
+                </div>
+              </SheetDescription>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {canResend && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -249,46 +271,84 @@ function DetailSheet({ id, onClose }: { id: string | null; onClose: () => void }
                   <RotateCcw /> Resend
                 </Button>
               )}
+              {canResend && <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />}
+              <DrawerCloseButton />
             </div>
-            <section>
-              <h3 className="mb-2 text-sm font-semibold">Attempts</h3>
-              {n.history.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No attempt yet.</p>
-              ) : (
-                <ol className="space-y-2">
-                  {n.history.map((a) => (
-                    <li key={a.attempt} className="rounded-lg border p-3 text-sm">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium">#{a.attempt}</span>
-                        <StatusBadge status={a.outcome === "sent" ? "sent" : a.outcome === "retry" ? "pending" : "failed"} label={a.outcome === "retry" ? "Will retry" : undefined} />
-                        <span className="tabular text-xs text-muted-foreground">
-                          {fmtDateTime(a.startedAt)} · {a.durationMs} ms · {a.adapter}
-                          {a.httpStatus ? ` · HTTP ${a.httpStatus}` : ""}
-                          {a.errorCode ? ` · ${a.errorCode}` : ""}
-                        </span>
-                      </div>
-                      {a.error && <p className="mt-1 break-words text-xs text-muted-foreground">{a.error}</p>}
-                      {a.providerRequestId && <p className="mt-1 font-mono text-[0.7rem] text-muted-foreground">request-id {a.providerRequestId}</p>}
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </section>
-            <section>
-              <h3 className="mb-2 text-sm font-semibold">Message</h3>
-              {n.rendered?.aiError && (
-                <Alert className="mb-2">
-                  <AlertDescription>Sent without the AI summary: {n.rendered.aiError}</AlertDescription>
-                </Alert>
-              )}
-              {n.rendered?.html ? (
-                <iframe title="Sent email" sandbox="" srcDoc={n.rendered.html} className="h-[32rem] w-full rounded-lg border bg-white" />
-              ) : (
-                <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-lg border p-3 font-mono text-xs">{n.rendered?.text ?? n.body ?? "Rendered at the first attempt."}</pre>
-              )}
-            </section>
           </div>
-        )}
+          {n && (
+            <dl className="grid grid-cols-2 gap-3 rounded-xl bg-muted/50 px-4 py-3 sm:grid-cols-4">
+              <Fact label="Status">
+                <StatusBadge status={n.status === "sending" ? "processing" : n.status} />
+              </Fact>
+              <Fact label={n.sentAt ? "Sent" : n.nextAttemptAt ? "Next try" : "Queued"}>
+                <span className="tabular">{fmtDateTime(n.sentAt ?? n.nextAttemptAt ?? n.createdAt)}</span>
+              </Fact>
+              <Fact label="Attempts">
+                <span className="tabular">{n.attempts}</span> <span className="font-normal capitalize text-muted-foreground">· {n.channel}</span>
+              </Fact>
+              <Fact label="Run">
+                <Link to={`/runs/${n.runId}`} className="text-primary underline-offset-2 hover:underline">
+                  #{n.runId}
+                </Link>
+                {n.templateVersion ? <span className="font-normal text-muted-foreground"> · template v{n.templateVersion}</span> : null}
+              </Fact>
+            </dl>
+          )}
+        </SheetHeader>
+
+        <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
+          {!n ? (
+            <div className="space-y-3">
+              <Skeleton className="h-24" />
+              <Skeleton className="h-96" />
+            </div>
+          ) : (
+            <>
+              <section className="space-y-2">
+                <h3 className="eyebrow">Message</h3>
+                {n.rendered?.aiError && (
+                  <Alert>
+                    <AlertDescription>Sent without the AI summary: {n.rendered.aiError}</AlertDescription>
+                  </Alert>
+                )}
+                {n.rendered?.html ? (
+                  <EmailFrame title="Sent email" html={n.rendered.html} />
+                ) : (
+                  <pre className="whitespace-pre-wrap rounded-xl border bg-muted/30 p-4 font-mono text-xs leading-relaxed">{n.rendered?.text ?? n.body ?? "Rendered at the first attempt."}</pre>
+                )}
+              </section>
+
+              <section className="space-y-2">
+                <h3 className="eyebrow">Delivery attempts</h3>
+                {n.history.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No attempt yet.</p>
+                ) : (
+                  <ol className="divide-y rounded-xl border">
+                    {n.history.map((a) => (
+                      <li key={a.attempt} className="space-y-1 px-4 py-3 text-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="tabular font-medium">#{a.attempt}</span>
+                          <StatusBadge status={a.outcome === "sent" ? "sent" : a.outcome === "retry" ? "pending" : "failed"} label={a.outcome === "retry" ? "Will retry" : undefined} />
+                          <span className="tabular text-xs text-muted-foreground">
+                            {fmtDateTime(a.startedAt)} · {a.durationMs} ms{a.adapter ? ` · via ${a.adapter}` : ""}
+                            {a.httpStatus ? ` · HTTP ${a.httpStatus}` : ""}
+                            {a.errorCode ? ` · ${a.errorCode}` : ""}
+                          </span>
+                        </div>
+                        {a.error && <p className="break-words text-xs text-destructive">{a.error}</p>}
+                        {a.providerRequestId && (
+                          <p className="truncate font-mono text-2xs text-muted-foreground" title={a.providerRequestId}>
+                            request-id {a.providerRequestId}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </section>
+            </>
+          )}
+        </div>
       </SheetContent>
     </Sheet>
   )

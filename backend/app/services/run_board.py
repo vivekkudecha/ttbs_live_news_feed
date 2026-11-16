@@ -218,6 +218,9 @@ def groups(uow: UnitOfWork, run: Run, *, q: str | None, lst: Listing, page: int,
         for n in s.scalars(select(Notification).where(Notification.run_id == run.id, Notification.part_month == run.part_month,
                                                        Notification.pam_id.in_(ids))):
             notes.setdefault(n.pam_id, {})[n.channel] = n
+    from app.services import priorities
+
+    pri = priorities.for_pams(uow, run.id, [i for i in ids if i])
     out = []
     for r in rows:
         p = pams.get(r.pid)
@@ -233,6 +236,7 @@ def groups(uow: UnitOfWork, run: Run, *, q: str | None, lst: Listing, page: int,
             "pending": int(r.pending or 0), "finishedAt": _iso(r.finishedAt),
             "totalAll": n_all, "doneAll": int(done or 0), "signalAll": int(sig_all or 0),
             "digests": {ch: _digest_out(note, int(sig_all or 0)) for ch, note in mine.items()},
+            "priorities": pri.get(r.pid),  # PRIORITY ACTIONS (services/priorities.py)
         })
     return {"rows": out, "total": total, "page": page, "pageSize": size}
 

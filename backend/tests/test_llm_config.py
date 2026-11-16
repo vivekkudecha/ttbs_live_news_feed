@@ -220,10 +220,13 @@ def test_saving_gemini_switches_perplexity_off_and_research_uses_gemini(client, 
     assert run["status"] == "completed" and run["withSignal"] == 1
     assert len([c for c in ai.calls if c.request.url.host == "api.perplexity.ai"]) == pplx_calls_before  # Perplexity untouched
 
-    research = [c.request for c in ai.calls if c.request.url.path.endswith(":generateContent") and b"systemInstruction" in c.request.content][-1]
+    calls = [c.request for c in ai.calls if c.request.url.path.endswith(":generateContent") and b"systemInstruction" in c.request.content]
+    research = next(c for c in calls if b"google_search" in c.content)
     assert research.url.path == "/v1beta/models/gemini-3.6-flash:generateContent"
     assert research.headers["x-goog-api-key"] == GKEY and "key=" not in str(research.url)
     assert json.loads(research.content)["tools"] == [{"google_search": {}}]
+    # PRIORITY ACTIONS for the PAM: the same AI, no web search (it only reads the research).
+    assert any(b"Why now?" in c.content and "tools" not in json.loads(c.content) for c in calls)
 
     res = client.get(f"/api/v1/runs/{run_id}/results").json()["rows"][0]
     assert res["sources"][0]["url"] == "https://vertexaisearch.example/r/1"  # grounded source first
@@ -263,3 +266,21 @@ def test_database_refuses_two_active_providers():
             uow.session.add(LlmProviderConfig(provider=p, active=True, api_key_enc="v1:x", key_hint="…", model="m",
                                               model_provider="x", updated_by="t"))
         uow.session.flush()
+
+
+def test_priority_actions_model_is_set_per_provider_and_used_for_them(client, ai):
+    client.put("/api/v1/settings/llm/perplexity", json={"apiKey": KEY, "model": "openai/gpt-5.5"})
+    r = client.put("/api/v1/settings/llm/perplexity/priority-model", json={"model": "perplexity/sonar"})
+    assert r.status_code == 200, r.text
+    cfg = _cfg(r.json(), "perplexity")
+    assert (cfg["model"], cfg["priorityModel"], cfg["priorityModelProvider"]) == ("openai/gpt-5.5", "perplexity/sonar", "perplexity")
+    assert client.put("/api/v1/settings/llm/perplexity/priority-model", json={"model": "nope/none"}).status_code == 422
+    assert client.put("/api/v1/settings/llm/gemini/priority-model", json={"model": "x"}).status_code == 404  # not configured
+
+    from app.research import providers
+
+    assert providers.get_provider(purpose="priority").model == "perplexity/sonar"
+    assert providers.get_provider().model == "openai/gpt-5.5"  # research keeps its own model
+    r = client.put("/api/v1/settings/llm/perplexity/priority-model", json={"model": ""})  # back to the research model
+    assert _cfg(r.json(), "perplexity")["priorityModel"] is None
+    assert providers.get_provider(purpose="priority").model == "openai/gpt-5.5"

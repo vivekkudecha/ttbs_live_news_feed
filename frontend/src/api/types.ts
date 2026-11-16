@@ -232,7 +232,10 @@ export interface TemplateVersion {
   researchPrompt: string
   relevanceRules: string
   sections: OutputSection[]
-  priorityPrompt: string
+  systemInstruction: string
+  /** PRIORITY ACTIONS rules and actions per PAM (0 = all signals). */
+  priorityRules: string
+  priorityLimit: number
   excelColumns: string[]
 }
 
@@ -678,6 +681,9 @@ export interface LlmConfig {
   updatedBy: string | null
   /** The request limit research is paced at: the provider's own (from its response headers) or our default. */
   rateLimit: { limitPerSecond: number; source: "provider" | "settings"; pacedPerSecond: number; nextSlotInS: number } | null
+  /** Model for PRIORITY ACTIONS (null = the research model). */
+  priorityModel: string | null
+  priorityModelProvider: string | null
 }
 
 export interface LlmSettings {
@@ -989,6 +995,10 @@ export interface ResearchPromptInput {
   outputRules: string
   categories: string[]
   windowDays: number
+  /** PRIORITY ACTIONS rules (blank = built-in). */
+  priorityRules: string
+  /** Priority actions per PAM; 0 = one for every signal. */
+  priorityLimit: number
   note?: string
 }
 
@@ -1002,6 +1012,7 @@ export interface ResearchPromptVersionSummary {
   activatedBy: string | null
   windowDays: number
   categories: string[]
+  priorityLimit: number
 }
 
 export type ResearchPromptVersion = ResearchPromptVersionSummary & Omit<ResearchPromptInput, "note">
@@ -1011,7 +1022,7 @@ export interface ResearchPromptState {
   versions: ResearchPromptVersionSummary[]
   placeholders: { key: string; description: string; required: boolean }[]
   requiredLabels: string[]
-  limits: { windowDays: [number, number]; maxCategories: number }
+  limits: { windowDays: [number, number]; maxCategories: number; priorityLimit: [number, number] }
   defaults: Omit<ResearchPromptInput, "note">
 }
 
@@ -1059,6 +1070,25 @@ export interface BoardPam {
   doneAll: number
   signalAll: number
   digests: Partial<Record<DeliveryChannel, BoardDigest>>
+  /** PRIORITY ACTIONS for this PAM (null until its research is done, or when it has no signals). */
+  priorities: PamPriorities | null
+}
+
+export interface PamPriorityAction {
+  rank: number
+  companyId: string | number
+  resultId: string | number
+  company: string
+  whyNow: string
+  action: string
+}
+
+export interface PamPriorities {
+  status: "pending" | "ready" | "failed"
+  provider: string | null
+  model: string | null
+  error: string | null
+  actions: PamPriorityAction[]
 }
 
 export interface BoardLogo {

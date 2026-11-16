@@ -34,7 +34,6 @@ import {
   Sparkles,
   Timer,
   UserRound,
-  X,
   XCircle,
   Zap,
   type LucideIcon,
@@ -46,7 +45,9 @@ import { ReassignDialog } from "@/components/companies/ReassignDialog"
 import { Avatar } from "@/components/runs/board/cells"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { DrawerCloseButton } from "@/components/common/DrawerCloseButton"
+import { EmailFrame } from "@/components/common/EmailFrame"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -186,11 +187,7 @@ function LogoDrawer({
               <NavButton label="Next logo" target={next} onNavigate={onNavigate} icon={ChevronDown} />
               <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
               {/* Close sits with the other header controls: same size, aligned to the title row. */}
-              <SheetClose asChild>
-                <Button variant="outline" size="icon" className="size-8 text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-accent-foreground" aria-label="Close">
-                  <X />
-                </Button>
-              </SheetClose>
+              <DrawerCloseButton />
             </div>
           </div>
           <Stats d={d} t={t} />
@@ -590,7 +587,7 @@ function DigestTab({ runId, pamId, pamName, active }: { runId: string; pamId: st
         </div>
       </div>
       {d.html ? (
-        <iframe title="Digest email" sandbox="" srcDoc={d.html} className="h-[60vh] w-full rounded-xl border bg-white" />
+        <EmailFrame title="Digest email" html={d.html} />
       ) : (
         <pre className="whitespace-pre-wrap rounded-xl border p-4 text-sm">{d.text}</pre>
       )}

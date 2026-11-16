@@ -1,6 +1,7 @@
 /**
  * Research prompt editor: every part of what the research AI is sent (system instruction, prompt,
- * TTBS context, output format & relevance rules, categories, news window) is editable here.
+ * TTBS context, output format & relevance rules, categories, news window) is editable here, plus the
+ * PRIORITY ACTIONS rules and how many actions each PAM gets.
  * Saving creates a new numbered version; any version can be re-activated. Runs pin the active
  * version when they start, and cached answers from another version are never reused.
  */
@@ -34,6 +35,8 @@ const toForm = (v: Form): Form => ({
   outputRules: v.outputRules,
   categories: [...v.categories],
   windowDays: v.windowDays,
+  priorityRules: v.priorityRules,
+  priorityLimit: v.priorityLimit ?? 0,
 })
 
 const same = (a: Form, b: Form) =>
@@ -42,6 +45,8 @@ const same = (a: Form, b: Form) =>
   a.ttbsContext === b.ttbsContext &&
   a.outputRules === b.outputRules &&
   a.windowDays === b.windowDays &&
+  a.priorityRules === b.priorityRules &&
+  a.priorityLimit === b.priorityLimit &&
   a.categories.join("\u0000") === b.categories.join("\u0000")
 
 function fieldErrors(e: unknown): FieldErrors {
@@ -169,6 +174,9 @@ function Editor({ state, canEdit }: { state: ResearchPromptState; canEdit: boole
             <TabsTrigger value="settings" className={cn(tabError(["categories", "windowDays"]) && "text-destructive")}>
               Categories &amp; window
             </TabsTrigger>
+            <TabsTrigger value="priority" className={cn(tabError(["priorityRules", "priorityLimit"]) && "text-destructive")}>
+              Priority actions
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="prompt" className="mt-4">
@@ -219,6 +227,37 @@ function Editor({ state, canEdit }: { state: ResearchPromptState; canEdit: boole
               rows={6}
             />
           </TabsContent>
+          <TabsContent value="priority" className="mt-4 space-y-6">
+            <div className="max-w-xs space-y-2">
+              <Label htmlFor="rp-priority-limit">Actions per PAM</Label>
+              <Input
+                id="rp-priority-limit"
+                type="number"
+                min={state.limits.priorityLimit[0]}
+                max={state.limits.priorityLimit[1]}
+                value={Number.isFinite(form.priorityLimit) ? form.priorityLimit : ""}
+                onChange={(e) => set("priorityLimit", e.target.valueAsNumber)}
+                readOnly={!canEdit}
+                aria-invalid={!!errors.priorityLimit}
+              />
+              <p className={cn("text-xs", errors.priorityLimit ? "text-destructive" : "text-muted-foreground")}>
+                {errors.priorityLimit ??
+                  (form.priorityLimit > 0
+                    ? `The ${form.priorityLimit} strongest signals per PAM get an action; the rest still appear in the digest as signals.`
+                    : "0 = every signal gets an action, strongest first.")}
+              </p>
+            </div>
+            <TextField
+              id="rp-priority-rules"
+              label="Priority actions rules"
+              hint="After a PAM's research, one AI call (the priority model under Providers & channels) reads that PAM's signals and writes the ranked PRIORITY ACTIONS shown at the end of their digest. Keep the COMPANY / Why now? / Action: format: entries are read from it. Changing only this keeps cached research answers."
+              value={form.priorityRules}
+              onChange={(v) => set("priorityRules", v)}
+              error={errors.priorityRules}
+              readOnly={!canEdit}
+              rows={20}
+            />
+          </TabsContent>
           <TabsContent value="settings" className="mt-4 space-y-6">
             <CategoriesField
               value={form.categories}
@@ -255,6 +294,7 @@ function Editor({ state, canEdit }: { state: ResearchPromptState; canEdit: boole
         const first = (Object.keys(e) as (keyof Form)[])[0]
         const tabOf: Record<keyof Form, string> = {
           researchPrompt: "prompt", outputRules: "rules", ttbsContext: "context", systemInstruction: "system", categories: "settings", windowDays: "settings",
+          priorityRules: "priority", priorityLimit: "priority",
         }
         if (first) setTab(tabOf[first])
       }} />

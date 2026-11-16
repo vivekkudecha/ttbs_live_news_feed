@@ -109,13 +109,15 @@ function ResearchTemplate() {
           <TabsTrigger value="rules">Relevance rules &amp; format</TabsTrigger>
           <TabsTrigger value="context">TTBS context</TabsTrigger>
           <TabsTrigger value="system">System instruction</TabsTrigger>
+          <TabsTrigger value="priority">Priority actions</TabsTrigger>
         </TabsList>
         {(
           [
             ["prompt", v.researchPrompt],
             ["rules", v.relevanceRules],
             ["context", v.ttbsContext],
-            ["system", v.priorityPrompt],
+            ["system", v.systemInstruction],
+            ["priority", `${v.priorityLimit ? `Actions per PAM: ${v.priorityLimit}` : "Actions per PAM: every signal"}\n\n${v.priorityRules}`],
           ] as const
         ).map(([key, text]) => (
           <TabsContent key={key} value={key}>

@@ -562,6 +562,13 @@ def save_llm_config(provider: AiProvider, body: sch.LlmConfigIn, actor: str = De
     return _llm_out()
 
 
+@router.put("/settings/llm/{provider}/priority-model")
+def save_llm_priority_model(provider: AiProvider, body: sch.LlmPriorityModelIn, actor: str = Depends(current_actor)) -> dict[str, Any]:
+    """The (cheaper) model that writes PRIORITY ACTIONS for each PAM."""
+    llm_config.save_priority_model(provider, body.model, actor)
+    return _llm_out()
+
+
 @router.post("/settings/llm/{provider}/activate")
 def activate_llm_provider(provider: AiProvider, actor: str = Depends(current_actor)) -> dict[str, Any]:
     llm_config.activate(provider, actor)

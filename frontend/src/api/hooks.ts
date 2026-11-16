@@ -141,6 +141,10 @@ export const useBoardResend = (runId: string) => {
   })
 }
 
+/** Write a PAM's PRIORITY ACTIONS again (e.g. after the AI failed). */
+export const useRetryPriorities = (runId: string) =>
+  useMutation({ mutationFn: (pamId: string) => backend.retryPriorities(runId, pamId), onSuccess: useJobInvalidate() })
+
 // ---- Run timeline, audit, costs; telemetry ---------------------------------------------------
 export const useRunTimeline = (id: string, live: boolean) =>
   useQuery({ queryKey: ["runTimeline", id], queryFn: () => backend.runTimeline(id), enabled: !!id, refetchInterval: live ? 4_000 : false })
@@ -164,6 +168,13 @@ export const useSaveLlmConfig = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (v: { provider: AiProvider; apiKey?: string; model: string }) => backend.saveLlmConfig(v.provider, { apiKey: v.apiKey, model: v.model }),
+    onSuccess: (s) => qc.setQueryData(["llmSettings"], s),
+  })
+}
+export const useSavePriorityModel = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { provider: AiProvider; model: string | null }) => backend.savePriorityModel(v.provider, v.model),
     onSuccess: (s) => qc.setQueryData(["llmSettings"], s),
   })
 }
