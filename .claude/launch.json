@@ -1,0 +1,27 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd backend && .venv/bin/uvicorn app.main:app --reload --port 8010"],
+      "port": 8010
+    },
+    {
+      "name": "worker",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd backend && .venv/bin/celery -A app.worker.celery_app worker -P threads -c 16 -Q research,notify,maintenance -l INFO"]
+    },
+    {
+      "name": "beat",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd backend && .venv/bin/celery -A app.worker.celery_app beat -l INFO"]
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd frontend && npm run dev -- --port 5173 --strictPort"],
+      "port": 5173
+    }
+  ]
+}

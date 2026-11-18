@@ -1,0 +1,5 @@
+line-length = 120
+
+[lint]
+# The script puts backend/ on sys.path before importing the app's prompt and parser.
+ignore = ["E402"]

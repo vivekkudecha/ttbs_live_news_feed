@@ -34,3 +34,7 @@ dist-artifact
 .env
 .env.*
 !.env.example
+
+# PoC outputs (raw research answers)
+poc/out/
+poc/.venv/
