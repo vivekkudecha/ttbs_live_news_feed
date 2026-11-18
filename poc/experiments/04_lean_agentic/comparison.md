@@ -1,0 +1,597 @@
+## Infosys (IT services)
+
+### agentic · claude-haiku-5-5 · $0.0057 · 12.6s
+```
+Infosys
+Category: Contract
+Key signals: Multi-year deal from Daimler for **hybrid-cloud** innovation and **IT infrastructure transformation**, deal size undisclosed (https://economictimes.indiatimes.com/markets/stocks/news/infosys-logs-new-all-time-high-on-multi-year-deal-win-from-daimler/printarticle/79912827.cms, 17 Nov 2026). Aligns with **TTBS Smart Cloud**, **Microsoft Azure and migration**, and **CloudMon monitoring**.
+Opportunity type: **Hybrid-cloud** migration and **infrastructure transformation** delivery for Daimler, which may need **connectivity** and **cloud monitoring** subcontracting.
+Recommended outreach approach: Engage Infosys cloud and infrastructure delivery leads on **partner-led connectivity** (ILL, SD-WAN iFLX) and **CloudMon** monitoring for the Daimler program.
+```
+
+### agentic · gpt-6-luna · $0.0043 · 15.2s
+```
+Infosys
+Category: Expansion
+Key signals: Infosys opened a **1.1-million-sq-ft Pocharam development block** in Hyderabad, adding 10,000 seats and capacity for over 13,000 employees under a hybrid model. [Source](https://ground.news/article/infosys-sets-up-new-11m-sq-ft-block-at-pocharam-campus-in-hyderabad-to-cater-to-emerging-technologies)
+Opportunity type: Assess **Smart ILL/SD-WAN and Managed Wi-Fi** for the expanded campus, plus **UCaaS** for its hybrid workforce. [Source](https://ground.news/article/infosys-sets-up-new-11m-sq-ft-block-at-pocharam-campus-in-hyderabad-to-cater-to-emerging-technologies)
+Recommended outreach approach: Approach Hyderabad **facilities and IT/network teams** with a campus connectivity and Wi-Fi assessment for the new block. [Source](https://ground.news/article/infosys-sets-up-new-11m-sq-ft-block-at-pocharam-campus-in-hyderabad-to-cater-to-emerging-technologies)
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0047 · 11.6s
+```
+Infosys
+Category: Contract
+Key signals: Multi-year Daimler deal for **hybrid-cloud** innovation and **IT infrastructure transformation**; size undisclosed, reported as over $1B by unnamed sources. Aligns with **TTBS Smart Cloud**, **Microsoft Azure and migration**, and **CloudMon monitoring**. Source: https://www.economictimes.indiatimes.com/markets/stocks/news/infosys-logs-new-all-time-high-on-multi-year-deal-win-from-daimler/printarticle/79912827.cms (2026-11-17)
+Opportunity type: **Cloud migration** and **hybrid-cloud monitoring** support for the Daimler infrastructure program, which Infosys would deliver and may need to subcontract or partner for.
+Recommended outreach approach: Contact Infosys cloud and infrastructure delivery leads on the Daimler program to position **TTBS Smart Cloud**, **Azure migration** and **CloudMon** as delivery add-ons.
+```
+
+### agentic_lean · gpt-6-luna · $0.0026 · 10.2s
+```
+Infosys
+Category: Expansion
+Key signals: Infosys is investing ₹290 crore to expand its **Mohali Development Centre** with a 350,000 sq ft block for about 3,000 employees. [Economic Times](http://economictimes.indiatimes.com/tech/information-tech/infosys-expands-mohali-centre-with-rs-290-crore-investment-to-add-3000-seats/articleshow/129499865.cms)
+Opportunity type: **Campus connectivity and workplace communications**—Smart Internet Leased Line, SD-WAN iFLX, Managed Wi-Fi and UCaaS for the expanded site.
+Recommended outreach approach: Engage the Mohali facilities and IT teams on **phased site connectivity, resilient network design and Wi-Fi/collaboration requirements** for the new block. [Economic Times](http://economictimes.indiatimes.com/tech/information-tech/infosys-expands-mohali-centre-with-rs-290-crore-investment-to-add-3000-seats/articleshow/129499865.cms)
+```
+
+## Zomato (Food delivery)
+
+### agentic · claude-haiku-5-5 · $0.0049 · 11.1s
+```
+Zomato
+Category: Expansion
+Key signals: Parent **Eternal**'s quick-commerce unit **Blinkit** targets **3,500 stores by March 2027** (https://economictimes.indiatimes.com/small-biz/zomato), adding about **250 dark stores per quarter** through 2026 (https://economictimes.indiatimes.com/markets/stocks/news/kotak-sees-zomato-shares-rallying-up-to-26-maintains-buy-rating/printarticle/117738231.cms). Rider base grew to **12 lakh** across Zomato and Blinkit (https://www.business-standard.com/companies/news/zomato-parent-eternal-reworks-2030-ev-delivery-target-amid-fleet-expansion-126111500167_1.html). Aligns with **SD-WAN iFLX**, **Smart Internet Leased Line** and **Managed Wi-Fi** for store connectivity, and **Smartflo CCaaS** and **WhatsApp Business** for rider communication.
+Opportunity type: **Multi-location store connectivity** for new dark stores (leased line, SD-WAN, Wi-Fi) and **distributed rider communication** at scale.
+Recommended outreach approach: Approach Blinkit/Eternal **IT infrastructure** and **store operations** heads with a bundled **SD-WAN iFLX** and **Managed Wi-Fi** proposal for new dark stores, plus **WhatsApp Business** for rider engagement.
+```
+
+### agentic · gpt-6-luna · $0.0036 · 10.3s
+```
+Zomato
+Category: None
+Key signals: Details not found
+Opportunity type: Details not found
+Recommended outreach approach: Details not found
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0033 · 12.2s
+```
+Zomato
+Category: Funding
+Key signals: **Blinkit** (Eternal/Zomato quick-commerce arm) received a Rs 600 crore infusion to fund **dark store** expansion, targeting 3,000 micro-warehouses by March 2027 (https://www.economictimes.indiatimes.com/markets/stocks/news/eternal-shares-in-focus-following-rs-600-crore-fund-infusion-into-blinkit/printarticle/125604083.cms). Eternal is also reassessing its 2030 **EV delivery fleet** target as rider base grows to 12 lakh across 900 cities (https://www.business-standard.com/companies/news/zomato-parent-eternal-reworks-2030-ev-delivery-target-amid-fleet-expansion-126111500167_1.html). Aligns with **SD-WAN iFLX**, **Smart Internet Leased Line** and **Managed Wi-Fi** (multi-site connectivity) and **Smartflo CCaaS** / **WhatsApp Business** (rider communication).
+Opportunity type: **Multi-site connectivity** for new dark stores and **rider communication** at scale across 900 cities.
+Recommended outreach approach: Engage Eternal/Blinkit **IT and network heads** with **SD-WAN iFLX** and **leased line** proposals for dark-store rollout, and pitch **Smartflo** and **WhatsApp Business** for rider engagement.
+```
+
+### agentic_lean · gpt-6-luna · $0.0024 · 13.8s
+```
+Zomato
+Category: Expansion — [Bengaluru warehouse lease](https://www.economictimes.indiatimes.com/industry/services/property-/-cstruction/zomato-signs-lease-for-its-largest-warehousing-space-in-bengaluru/printarticle/107533729.cms)
+Key signals: **300,000-sq-ft Bengaluru warehouse** and launches in 17 additional Indian cities expand Zomato’s operating footprint ([warehouse](https://www.economictimes.indiatimes.com/industry/services/property-/-cstruction/zomato-signs-lease-for-its-largest-warehousing-space-in-bengaluru/printarticle/107533729.cms); [city expansion](https://www.economictimes.indiatimes.com/small-biz/startups/newsbuzz/zomato-expands-food-delivery-business-to-213-cities-across-india/printarticle/68672719.cms).  
+**GenAI experimentation** includes customer-facing features and backend customer-support tools ([Economic Times](https://www.economictimes.indiatimes.com/tech/startups/zomato-starts-experimenting-with-generative-artificial-intelligence/articleshow/100819374.cms)).
+Opportunity type: **Managed Wi-Fi and leased-line connectivity** for the new warehouse; assess secure, reliable connectivity needs as operations extend to more cities.  
+Potential **cloud and monitoring** discussion for AI-related workloads ([warehouse](https://www.economictimes.indiatimes.com/industry/services/property-/-cstruction/zomato-signs-lease-for-its-largest-warehousing-space-in-bengaluru/printarticle/107533729.cms); [AI initiative](https://www.economictimes.indiatimes.com/tech/startups/zomato-starts-experimenting-with-generative-artificial-intelligence/articleshow/100819374.cms)).
+Recommended outreach approach: Engage **operations and technology stakeholders** to validate warehouse go-live timelines, bandwidth, Wi-Fi and resilience requirements.  
+Separately qualify **cloud and security needs** for the reported AI experimentation before proposing TTBS services ([warehouse](https://www.economictimes.indiatimes.com/industry/services/property-/-cstruction/zomato-signs-lease-for-its-largest-warehousing-space-in-bengaluru/printarticle/107533729.cms); [AI initiative](https://www.economictimes.indiatimes.com/tech/startups/zomato-starts-experimenting-with-generative-artificial-intelligence/articleshow/100819374.cms)).
+```
+
+## Apollo Hospitals (Healthcare)
+
+### agentic · claude-haiku-5-5 · $0.0050 · 11.4s
+```
+Apollo Hospitals
+Category: Expansion
+Key signals: New 450-bed Gurugram hospital opened, needing **multi-site connectivity** and **Managed Wi-Fi** (SD-WAN iFLX, ILL) (https://www.digitalhealthnews.com/apollo-hospitals-enters-gurugram-with-a-new-450-bed-multi-speciality-facility). Apollo Clinic and **Diagnostics National Reference Lab** launched in Gurugram Sector 52 with a digitally monitored lab (https://www.outlookbusiness.com/spotlight/news-wire/apollo-health-strengthens-its-expansion-in-north-india-with-new-clinic-and-national-reference-laboratory-in-gurugram). IHD 2026 announced a **Hospital of the Future** in Hyderabad and a **Microsoft**-backed Clinician Copilot, aligned with **Azure** and **cloud** (https://www.biospectrumindia.com/news/16/27257/apollo-hospitals-commits-to-year-round-operations-and-announces-hospital-of-the-future-at-ihd-2026.html).
+Opportunity type: **Multi-location connectivity** for new hospitals and labs (Managed Wi-Fi, SD-WAN, ILL, **SIP Trunk**); **Azure migration** and **TTBS Smart Cloud** support for AI-led clinical platforms; **Smartflo CCaaS** for the 24x7 patient-request model.
+Recommended outreach approach: Pitch **Managed Wi-Fi and SD-WAN iFLX** for the Gurugram and Hyderabad sites, and **Smartflo CCaaS** for the Dial50 and 24x7 contact-centre operations, through the hospital IT and operations heads.
+```
+
+### agentic · gpt-6-luna · $0.0041 · 18.9s
+```
+APOLLO HOSPITALS
+Category: Expansion ([source](https://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/apollo-hospitals-plans-to-add-5800-beds-over-next-five-years-gurugram-facility-to-open-in-q3-fy27/printarticle/135542311.cms))
+Key signals: Plans to add **~5,800 beds** over five years; its **~470-bed Gurugram facility** is on track for commissioning in Q3 FY27 ([source](https://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/apollo-hospitals-plans-to-add-5800-beds-over-next-five-years-gurugram-facility-to-open-in-q3-fy27/printarticle/135542311.cms)). Apollo and Microsoft also deployed an AI patient-safety review system using hospital data in Microsoft Fabric ([source](https://news.microsoft.com/source/features/digital-transformation/at-apollo-hospitals-clinicians-use-a-continuous-learning-ai-system-to-improve-patient-safety-reviews/)).
+Opportunity type: **Multi-site connectivity** for new and expanding hospitals via Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi; **managed cybersecurity** to support connected clinical operations ([expansion source](https://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/apollo-hospitals-plans-to-add-5800-beds-over-next-five-years-gurugram-facility-to-open-in-q3-fy27/printarticle/135542311.cms); [technology source](https://news.microsoft.com/source/features/digital-transformation/at-apollo-hospitals-clinicians-use-a-continuous-learning-ai-system-to-improve-patient-safety-reviews/)).
+Recommended outreach approach: Engage **IT/network and hospital operations leaders** to assess connectivity and Wi-Fi requirements at commissioning and ramp-up sites, and propose a phased SD-WAN/ILL and security review ([source](https://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/apollo-hospitals-plans-to-add-5800-beds-over-next-five-years-gurugram-facility-to-open-in-q3-fy27/printarticle/135542311.cms)).
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0033 · 9.3s
+```
+Apollo Hospitals
+Category: Digital
+Key signals: **Google Cloud** expanded partnership for Apollo 24|7, built entirely on Google Cloud with Vertex AI and gen AI (aligns with **TTBS Smart Cloud** and Azure migration) [https://medtechspectrum.com/news/3/343/apollo-hospitals-expands-partnership-with-google-cloud-to-boost-healthcare-ecosystem-in-india.html]. New **Gurugram** clinic and National Reference Laboratory, plus plans for **5,800 beds** over five years (aligns with **SD-WAN iFLX**, **Smart Internet Leased Line**, **Managed Wi-Fi**) [https://www.outlookbusiness.com/spotlight/news-wire/apollo-health-strengthens-its-expansion-in-north-india-with-new-clinic-and-national-reference-laboratory-in-gurugram] [https://economictimes.indiatimes.com/topic/apollo-hospitals-enterprise-stocks/news].
+Opportunity type: **Multi-site hospital connectivity** for new Gurugram and Tier-II facilities; **cloud hosting and migration** for the Google Cloud-based Apollo 24|7 platform; **AI/data workloads** from Clinical Intelligence Engine rollout [https://www.financialexpress.com/business/healthcare/making-every-minute-count/4385368/].
+Recommended outreach approach: Pitch **SD-WAN iFLX** and **Smart Internet Leased Line** for the Gurugram and new-city hospital rollouts; position **TTBS Smart Cloud** and **CloudMon monitoring** as a complement to the Google Cloud build, and lead with **Managed SOC** and **DLP** for patient-data protection.
+```
+
+### agentic_lean · gpt-6-luna · $0.0025 · 13.2s
+```
+Apollo Hospitals
+Category: Expansion  
+Key signals: **₹6,000 crore expansion** targets 4,300+ beds across India over 3–4 years, including Gurugram, Kolkata, Pune, Hyderabad, Delhi and Sarjapur. [Economic Times](https://www.economictimes.indiatimes.com/markets/stocks/news/apollo-hospitals-to-invest-rs-6000-crore-for-4300-new-beds-across-india/printarticle/121521117.cms)  
+**Gurugram clinic and reference laboratory** opened with robotics and AI-enabled diagnostics; Apollo also reported expanded Google Cloud work on its digital health platform. [Digital Health News](https://www.digitalhealthnews.com/apollo-diagnostics-national-reference-laboratory-and-apollo-clinic-inaugurated-in-gurugrams-sector-52) · [MedTech Spectrum](https://medtechspectrum.com/news/3/343/apollo-hospitals-expands-partnership-with-google-cloud-to-boost-healthcare-ecosystem-in-india.html)  
+Opportunity type: **Multi-site connectivity and security** for new and expanding facilities: Smart Internet Leased Line, SD-WAN iFLX, Managed Wi-Fi, and Managed SOC/EDR. [Economic Times](https://www.economictimes.indiatimes.com/markets/stocks/news/apollo-hospitals-to-invest-rs-6000-crore-for-4300-new-beds-across-india/printarticle/121521117.cms)  
+**Cloud monitoring and data protection** may complement its growing cloud-based and AI-enabled clinical platforms. [Microsoft](https://news.microsoft.com/source/features/digital-transformation/at-apollo-hospitals-clinicians-use-a-continuous-learning-ai-system-to-improve-patient-safety-reviews/)  
+Recommended outreach approach: **Engage IT and operations leaders** around connectivity, Wi-Fi and cybersecurity requirements for new and expanding sites; propose a site-readiness assessment. [Economic Times](https://www.economictimes.indiatimes.com/markets/stocks/news/apollo-hospitals-to-invest-rs-6000-crore-for-4300-new-beds-across-india/printarticle/121521117.cms)  
+Position **managed security and cloud monitoring** as complementary to Apollo’s existing cloud and AI initiatives, not as a replacement for its platforms. [MedTech Spectrum](https://medtechspectrum.com/news/3/343/apollo-hospitals-expands-partnership-with-google-cloud-to-boost-healthcare-ecosystem-in-india.html) · [Microsoft](https://news.microsoft.com/source/features/digital-transformation/at-apollo-hospitals-clinicians-use-a-continuous-learning-ai-system-to-improve-patient-safety-reviews/)
+```
+
+## Delhivery (Logistics)
+
+### agentic · claude-haiku-5-5 · $0.0045 · 8.9s
+```
+Delhivery
+Category: Expansion
+Key signals: **Intra-city fleet expansion** to ~20,000 vehicles in 4-5 years, with **₹80-100 crore** for charging and parking infrastructure and a **Delhi-NCR charging pilot at facilities** (Smartflo/WhatsApp for field-force communication; Managed Wi-Fi/ILL for facility connectivity) ([Economic Times, 14 Nov 2026](https://www.economictimes.indiatimes.com/news/india/delhivery-eyes-20000-intracity-vehicles-in-five-years/printarticle/135781535.cms); [Mathrubhumi, 13 Nov 2026](https://english.mathrubhumi.com/news/money/delhivery-tata-motors-euler-motors-montra-electric-fleet-deal-ptid6w0lafk))
+Opportunity type: **Distributed fleet and vendor-partner communication** across multi-site intra-city network; **charging-site connectivity** and **fleet telematics/monitoring** needs as EV rollout scales ([Business Standard, 13 Nov 2026](https://www.business-standard.com/companies/news/delhivery-electric-commercial-vehicles-tata-motors-euler-montra-electric-126111300742_1.html); [Brief, 15 Nov 2026](https://www.brief.news/electric-vehicles/2026/11/15/delhivery-electrifies-its-fleet))
+Recommended outreach approach: Pitch **Smartflo CCaaS** and **WhatsApp Business** for driver and vendor-partner engagement, plus **Smart Internet ILL/Managed Wi-Fi** for Delhi-NCR charging-pilot sites, via the Delhivery fleet/operations and IT procurement teams.
+```
+
+### agentic · gpt-6-luna · $0.0038 · 12.2s
+```
+DELHIVERY
+Category: Expansion
+Key signals: **1,500–2,000 EVs** planned for intra-city operations over 12–18 months, with rollout starting in Delhi-NCR; Delhivery is also piloting charging and parking facilities. [Delhivery](https://www.delhivery.com/press-release/delhivery-partners-with-tata-motors-euler-motors-and-montra-electric-to-deploy-2000-electric-commercial-vehicles)
+Opportunity type: **Managed connectivity** for new or expanding operational sites, using TTBS Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi. [Delhivery](https://www.delhivery.com/press-release/delhivery-partners-with-tata-motors-euler-motors-and-montra-electric-to-deploy-2000-electric-vehicles)
+Recommended outreach approach: **Map Delhi-NCR rollout and planned facility locations** with Delhivery operations/IT; assess connectivity and Wi-Fi requirements for charging and parking sites. [Delhivery](https://www.delhivery.com/press-release/delhivery-partners-with-tata-motors-euler-motors-and-montra-electric-to-deploy-2000-electric-commercial-vehicles)
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0032 · 7.5s
+```
+Delhivery
+Category: Expansion
+Key signals: **Intracity EV fleet** MoUs with Tata Motors, Euler and Montra for 1,500-2,000 eCVs, starting in **Delhi-NCR**, with **charging infrastructure** piloted at its facilities; aligns with **Connectivity** (SD-WAN/ILL for multi-site connectivity) and **Business communications** (Smartflo field-force calling) ([Business Standard, 13 Nov 2026](https://www.business-standard.com/companies/news/delhivery-electric-commercial-vehicles-tata-motors-euler-montra-126111300742_1.html); [Mathrubhumi](https://english.mathrubhumi.com/news/money/delhivery-tata-motors-euler-montra-electric-fleet-deal-ptid6w0lafk)). Plan to grow intracity fleet to **~20,000 vehicles** in 4-5 years with ₹80-100 crore for charging and parking infrastructure ([Economic Times, 15 Nov 2026](http://www.economictimes.indiatimes.com/news/india/delhivery-eyes-20000-intracity-vehicles-in-five-years/printarticle/135781535.cms)).
+Opportunity type: **Multi-site connectivity** for new charging and parking hubs and **fleet telematics/monitoring** across a growing intracity network; **field-force communication** for a larger distributed driver and fleet-partner base.
+Recommended outreach approach: Engage Delhivery's **intracity operations and network-infrastructure leads** in Delhi-NCR, positioning **SD-WAN iFLX/Smart ILL** for new charging and hub sites and **Smartflo** for driver and fleet-partner communication.
+```
+
+### agentic_lean · gpt-6-luna · $0.0022 · 13.7s
+```
+Delhivery
+Category: Expansion
+Key signals: **1,500–2,000 electric vehicles** are planned for its intracity network over 12–18 months; charging-infrastructure pilots are starting at facilities in Delhi-NCR. This creates a potential distributed-site connectivity need for **Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi**. [Source](https://www.theweek.in/wire-updates/business/2026/11/13/delhivery-partners-with-tata-motors-euler-motors-montra-electric-to-deploy-up-to-2-000-ecvs0.html)
+Opportunity type: Assess **managed connectivity and Wi-Fi** for charging and operating sites as the EV network expands. [Source](https://www.theweek.in/wire-updates/business/2026/11/13/delhivery-partners-with-tata-motors-euler-motors-montra-electric-to-deploy-up-to-2-000-ecvs0.html)
+Recommended outreach approach: Engage **In-City Operations** to map the rollout’s site-connectivity requirements and propose a pilot for secure, monitored connectivity at charging facilities. [Source](https://www.theweek.in/wire-updates/business/2026/11/13/delhivery-partners-with-tata-motors-euler-motors-montra-electric-to-deploy-up-to-2-000-ecvs0.html)
+```
+
+## Tata Motors (Automotive)
+
+### agentic · claude-haiku-5-5 · $0.0047 · 10.5s
+```
+Tata Motors
+Category: Expansion
+Key signals: Tata Group's Agratas signed an MoU for a ₹1.3 lakh crore, 20 GWh lithium-ion cell plant in Sanand, Gujarat (Tata Group unit, not Tata Motors directly); a new **manufacturing plant** build-out creates **Managed Wi-Fi**, **Smart Internet Leased Line (ILL)** and **SD-WAN iFLX** needs. Source: https://www.economictimes.indiatimes.com/industry/renewables/tata-group-signs-1-6-bln-electric-vehicle-battery-plant-deal/printarticle/100709618.cms (2026-11-16)
+Opportunity type: **Greenfield plant** connectivity and network setup for a new Gujarat facility, with potential **Smartflo** communications and **Managed SOC** for OT/IT security as the site scales.
+Recommended outreach approach: Engage Tata Motors' EV and manufacturing IT leads and Agratas project team with a **Managed Wi-Fi** and **SD-WAN iFLX** proposal for the Sanand site, plus **Smart Internet Leased Line (ILL)** for plant connectivity.
+```
+
+### agentic · gpt-6-luna · $0.0038 · 12.1s
+```
+Tata Motors
+Category: Cybersecurity  
+Key signals: **CERT-In flagged four high-severity vulnerabilities** in Tata’s iRA connected-vehicle apps; Tata said fixes were issued through mandatory updates. [Source](https://ground.news/article/cert-in-flags-security-vulnerabilities-in-tata-motors-ira-connected-vehicle-apps)  
+Opportunity type: **VAPT** to assess related digital services and connected systems for residual exposure. [Source](https://ground.news/article/cert-in-flags-security-vulnerabilities-in-tata-motors-ira-connected-vehicle-apps)  
+Recommended outreach approach: Offer a **targeted VAPT discussion** focused on application and data-protection risks, coordinating with the security team. [Source](https://ground.news/article/cert-in-flags-security-vulnerabilities-in-tata-motors-ira-connected-vehicle-apps)
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0034 · 10.0s
+```
+Tata Motors
+Category: Expansion
+Key signals: Tata Group's Agratas signed a Rs 13,000 crore MoU with the Gujarat government for a **20 GWh EV battery plant** in Sanand, with work expected to start within three years; this is a new plant that needs **Smart Internet Leased Line (ILL)**, **SD-WAN iFLX** and **Managed Wi-Fi** (source: https://www.economictimes.indiatimes.com/industry/renewables/tata-group-signs-1-6-bln-electric-vehicle-battery-plant-deal/printarticle/100709618.cms, 2026-11-16).
+Opportunity type: **Greenfield plant connectivity** and **multi-site network setup** at the Sanand battery facility, plus later **Smart Cloud** and **CloudMon** monitoring for plant operations.
+Recommended outreach approach: Engage Tata Motors and Agratas procurement and IT teams on **ILL and SD-WAN** for the Sanand plant build-out, positioning TTBS as the connectivity partner before the site goes live.
+```
+
+### agentic_lean · gpt-6-luna · $0.0025 · 16.7s
+```
+Tata Motors
+Category: Cybersecurity
+Key signals: Tata Motors PV said vulnerabilities in its iRA 2.0 and iRA.ev apps had been addressed through updates and enhanced security measures. [Source](https://economictimes.indiatimes.com/topic/tata-motors-cybersecurity-breach/news)
+Opportunity type: **VAPT** to assess connected-app security and **Managed SOC** for ongoing threat monitoring. [Source](https://economictimes.indiatimes.com/topic/tata-motors-cybersecurity-breach/news)
+Recommended outreach approach: Engage the CISO with a focused **application-security and threat-monitoring** discussion, referencing the disclosed app vulnerabilities. [Source](https://x.com/ET_CIO/status/2120861371147706654)
+```
+
+## Asian Paints (Manufacturing)
+
+### agentic · claude-haiku-5-5 · $0.0043 · 8.8s
+```
+Asian Paints
+Category: None
+Key signals: Details not found
+Opportunity type: Details not found
+Recommended outreach approach: Details not found
+```
+
+### agentic · gpt-6-luna · $0.0037 · 9.6s
+```
+Asian Paints
+Category: Expansion
+Key signals: Asian Paints plans a **₹960 crore capacity expansion** at its Ankleshwar, Gujarat facility over 2–3 years. [Source](http://economictimes.indiatimes.com/industry/cons-products/paints/asian-paints-to-invest-rs-960-cr-to-expand-gujarat-unit/printarticle/87975809.cms)
+Opportunity type: Assess **plant connectivity and managed Wi-Fi** needs as the facility expands; potential fit for Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi. [Source](http://economictimes.indiatimes.com/industry/cons-products/paints/asian-paints-to-invest-rs-960-cr-to-expand-gujarat-unit/printarticle/87975809.cms)
+Recommended outreach approach: Contact the **plant operations and IT teams** to understand expansion timelines and assess resilient site connectivity and Wi-Fi requirements. [Source](http://economictimes.indiatimes.com/industry/cons-products/paints/asian-paints-to-invest-rs-960-cr-to-expand-gujarat-unit/printarticle/87975809.cms)
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0031 · 8.6s
+```
+Asian Paints
+Category: Expansion
+Key signals: **Ankleshwar (Gujarat)** plant expansion, Rs 960 cr, paint capacity 1.3 to 2.5 lakh KL, to finish in 2-3 years, aligns with **Smart Internet Leased Line (ILL)** and **SD-WAN iFLX** (https://economictimes.indiatimes.com/industry/cons-products/paints/asian-paints-to-invest-rs-960-cr-to-expand-gujarat-unit/printarticle/87975809.cms, 17 Nov 2026). **Visakhapatnam and Mysuru** new plants, Rs 4,000 cr total, add 1.1 million KL, align with **P2P Leased Line** and **Managed Wi-Fi** (https://www.economictimes.indiatimes.com/industry/cons-products/paints/asian-paints-to-invest-rs-4000-cr-this-fiscal-in-largest/printarticle/64719461.cms, 12 Nov 2026).
+Opportunity type: New multi-site plant build-outs need **plant-to-HQ connectivity**, **branch and site networking**, and **SD-WAN** for new facilities, which TTBS can sell as **Smart ILL**, **SD-WAN iFLX**, **P2P Leased Line** and **Managed Wi-Fi**.
+Recommended outreach approach: Approach the **IT head or plant-IT lead** for Ankleshwar, Visakhapatnam and Mysuru with a **connectivity and SD-WAN proposal** for the new plant sites, timed to the build-out phase.
+```
+
+### agentic_lean · gpt-6-luna · $0.0026 · 13.9s
+```
+ASIAN PAINTS
+Category: None
+Key signals: Details not found
+Opportunity type: Details not found
+Recommended outreach approach: Details not found
+```
+
+## Nykaa (Retail)
+
+### agentic · claude-haiku-5-5 · $0.0048 · 11.2s
+```
+FSN E-Commerce Ventures (Nykaa)
+Category: Expansion
+Key signals: **14 net-new stores** in Q2 FY27 took the network to **338 stores across 111 cities**, aligning with **SD-WAN iFLX**, **Smart Internet Leased Line** and **Managed Wi-Fi** (https://economictimes.indiatimes.com/markets/stocks/news/nykaa-shares-rise-4-as-q2-fy27-update-points-to-strong-growth-across-beauty-fashion/printarticle/134687436.cms; https://www.financialexpress.com/business/industry-nykaa-q2-profit-nearly-triples-to-rs-101-crore-beats-estimates-4377185/). Plan to expand the **beauty store network to about 600 stores** over the next few years (https://www.moneycontrol.com/news/business/companies/nykaa-bets-on-premium-brands-lower-marketing-costs-to-boost-fashion-margins-14070277.html).
+Opportunity type: **Multi-location branch connectivity** for each new **retail store** rollout, plus **store-level Wi-Fi** and uptime needs.
+Recommended outreach approach: Pitch an **SD-WAN iFLX** and **Managed Wi-Fi** bundle for store rollouts to the IT or network head, with **Smart Internet Leased Line** as the uptime backup.
+```
+
+### agentic · gpt-6-luna · $0.0037 · 13.5s
+```
+NYKAA
+Category: Expansion
+Key signals: Nykaa Now plans to expand quick-commerce coverage from 15 to **25+ cities by FY27-end**, scaling its distributed delivery operations. [Source](https://economictimes.indiatimes.com/tech/nykaa)
+Opportunity type: Assess **reliable multi-city connectivity, SD-WAN and CloudMon monitoring** needs supporting its growing quick-commerce footprint. [Source](https://economictimes.indiatimes.com/tech/nykaa)
+Recommended outreach approach: Engage **operations and technology leaders** to map connectivity and uptime requirements as Nykaa Now adds cities. [Source](https://economictimes.indiatimes.com/tech/nykaa)
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0032 · 10.2s
+```
+Nykaa (FSN E-Commerce Ventures)
+Category: Expansion
+Key signals: **Store network** grew to 338 stores with 14 net-new in Q2 FY27 (as of 30 Sep 2026), and **Nykaa Now** quick-commerce is expanding from 15 to 25+ cities by FY27-end. Aligns with **Smart Internet Leased Line**, **Managed Wi-Fi** and **SD-WAN iFLX** (multi-site connectivity). Sources: https://economictimes.indiatimes.com/markets/stocks/news/nykaa-shares-rise-4-as-q2-fy27-update-points-to-strong-growth-across-beauty-fashion/printarticle/134687436.cms ; https://economictimes.indiatimes.com/topic/quick-commerce-nykaa/news
+Opportunity type: **Multi-location store connectivity** and **quick-commerce dark-store network** connectivity for new cities and outlets.
+Recommended outreach approach: Pitch **SD-WAN iFLX** and **Managed Wi-Fi** for new stores and **Smart Internet Leased Line** for new quick-commerce sites, targeting the network or IT infrastructure head.
+```
+
+### agentic_lean · gpt-6-luna · $0.0023 · 10.7s
+```
+Nykaa
+Category: Expansion ([source](https://www.medianama.com/2026/11/223-nykaa-clocks-profit-revenue/))
+Key signals: **14 new stores** brought the network to 338 stores across 111 cities; Nykaa Now reached 15 cities, with expansion planned to 25+ by FY27-end ([source](https://www.medianama.com/2026/11/223-nykaa-clocks-profit-revenue/)).
+Opportunity type: **SD-WAN, leased-line connectivity and managed Wi-Fi** for distributed stores and quick-commerce operations ([source](https://www.medianama.com/2026/11/223-nykaa-clocks-profit-revenue/)).
+Recommended outreach approach: **Engage IT/operations** on resilient, centrally managed connectivity and Wi-Fi for new and existing retail locations ([source](https://www.medianama.com/2026/11/223-nykaa-clocks-profit-revenue/)).
+```
+
+## Bajaj Finance (Financial services)
+
+### agentic · claude-haiku-5-5 · $0.0043 · 8.6s
+```
+Bajaj Finance
+Category: None
+Key signals: Details not found
+Opportunity type: Details not found
+Recommended outreach approach: Details not found
+```
+
+### agentic · gpt-6-luna · $0.0037 · 11.9s
+```
+BAJAJ FINANCE
+Category: Digital
+Key signals: **AI-powered customer engagement:** Bajaj Finance acquired a 5% stake in TrueFan AI, citing production-scale use of its platform and plans to expand personalized, AI-enhanced communication. [Source](http://www.economictimes.indiatimes.com/markets/stocks/news/bajaj-finance-acquires-5-stake-in-truefan-ai-as-part-of-finserv-intelligence/printarticle/133926755.cms)
+Opportunity type: Explore **CPaaS, WhatsApp Business and Enterprise RCS** for delivering personalized customer communications at scale. [Source](http://www.economictimes.indiatimes.com/markets/stocks/news/bajaj-finance-acquires-5-stake-in-truefan-ai-as-part-of-finserv-intelligence/printarticle/133926755.cms)
+Recommended outreach approach: Engage digital and customer-communications stakeholders to discuss how TTBS channels could support **AI-personalized customer engagement**. [Source](http://www.economictimes.indiatimes.com/markets/stocks/news/bajaj-finance-acquires-5-stake-in-truefan-ai-as-part-of-finserv-intelligence/printarticle/133926755.cms)
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0027 · 6.1s
+```
+Bajaj Finance
+Category: None
+Key signals: Details not found
+Opportunity type: Details not found
+Recommended outreach approach: Details not found
+```
+
+### agentic_lean · gpt-6-luna · $0.0023 · 10.7s
+```
+BAJAJ FINANCE
+Category: Digital
+Key signals: **AI-powered customer engagement** is in focus through Bajaj Finance’s investment in TrueFan AI, whose platform it already uses; the stated aim includes personalized marketing and AI-enhanced communication. [Source](http://www.economictimes.indiatimes.com/markets/stocks/news/bajaj-finance-acquires-5-stake-in-truefan-ai-as-part-of-finserv-intelligence/printarticle/133926755.cms)
+Opportunity type: Explore **CPaaS and WhatsApp Business** for scalable, personalized customer communications alongside AI-generated content. [Source](http://www.economictimes.indiatimes.com/markets/stocks/news/bajaj-finance-acquires-5-stake-in-truefan-ai-as-part-of-finserv-intelligence/printarticle/133926755.cms)
+Recommended outreach approach: Engage digital and customer-engagement stakeholders to discuss **omnichannel communication** use cases integrating personalized AI content with WhatsApp and CPaaS. [Source](http://www.economictimes.indiatimes.com/markets/stocks/news/bajaj-finance-acquires-5-stake-in-truefan-ai-as-part-of-finserv-intelligence/printarticle/133926755.cms)
+```
+
+## Dixon Technologies (Electronics manufacturing)
+
+### agentic · claude-haiku-5-5 · $0.0048 · 13.5s
+```
+Dixon Technologies
+Category: Expansion
+Key signals: **Tirupati ₹700 crore** fresh investment (2,300 jobs) and **Kopparthy ₹450 crore** AIL Dixon expansion (7,000 jobs), aligning with **Smart Internet Leased Line** and **SD-WAN iFLX** (https://www.thehindubusinessline.com/news/dixon-technologies-to-invest-700-crore-in-tirupati-in-ap/article71696793.ece). **Acer** laptop manufacturing at Noida, up to 5 lakh units/year (https://www.economictimes.indiatimes.com/markets/stocks/news/dixon-jumps-4-after-tying-up-with-acer-for-laptop-manufacturing/printarticle/87902623.cms).
+Opportunity type: New multi-site plant build-outs need **branch connectivity**, **Managed Wi-Fi** and **SIP Trunk/Smartflo** communications. Asset purchase of up to ₹49.75 crore from Vimal signals **capex** scale-up (https://nsearchives.nseindia.com/corporate/DIXON_16112026201438_Regulation30AnnouncementVimal16112026.pdf).
+Recommended outreach approach: Pitch **SD-WAN iFLX** and **Smart Internet Leased Line** to Dixon's Noida, Tirupati and Kopparthy site IT teams for new plant connectivity. Lead with **Smartflo** and **SIP Trunk** for factory-floor communication.
+```
+
+### agentic · gpt-6-luna · $0.0041 · 12.4s
+```
+Dixon Technologies
+Category: Expansion
+Key signals: **Noida scale-up:** a nearly complete 1-million-sq-ft facility is expected to start operations in Q3 FY27, alongside ₹500 crore of planned IT-PLI capex; aligns with **Smart ILL, SD-WAN iFLX and Managed Wi-Fi**. [NSE earnings-call transcript](https://nsearchives.nseindia.com/corporate/DIXON_05112026163605_EarningCallTranscriptQ2Intimation.pdf)
+**New production footprint:** Dixon announced a Google Pixel manufacturing pact using its Noida facility and a proposed ₹700 crore Tirupati investment; aligns with **multi-site connectivity**. [Economic Times](https://www.economictimes.indiatimes.com/industry/cons-products/electronics/dixon-technologies-partners-with-taiwans-compal-electronics-to-make-google-pixel-devices-in-india/printarticle/115813869.cms) · [The Hindu BusinessLine](https://www.thehindubusinessline.com/news/dixon-technologies-to-invest-700-crore-in-tirupati-in-ap/article71696793.ece)
+Opportunity type: **Plant connectivity:** assess resilient leased-line access, SD-WAN and managed Wi-Fi requirements for the expanding Noida and Tirupati operations. [NSE earnings-call transcript](https://nsearchives.nseindia.com/corporate/DIXON_05112026163605_EarningCallTranscriptQ2Intimation.pdf) · [The Hindu BusinessLine](https://www.thehindubusinessline.com/news/dixon-technologies-to-invest-700-crore-in-tirupati-in-ap/article71696793.ece)
+Recommended outreach approach: Engage **plant IT and operations teams** to map site timelines, bandwidth, uptime and Wi-Fi requirements; propose a phased **Smart ILL/SD-WAN and Managed Wi-Fi** assessment. [NSE earnings-call transcript](https://nsearchives.nseindia.com/corporate/DIXON_05112026163605_EarningCallTranscriptQ2Intimation.pdf)
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0031 · 8.8s
+```
+Dixon Technologies
+Category: Expansion
+Key signals: **Tirupati/Sri City integrated factory** MoU with Andhra Pradesh govt for microwave, dishwasher and vacuum production, 2,500 jobs, ₹800-1,000 crore over five years ([Fortune India](https://www.fortuneindia.com/business-news/dixon-technologies-lines-up-1000-crore-investment-to-expand-consumer-durables-offerings/170666), 2026-11-17). Asset purchase from Vimal Plast for up to ₹49.75 crore to expand **washing machine capacity** ([Moneycontrol](https://www.moneycontrol.com/news/business/markets/dixon-tech-shares-rise-3-as-company-buys-new-assets-to-boost-washing-machine-operations-14082562.html/amp), 2026-11-17). Data-centre component plans via Inventec JV, operational from Q1 FY27 ([Economic Times](http://www.economictimes.indiatimes.com/industry/telecom/telecom-news/dixon-technologies-posts-81-jump-in-quarterly-profit-on-new-contracts/printarticle/124641791.cms), 2026-11-17). Aligns with **Smart Internet Leased Line**, **SD-WAN iFLX**, **Managed Wi-Fi** and **P2P Leased Line** for new plant sites.
+Opportunity type: **New multi-site manufacturing connectivity** for the Tirupati factory and washing machine facility; **data-centre component** operations may need **Smart Cloud** and **CloudMon** monitoring.
+Recommended outreach approach: Engage Dixon's IT or operations head on **leased line and SD-WAN** for the Tirupati plant and **Managed Wi-Fi** for new facilities; pitch **CloudMon** and **Managed SOC** for the data-centre component business.
+```
+
+### agentic_lean · gpt-6-luna · $0.0023 · 9.7s
+```
+Dixon Technologies
+Category: Expansion
+Key signals: Dixon plans an integrated appliance facility in Tirupati, with ₹800–1,000 crore investment and about 2,500 jobs; additional expansion is planned at its Tirupati and Kopparthy manufacturing operations. [Fortune India](https://www.fortuneindia.com/business-news/dixon-technologies-lines-up-1000-crore-investment-to-expand-consumer-durables-offerings/170666) · [BusinessLine](https://www.thehindubusinessline.com/news/dixon-technologies-to-invest-700-crore-in-tirupati-in-ap/article71696793.ece)
+Opportunity type: **Multi-site connectivity and network management** for growing manufacturing operations—Smart Internet Leased Line, SD-WAN iFLX, Managed Wi-Fi and CloudMon. [Fortune India](https://www.fortuneindia.com/business-news/dixon-technologies-lines-up-1000-crore-investment-to-expand-consumer-durables-offerings/170666)
+Recommended outreach approach: Engage the **plant expansion/operations team** to assess site connectivity, network resilience and managed Wi-Fi needs for the new Tirupati facility and expanding locations. [BusinessLine](https://www.thehindubusinessline.com/news/dixon-technologies-to-invest-700-crore-in-tirupati-in-ap/article71696793.ece)
+```
+
+## Mahindra Logistics (Logistics)
+
+### agentic · claude-haiku-5-5 · $0.0043 · 6.2s
+```
+Mahindra Logistics
+Category: None
+Key signals: Details not found
+Opportunity type: Details not found
+Recommended outreach approach: Details not found
+```
+
+### agentic · gpt-6-luna · $0.0038 · 15.1s
+```
+Mahindra Logistics
+Category: Expansion
+Key signals: **Warehouse expansion**: 6.5-lakh-sq-ft Bhiwandi facility and 4.75-lakh-sq-ft Howrah lease add large, distributed operating sites. [Bhiwandi](http://economictimes.indiatimes.com/small-biz/sme-sector/mahindra-logistics-unveils-multi-client-warehouse-in-bhiwandi/printarticle/104039427.cms) · [Howrah](http://economictimes.indiatimes.com/industry/services/property-/-cstruction/mahindra-logistics-leases-4-75-lakh-sq-ft-warehouse-in-kolkata/printarticle/124580506.cms)
+Opportunity type: **Site connectivity and Wi-Fi**: assess SD-WAN iFLX, Smart Internet Leased Line and Managed Wi-Fi requirements across the expanded warehouse footprint.
+Recommended outreach approach: **Warehouse-network assessment**: engage operations and IT to map site readiness, uptime and connectivity requirements; propose a phased connectivity and Wi-Fi plan. [Bhiwandi facility](http://economictimes.indiatimes.com/small-biz/sme-sector/mahindra-logistics-unveils-multi-client-warehouse-in-bhiwandi/printarticle/104039427.cms) · [Howrah expansion](http://economictimes.indiatimes.com/industry/services/property-/-cstruction/mahindra-logistics-leases-4-75-lakh-sq-ft-warehouse-in-kolkata/printarticle/124580506.cms)
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0027 · 8.7s
+```
+Mahindra Logistics
+Category: Expansion
+Key signals: **Bhiwandi multi-client warehouse** unveiled 17 Nov 2026: 6.5 lakh sq ft, 84 docks, described as "technology-driven" fulfilment, aligns with **SD-WAN iFLX**, **Smart Internet Leased Line (ILL)** and **Managed Wi-Fi** for the new site (https://economictimes.indiatimes.com/small-biz/sme-sector/mahindra-logistics-unveils-multi-client-warehouse-in-bhiwandi/printarticle/104039427.cms)
+Opportunity type: New **warehouse site** needs **connectivity** and **Smartflo CCaaS** for distributed fulfilment and customer communication
+Recommended outreach approach: Pitch **SD-WAN iFLX** and **ILL** for Bhiwandi site connectivity, with **Smartflo** for logistics customer support, via the logistics operations and IT head
+```
+
+### agentic_lean · gpt-6-luna · $0.0023 · 13.0s
+```
+Mahindra Logistics
+Category: Expansion
+Key signals: **New 6.5-lakh-sq-ft Bhiwandi warehouse** and **Agartala facility** expand multi-client operations and regional footprint. [Economic Times](http://economictimes.indiatimes.com/small-biz/sme-sector/mahindra-logistics-unveils-multi-client-warehouse-in-bhiwandi/printarticle/104039427.cms) · [Economic Times](https://www.economictimes.com/industry/transportation/shipping-/-transport/stronger-rivigo-b2c-e-mobility-to-drive-mahindra-logistics-rebound/printarticle/124283907.cms)
+Opportunity type: **Resilient site connectivity** and managed Wi-Fi for warehouse operations, aligned with **Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi**.
+Recommended outreach approach: Offer a **warehouse connectivity assessment** covering uptime, secure inter-site access and Wi-Fi requirements at new and expanding facilities.
+```
+
+## Kalyan Jewellers (Retail)
+
+### agentic · claude-haiku-5-5 · $0.0046 · 10.3s
+```
+Kalyan Jewellers
+Category: Expansion
+Key signals: **Store expansion**: 11 net new Kalyan India stores in Q2 FY27 (365 total), with plans for 84 Kalyan FOCO stores, 50 Candere stores and 4 more **ATM showrooms** in Tamil Nadu in FY27 (https://insights.dsij.in/markets/reports/report-details/kalyan-jewellers-india-ltd/46169; https://www.thehindubusinessline.com/companies/strong-festive-demand-volume-growth-lift-kalyan-jewellers-growth-outlook/article71693030.ece/amp/). Aligns with **Smart Internet Leased Line** and **SD-WAN iFLX** for store connectivity, and **Managed Wi-Fi** for in-store networks.
+Opportunity type: **Multi-site branch connectivity** for new showroom rollouts, with openings weighted to H2 FY27 (https://insights.dsij.in/markets/reports/report-details/kalyan-jewellers-india-ltd/46156; https://economictimes.indiatimes.com/markets/stocks/news/kalyan-jewellers-shares-zoom-10-hit-upper-circuit-after-strong-q2-earnings-what-analysts-are-saying/printarticle/135725602.cms).
+Recommended outreach approach: Pitch **SD-WAN iFLX**, **Smart ILL** and **Managed Wi-Fi** as a standard bundle for each new FOCO and ATM store, timed before the H2 FY27 openings (https://www.thehindubusinessline.com/companies/strong-festive-demand-volume-growth-lift-kalyan-jewellers-growth-outlook/article71693030.ece/amp/).
+```
+
+### agentic · gpt-6-luna · $0.0037 · 11.2s
+```
+Kalyan Jewellers
+Category: Expansion
+Key signals: Plans **four additional ATM showrooms in Tamil Nadu** during FY27, alongside a wider showroom rollout. [Source](https://www.thehindubusinessline.com/companies/strong-festive-demand-volume-growth-lift-kalyan-jewellers-growth-outlook/article71693030.ece)
+Opportunity type: **Branch connectivity and Wi-Fi** for new showrooms; assess Smart Internet ILL, SD-WAN iFLX and Managed Wi-Fi needs. [Source](https://www.thehindubusinessline.com/companies/strong-festive-demand-volume-growth-lift-kalyan-jewellers-growth-outlook/article71693030.ece)
+Recommended outreach approach: Contact **retail expansion/operations and IT teams** to scope connectivity and managed Wi-Fi for planned Tamil Nadu openings. [Source](https://www.thehindubusinessline.com/companies/strong-festive-demand-volume-growth-lift-kalyan-jewellers-growth-outlook/article71693030.ece)
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0029 · 6.7s
+```
+Kalyan Jewellers
+Category: Expansion
+Key signals: **84 Kalyan FOCO stores**, **50 Candere stores** and **five ATM showrooms** planned for FY27, with 11 net new Kalyan India stores in Q2 FY27 (365 total) ([source](https://insights.dsij.in/markets/reports/report-details/kalyan-jewellers-india-ltd/46169)). Aligns with **SD-WAN iFLX**, **Smart Internet Leased Line (ILL)** and **Managed Wi-Fi** for new store connectivity. ([source](https://economictimes.indiatimes.com/markets/stocks/earnings/kalyan-jewellers-hits-52-week-high-on-64-profit-growth/articleshow/135785714.cms))
+Opportunity type: **Multi-store connectivity rollout** across new India retail stores, plus **Smartflo** contact-center needs for customer support across the expanded store base. ([source](https://www.moneycontrol.com/news/business/markets/kalyan-jewellers-shares-rally-8-to-hit-52-week-high-brokerages-bullish-on-q3-demand-check-target-prices-14077964.html/amp))
+Recommended outreach approach: Pitch a **standardised store-network bundle** (SD-WAN iFLX, ILL, Managed Wi-Fi) for the 84 FOCO and 50 Candere openings weighted to 2HFY27, and link it to **Smartflo** for store customer support. ([source](https://insights.dsij.in/markets/reports/report-details/kalyan-jewellers-india-ltd/46156))
+```
+
+### agentic_lean · gpt-6-luna · $0.0023 · 9.1s
+```
+Kalyan Jewellers
+Category: Expansion (https://economictimes.indiatimes.com/markets/stocks/earnings/kalyan-jewellers-hits-52-week-high-on-64-profit-growth/articleshow/135785714.cms)
+Key signals: Plans FY27 openings of **84 Kalyan stores, 50 Candere outlets and five ATM stores**—a growing, distributed retail footprint. (https://economictimes.indiatimes.com/markets/stocks/earnings/kalyan-jewellers-hits-52-week-high-on-64-profit-growth/articleshow/135785714.cms)
+Opportunity type: **Branch connectivity and managed Wi-Fi** for new showrooms; assess ILL or SD-WAN needs across locations. (https://economictimes.indiatimes.com/markets/stocks/earnings/kalyan-jewellers-hits-52-week-high-on-64-profit-growth/articleshow/135785714.cms)
+Recommended outreach approach: Approach **retail IT and operations** to map rollout locations and propose a standardized connectivity and Wi-Fi plan for new stores. (https://economictimes.indiatimes.com/markets/stocks/earnings/kalyan-jewellers-hits-52-week-high-on-64-profit-growth/articleshow/135785714.cms)
+```
+
+## Lenskart (Retail)
+
+### agentic · claude-haiku-5-5 · $0.0046 · 9.5s
+```
+Lenskart Solutions Limited
+Category: Expansion
+Key signals: **Store network expansion** target of 10 crore annual eyewear units in India, up from 3.2 crore, per the [Fortune India, Nov 12, 2026](https://www.fortuneindia.com/business-news/lenskart-targets-10-crore-eyewear-units-annually-in-india-makes-blue-light-lenses-standard/169913) and the [Economic Times, Nov 14, 2026](http://www.economictimes.indiatimes.com/news/company/corporate-trends/what-we-have-done-is-not-enough-says-lenskart-ceo-as-he-eyes-10-cr-eyewear-units-a-year/printarticle/135767225.cms). Aligns with **Smart Internet Leased Line (ILL)**, **SD-WAN iFLX** and **Managed Wi-Fi** for multi-store connectivity.
+Opportunity type: **Multi-location store connectivity** and **customer-support scale-up** for new stores, inferred from the store-led growth target. Aligns with **Smartflo CCaaS** for contact-center capacity.
+Recommended outreach approach: Pitch **SD-WAN iFLX** and **Smart ILL** for store rollouts, and **Smartflo CCaaS** for customer-support scaling, to Lenskart's IT or network heads.
+```
+
+### agentic · gpt-6-luna · $0.0039 · 11.4s
+```
+Lenskart
+Category: Expansion
+Key signals: Plans **450+ net new Indian stores** this fiscal, adding distributed retail sites; this points to branch connectivity and Wi-Fi needs. [Economic Times, Nov. 12](http://economictimes.indiatimes.com/markets/stocks/earnings/lenskart-eyes-more-growth-as-q2-revenue-jumps-21/printarticle/125668149.cms)
+Opportunity type: **SD-WAN iFLX, Smart ILL and Managed Wi-Fi** for reliable connectivity across new stores. [Economic Times, Nov. 12](http://economictimes.indiatimes.com/markets/stocks/earnings/lenskart-eyes-more-growth-as-q2-revenue-jumps-21/printarticle/125668149.cms)
+Recommended outreach approach: Engage **retail expansion and IT/network teams** on a repeatable store-connectivity package with centralized monitoring as rollout proceeds. [Economic Times, Nov. 12](http://economictimes.indiatimes.com/markets/stocks/earnings/lenskart-eyes-more-growth-as-q2-revenue-jumps-21/printarticle/125668149.cms)
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0029 · 7.4s
+```
+Lenskart
+Category: Expansion
+Key signals: **165 net new stores** in Q2 FY27, taking the network to 3,624, and **61 new cities** added, which drives **store connectivity** needs (Smart Internet Leased Line, SD-WAN iFLX, Managed Wi-Fi) ([ticker.finology.in](https://ticker.finology.in/discover/market-update/lenskart-q2-fy27-results-analysis)). **Remote optometry** in 934 Indian stores and AI eye-testing pilots depend on **reliable branch connectivity** ([ticker.finology.in](https://ticker.finology.in/discover/market-update/lenskart-q2-fy27-results-analysis); [multibagg.ai](https://www.multibagg.ai/market-pulse/articles/lenskart-hustlr-glasses-early-scale-concall-cmwassyyg004t2qo6upocu74n)). Plans to add **about 20 stores a month** in tier I and II cities ([economictimes.indiatimes.com](http://economictimes.indiatimes.com/small-biz/startups/lenskart-to-expand-in-tier-i-ii-cities-launches-new-app/printarticle/56854421.cms)).
+Opportunity type: **Multi-site connectivity** for new stores and remote optometry sites (Smart Internet Leased Line, SD-WAN iFLX, Managed Wi-Fi); **customer-engagement communications** for a growing store base (Smartflo CCaaS, WhatsApp Business) ([nicodigital.com](https://www.nicodigital.com/marketing-strategy/lenskart-business-model/)).
+Recommended outreach approach: Approach the **IT infrastructure or network head** with an **SD-WAN and leased-line bundle** for new store rollouts and remote-optometry uptime, and add **Smartflo** for store and contact-center calling.
+```
+
+### agentic_lean · gpt-6-luna · $0.0027 · 17.1s
+```
+Lenskart
+Category: Expansion
+Key signals: **450+ planned India store additions** and ongoing omnichannel growth; the company also described **AI-enabled remote testing** and investment in manufacturing capacity. [Economic Times](http://economictimes.indiatimes.com/tech/startups/lenskart-revenue-grows-21-in-q2-net-profit-rises-at-similar-clip-as-margins-improve/articleshow/125657952.cms) [Economic Times](http://economictimes.indiatimes.com/tech/technology/ettech-qa-were-not-an-online-or-offline-company-were-an-eyewear-company-lenskart-ceo-peyush-bansal/articleshow/124841824.cms)
+Opportunity type: **Store connectivity** through Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi; assess resilient connectivity and monitoring needs for new sites and manufacturing operations. [Economic Times](http://economictimes.indiatimes.com/tech/startups/lenskart-revenue-grows-21-in-q2-net-profit-rises-at-similar-clip-as-margins-improve/articleshow/125657952.cms) [Economic Times](http://economictimes.indiatimes.com/tech/technology/ettech-qa-were-not-an-online-or-offline-company-were-an-eyewear-company-lenskart-ceo-peyush-bansal/articleshow/124841824.cms)
+Recommended outreach approach: Engage **IT and retail operations** to map rollout timelines, connectivity standards and site uptime requirements; position a pilot across new stores or a manufacturing site. [Economic Times](http://economictimes.indiatimes.com/tech/startups/lenskart-revenue-grows-21-in-q2-net-profit-rises-at-similar-clip-as-margins-improve/articleshow/125657952.cms) [Economic Times](http://economictimes.indiatimes.com/tech/technology/ettech-qa-were-not-an-online-or-offline-company-were-an-eyewear-company-lenskart-ceo-peyush-bansal/articleshow/124841824.cms)
+```
+
+## Sahyadri Hospitals (Healthcare)
+
+### agentic · claude-haiku-5-5 · $0.0046 · 7.5s
+```
+Sahyadri Hospitals
+Category: Expansion
+Key signals: **CCI approval** (14 Nov 2026) of **Manipal Hospitals'** acquisition of Sahyadri, covering 11 hospitals across Pune, Nashik, Ahilya Nagar and Karad (https://economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/cci-clears-manipal-hospitals-proposal-to-acquire-sahyadri-hospitals/printarticle/123659652.cms). Integration uses **centralised procurement** and **digital engagement**; digital channels are 11% of Sahyadri revenue in Q2 FY27 (https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-growth-concall-cmwjdbgui00972ntk8a6o7ga0). Aligns with **Smart Internet Leased Line**, **SD-WAN iFLX** and **Managed Wi-Fi** for multi-site connectivity, and **WhatsApp Business** and **Smartflo** for patient engagement.
+Opportunity type: **Multi-location network consolidation** across the newly acquired hospitals and the Pune cluster, plus **digital patient-engagement** scale-up (https://health.economictimes.indiatimes.com/amp/news/hospitals/manipal-posts-3399-cr-in-q2-fy27-net-profit-rises-21-6/135801358).
+Recommended outreach approach: Pitch **SD-WAN iFLX** and **Leased Line** for branch-to-hub connectivity, and **WhatsApp Business** for patient communication, to the **Manipal-Sahyadri integration** IT and procurement leads.
+```
+
+### agentic · gpt-6-luna · $0.0039 · 11.7s
+```
+SAHYADRI HOSPITALS
+Category: Expansion
+Key signals: Manipal’s acquisition of Sahyadri expands its multi-hospital network; around 50 beds are planned for Hadapsar, and digital channels contributed 11% of Sahyadri revenue in Q2 FY27. [Economic Times](http://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/manipal-health-buys-sahyadri-hospitals-for-rs-6400-crore/printarticle/122348011.cms) [Multibagg](https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-growth-concall-cmwjdbgui00972ntk8a6o7ga0)
+Opportunity type: **Multi-site connectivity and security assessment** for hospital integration and growing digital operations; assess Smart Internet ILL, SD-WAN iFLX and Managed SOC. [Multibagg](https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-growth-concall-cmwjdbgui00972ntk8a6o7ga0)
+Recommended outreach approach: Engage **IT and operations leadership** to map integration and Hadapsar expansion needs, then propose a phased connectivity and security review. [Economic Times](http://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/manipal-health-buys-sahyadri-hospitals-for-rs-6400-crore/printarticle/122348011.cms)
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0034 · 9.3s
+```
+Sahyadri Hospitals
+Category: Expansion
+Key signals: **Sahyadri** (11 hospitals in Pune, Nashik, Ahilya Nagar, Karad) is adding **440-500 beds** in H2 FY27, with Mumbai Juhu (602 beds) and Gurugram (500-bed lease) in the pipeline. Its **digital revenue** rose to 11% in Q2 FY27 and it reported interoperability for 58 clinicians, which points to Managed Wi-Fi, ILL/SD-WAN for multi-site connectivity and Microsoft 365 for shared clinical systems. Sources: https://marketping.in/concalls/manipal-health-enterpri-l/2026-11-13 ; https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-growth-concall-cmwjdbgui00972ntk8a6o7ga0 ; https://www.multibagg.ai/market-pulse/articles/sahyadri-margin-integration-rollout-update-ppt-cmweuw8jn00fu2npiesaoc7fx
+Opportunity type: **Multi-site connectivity** for new and brownfield hospitals (Managed Wi-Fi, SD-WAN iFLX, Smart Internet Leased Line); **Cloud and workplace** support for **integration** of procurement, clinical and **brand transition** systems (TTBS Smart Cloud, Microsoft 365, Vaultastic); **Patient engagement** via Smartflo and WhatsApp Business. Source: https://www.economictimes.indiatimes.com/topic/sahyadri-hospitals-ltd/news ; https://health.economictimes.indiatimes.com/news/hospitals/manipal-posts-3399-cr-in-q2-fy27-net-profit-rises-21-6/135801358
+Recommended outreach approach: Target the **Manipal Health Enterprises** and **Sahyadri** IT/operations leads with a **multi-site connectivity** and **integration** proposal covering SD-WAN and Managed Wi-Fi for the new bed additions, plus **Microsoft 365** and **Smartflo/WhatsApp** for the Pune cluster. Lead with **Managed SOC** and **VAPT** for patient-data protection across the integrated network. Source: https://www.multibagg.ai/market-pulse/articles/sahyadri-margin-integration-rollout-update-ppt-cmweuw8jn00fu2npiesaoc7fx
+```
+
+### agentic_lean · gpt-6-luna · $0.0027 · 12.0s
+```
+Sahyadri Hospitals
+Category: Expansion
+Key signals: **Manipal acquisition** adds 11 Sahyadri hospitals to its network, creating a multi-site integration context; **~50 beds planned at Hadapsar** in Q3 FY27. [Economic Times](http://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/manipal-health-buys-sahyadri-hospitals-for-rs-6400-crore/printarticle/122348011.cms) · [Multibagg](https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-share-rises)
+Opportunity type: **Multi-site connectivity standardization** across hospitals and the Hadapsar capacity addition; assess Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi. [Economic Times](http://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/manipal-health-buys-sahyadri-hospitals-for-rs-6400-crore/printarticle/122348011.cms) · [Multibagg](https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-share-rises)
+Recommended outreach approach: Engage IT/operations to map **site connectivity and integration priorities** following the acquisition; propose a phased network assessment for existing hospitals and Hadapsar. [Economic Times](http://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/manipal-health-buys-sahyadri-hospitals-for-rs-6400-crore/printarticle/122348011.cms) · [Multibagg](https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-share-rises)
+```
+
+## Vardhman Textiles (Textiles)
+
+### agentic · claude-haiku-5-5 · $0.0046 · 9.3s
+```
+Vardhman Textiles
+Category: Expansion
+Key signals: **Dhar greenfield expansion** and **open-end spinning project** (about 1.34 million spindles by FY28, Rs 8-9 bn capex into 1QFY28) ([DSIJ, 2026-11-17](https://insights.dsij.in/markets/reports/report-details/vardhman-textiles-ltd/44892)). Garment capacity doubling at Ludhiana from 2.2 to 4.5 million shirts p.a. by FY27 ([indiancompanies.in, 2026-11-13](https://indiancompanies.in/vardhman-textiles/)). Aligns with **Smart Internet Leased Line (ILL)** and **SD-WAN iFLX** for new multi-site connectivity.
+Opportunity type: **New plant and multi-location connectivity** needs at Dhar and Ludhiana; **capex-linked IT scale-up** across ₹3,660 crore programme ([Indian Textile Magazine, updated 2026-11-18](https://www.indiantextilemagazine.in/vardhman-bets-%E2%82%B93660-crore-on-scale-integration-and-value-added-growth/)). Fits **Smart Cloud**, **Managed Wi-Fi** and **SmartOffice** for new sites.
+Recommended outreach approach: Engage plant and IT heads at Dhar and Ludhiana on **SD-WAN iFLX** and **Smart Internet Leased Line** for greenfield site connectivity. Position **Managed Wi-Fi** and **TTBS Smart Cloud** for the garment and fabric capacity ramp-up.
+```
+
+### agentic · gpt-6-luna · $0.0039 · 12.4s
+```
+VARDHMAN TEXTILES
+Category: Expansion  
+Key signals: In its **Nov. 10 earnings-call transcript**, management said a ~50-ton/day open-end project is expected to start operations in 6–7 months and that it has taken land in Madhya Pradesh’s PM MITRA Park for development. [Source](https://nsearchives.nseindia.com/corporate/VTL_10112026103714_vtl_transcript_sd.pdf)  
+Opportunity type: **New-site connectivity** for the developing Madhya Pradesh facility: assess Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi requirements. [Source](https://nsearchives.nseindia.com/corporate/VTL_10112026103714_vtl_transcript_sd.pdf)  
+Recommended outreach approach: Engage the **IT and plant operations teams** to understand site timelines and assess resilient connectivity and managed Wi-Fi needs for the new location. [Source](https://nsearchives.nseindia.com/corporate/VTL_10112026103714_vtl_transcript_sd.pdf)
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0032 · 8.9s
+```
+Vardhman Textiles
+Category: Expansion
+Key signals: **50 TPD open-end yarn project** expected operational within 6-7 months of the 6 Nov 2026 call, a **manufacturing capacity expansion** ([multibagg.ai, 10 Nov 2026](https://www.multibagg.ai/market-pulse/articles/vardhman-low-cost-cotton-gains-concall-cmwa8gk0h00cv2mph3xttas6v)). Aligns with **SD-WAN iFLX** and **Smart Internet Leased Line** for plant connectivity. **Garmenting capacity doubling** to 4.5 million shirts p.a. by end FY27 ([Hindu BusinessLine, 11 Nov 2026](https://www.thehindubusinessline.com/markets/brokers-call-vardhman-textiles-buy/article71685708.ece)). Aligns with **Managed Wi-Fi** and **SD-WAN iFLX** for the Ludhiana site.
+Opportunity type: **New open-end spinning unit** and **Ludhiana garmenting expansion** need **branch and plant connectivity**, **network uptime** and **remote-site access**.
+Recommended outreach approach: Engage the **plant IT or operations head** with **SD-WAN iFLX** and **Smart Internet Leased Line** proposals for the new open-end unit and the Ludhiana garmenting site before commissioning.
+```
+
+### agentic_lean · gpt-6-luna · $0.0024 · 11.2s
+```
+Vardhman Textiles
+Category: Expansion
+Key signals: Management disclosed a **50-tonne/day open-end yarn project** expected to be operational within six to seven months, and **garment capacity expansion** at an existing location from 2.2 million to 4.5 million shirts annually by FY27-end. [Q2 FY27 call transcript](https://www.evenfolio.com/in/stocks/vtl/) · [Call transcript coverage](https://www.alphatribe.in/concalls/VTL)
+Opportunity type: Assess **resilient site connectivity**—Smart Internet Leased Line and SD-WAN iFLX—and **Managed Wi-Fi** for expanding production operations. [Q2 FY27 call transcript](https://www.evenfolio.com/in/stocks/vtl/)
+Recommended outreach approach: Contact **IT and plant operations** to map connectivity, uptime and Wi-Fi requirements for the yarn project and garment expansion. [Q2 FY27 call transcript](https://www.evenfolio.com/in/stocks/vtl/)
+```
+
+## Shreeji Logistics Pvt Ltd (Logistics)
+
+### agentic · claude-haiku-5-5 · $0.0045 · 8.6s
+```
+SHREEJI TRANSLOGISTICS LTD (matched entity; "Shreeji Logistics Pvt Ltd" not found as a separate filer)
+Category: Expansion
+Key signals: **Navi Mumbai International Airport** bonded trucking permission for air-cargo transhipment to all Indian gateways, expanding its **logistics network** (https://themachinemaker.com/news/shreeji-translogistics-gets-approval-for-bonded-cargo-transport-from-navi-mumbai-international-airport/, 2026-11-10; filing: https://alfafinder.com/filings/shreeji-translogistics/2026-11-03-business-update-v55neop5/). Aligns with **SD-WAN iFLX** and **Smart Internet Leased Line** for multi-gateway connectivity.
+Opportunity type: **Multi-location connectivity** for new airport-linked bonded operations across gateways; **dispatch communication** needs via Smartflo CCaaS for coordination of transhipment movements.
+Recommended outreach approach: Engage operations/IT head on **SD-WAN iFLX** for linking Navi Mumbai and gateway sites, and position **Smartflo CCaaS** for dispatch and customer support as the airport route scales.
+```
+
+### agentic · gpt-6-luna · $0.0037 · 10.5s
+```
+Shreeji Logistics Pvt Ltd
+Category: None
+Key signals: Details not found
+Opportunity type: Details not found
+Recommended outreach approach: Details not found
+```
+
+### agentic_lean · claude-haiku-5-5 · $0.0030 · 6.9s
+```
+Shreeji Logistics Pvt Ltd
+Category: None
+Key signals: Details not found
+Opportunity type: Details not found
+Recommended outreach approach: Details not found
+```
+
+### agentic_lean · gpt-6-luna · $0.0023 · 6.0s
+```
+Shreeji Logistics Pvt Ltd
+Category: None
+Key signals: Details not found
+Opportunity type: Details not found
+Recommended outreach approach: Details not found
+```
+
+## Summary
+
+| Mode · model | Logos | Signals | No signal | Failed | Total cost | Cost / logo | Time / logo | Tokens in / out (avg) | Searches |
+|---|---|---|---|---|---|---|---|---|---|
+| agentic · claude-haiku-5-5 | 15 | 12 | 3 | 0 | $0.0701 | $0.0047 | 9.9s | 13392 / 1460 | 1.0 tool calls |
+| agentic · gpt-6-luna | 15 | 13 | 2 | 0 | $0.0579 | $0.0039 | 12.6s | 7502 / 846 | 1.0 tool calls |
+| agentic_lean · claude-haiku-5-5 | 15 | 13 | 2 | 0 | $0.0483 | $0.0032 | 8.8s | 14434 / 1334 | 1.0 tool calls |
+| agentic_lean · gpt-6-luna | 15 | 13 | 2 | 0 | $0.0364 | $0.0024 | 12.1s | 7772 / 911 | 1.0 tool calls |
+
+**agentic · gpt-6-luna vs agentic · claude-haiku-5-5** (15 logos): signal / no-signal agree on 10; category agrees on 7 of 10 where both found a signal.
+- signal only with agentic · claude-haiku-5-5: Zomato, Shreeji Logistics Pvt Ltd
+- signal only with agentic · gpt-6-luna: Asian Paints, Bajaj Finance, Mahindra Logistics
+
+**agentic_lean · claude-haiku-5-5 vs agentic · claude-haiku-5-5** (15 logos): signal / no-signal agree on 12; category agrees on 9 of 11 where both found a signal.
+- signal only with agentic · claude-haiku-5-5: Shreeji Logistics Pvt Ltd
+- signal only with agentic_lean · claude-haiku-5-5: Asian Paints, Mahindra Logistics
+
+**agentic_lean · gpt-6-luna vs agentic · claude-haiku-5-5** (15 logos): signal / no-signal agree on 12; category agrees on 6 of 11 where both found a signal.
+- signal only with agentic · claude-haiku-5-5: Shreeji Logistics Pvt Ltd
+- signal only with agentic_lean · gpt-6-luna: Bajaj Finance, Mahindra Logistics

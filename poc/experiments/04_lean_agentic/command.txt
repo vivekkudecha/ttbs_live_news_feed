@@ -1,0 +1,1 @@
+poc/.venv/bin/python poc/search_mode_poc.py --file poc/sample_logos.csv --modes agentic,agentic_lean --model anthropic/claude-haiku-5-5,openai/gpt-6-luna --experiment lean_agentic --workers 4 --timeout 180

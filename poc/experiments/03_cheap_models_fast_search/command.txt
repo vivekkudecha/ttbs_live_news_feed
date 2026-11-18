@@ -1,0 +1,1 @@
+poc/.venv/bin/python poc/search_mode_poc.py --file poc/sample_logos.csv --modes fast --model anthropic/claude-haiku-5-5,openai/gpt-6-luna,perplexity/glm-5.3-flash,perplexity/nemotron-3.5-super-120b-a12b,google/gemini-3.1-flash-lite --baseline 'fast · claude-haiku-5-5' --experiment cheap_models_fast_search --workers 4

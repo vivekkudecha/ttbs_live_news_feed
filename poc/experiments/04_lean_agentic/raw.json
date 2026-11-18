@@ -1,0 +1,3078 @@
+{
+  "meta": {
+    "models": [
+      "anthropic/claude-haiku-5-5",
+      "openai/gpt-6-luna"
+    ],
+    "modes": [
+      "agentic",
+      "agentic_lean"
+    ],
+    "reasoning": null,
+    "window": [
+      "2026-11-08",
+      "2026-11-18"
+    ],
+    "queries": [
+      "{company} India new office OR campus OR plant OR facility OR warehouse OR branch OR data center",
+      "{company} India funding OR acquisition OR investment OR capex OR contract OR order win",
+      "{company} appoints CIO OR CTO OR CISO OR CDO OR \"head of IT\" OR \"chief digital officer\"",
+      "{company} digital transformation OR cloud OR AI OR cybersecurity OR ERP OR SAP OR data breach",
+      "{company} {industry} India expansion OR partnership OR rollout OR launch"
+    ],
+    "excluded_domains": [
+      "finance.yahoo.com",
+      "investing.com",
+      "in.investing.com",
+      "marketscreener.com",
+      "tradingview.com",
+      "stockanalysis.com",
+      "simplywall.st",
+      "marketsmojo.com",
+      "trendlyne.com",
+      "tickertape.in",
+      "screener.in",
+      "zeebiz.com/markets",
+      "moneycontrol.com/stocks",
+      "groww.in",
+      "5paisa.com",
+      "angelone.in"
+    ],
+    "country": "IN",
+    "max_results": 20,
+    "hits": 20,
+    "snippet_chars": 1500
+  },
+  "results": [
+    {
+      "company": "Infosys",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Infosys\nCategory: Contract\nKey signals: Multi-year deal from Daimler for **hybrid-cloud** innovation and **IT infrastructure transformation**, deal size undisclosed (https://economictimes.indiatimes.com/markets/stocks/news/infosys-logs-new-all-time-high-on-multi-year-deal-win-from-daimler/printarticle/79912827.cms, 17 Nov 2026). Aligns with **TTBS Smart Cloud**, **Microsoft Azure and migration**, and **CloudMon monitoring**.\nOpportunity type: **Hybrid-cloud** migration and **infrastructure transformation** delivery for Daimler, which may need **connectivity** and **cloud monitoring** subcontracting.\nRecommended outreach approach: Engage Infosys cloud and infrastructure delivery leads on **partner-led connectivity** (ILL, SD-WAN iFLX) and **CloudMon** monitoring for the Daimler program.",
+      "status": "signal",
+      "category": "Contract",
+      "cost": 0.00569,
+      "search_cost": 0.0,
+      "llm_cost": 0.00569,
+      "tool_cost": 0.0025,
+      "latency_ms": 12563,
+      "tokens_in": 20579,
+      "tokens_out": 1471,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00244,
+          "cache_read_cost": 1e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00074,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00569
+        },
+        "input_tokens": 20579,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 19495,
+          "cache_read_input_tokens": 1076,
+          "cached_tokens": 1076
+        },
+        "output_tokens": 1471,
+        "output_tokens_details": {
+          "reasoning_tokens": 982
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 22050
+      },
+      "evidence": []
+    },
+    {
+      "company": "Infosys",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "Infosys\nCategory: Expansion\nKey signals: Infosys opened a **1.1-million-sq-ft Pocharam development block** in Hyderabad, adding 10,000 seats and capacity for over 13,000 employees under a hybrid model. [Source](https://ground.news/article/infosys-sets-up-new-11m-sq-ft-block-at-pocharam-campus-in-hyderabad-to-cater-to-emerging-technologies)\nOpportunity type: Assess **Smart ILL/SD-WAN and Managed Wi-Fi** for the expanded campus, plus **UCaaS** for its hybrid workforce. [Source](https://ground.news/article/infosys-sets-up-new-11m-sq-ft-block-at-pocharam-campus-in-hyderabad-to-cater-to-emerging-technologies)\nRecommended outreach approach: Approach Hyderabad **facilities and IT/network teams** with a campus connectivity and Wi-Fi assessment for the new block. [Source](https://ground.news/article/infosys-sets-up-new-11m-sq-ft-block-at-pocharam-campus-in-hyderabad-to-cater-to-emerging-technologies)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00427,
+      "search_cost": 0.0,
+      "llm_cost": 0.00427,
+      "tool_cost": 0.0025,
+      "latency_ms": 15246,
+      "tokens_in": 9530,
+      "tokens_out": 1165,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00118,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00058,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00427
+        },
+        "input_tokens": 9530,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 9452,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 1165,
+        "output_tokens_details": {
+          "reasoning_tokens": 831
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 10695
+      },
+      "evidence": []
+    },
+    {
+      "company": "Infosys",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Infosys\nCategory: Contract\nKey signals: Multi-year Daimler deal for **hybrid-cloud** innovation and **IT infrastructure transformation**; size undisclosed, reported as over $1B by unnamed sources. Aligns with **TTBS Smart Cloud**, **Microsoft Azure and migration**, and **CloudMon monitoring**. Source: https://www.economictimes.indiatimes.com/markets/stocks/news/infosys-logs-new-all-time-high-on-multi-year-deal-win-from-daimler/printarticle/79912827.cms (2026-11-17)\nOpportunity type: **Cloud migration** and **hybrid-cloud monitoring** support for the Daimler infrastructure program, which Infosys would deliver and may need to subcontract or partner for.\nRecommended outreach approach: Contact Infosys cloud and infrastructure delivery leads on the Daimler program to position **TTBS Smart Cloud**, **Azure migration** and **CloudMon** as delivery add-ons.",
+      "status": "signal",
+      "category": "Contract",
+      "cost": 0.00471,
+      "search_cost": 0.0,
+      "llm_cost": 0.00471,
+      "tool_cost": 0.001,
+      "latency_ms": 11581,
+      "tokens_in": 26633,
+      "tokens_out": 1260,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00306,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00063,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00471
+        },
+        "input_tokens": 26633,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 24473,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1260,
+        "output_tokens_details": {
+          "reasoning_tokens": 750
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 27893
+      },
+      "evidence": []
+    },
+    {
+      "company": "Infosys",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "Infosys\nCategory: Expansion\nKey signals: Infosys is investing ₹290 crore to expand its **Mohali Development Centre** with a 350,000 sq ft block for about 3,000 employees. [Economic Times](http://economictimes.indiatimes.com/tech/information-tech/infosys-expands-mohali-centre-with-rs-290-crore-investment-to-add-3000-seats/articleshow/129499865.cms)\nOpportunity type: **Campus connectivity and workplace communications**—Smart Internet Leased Line, SD-WAN iFLX, Managed Wi-Fi and UCaaS for the expanded site.\nRecommended outreach approach: Engage the Mohali facilities and IT teams on **phased site connectivity, resilient network design and Wi-Fi/collaboration requirements** for the new block. [Economic Times](http://economictimes.indiatimes.com/tech/information-tech/infosys-expands-mohali-centre-with-rs-290-crore-investment-to-add-3000-seats/articleshow/129499865.cms)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00262,
+      "search_cost": 0.0,
+      "llm_cost": 0.00262,
+      "tool_cost": 0.001,
+      "latency_ms": 10162,
+      "tokens_in": 10051,
+      "tokens_out": 727,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00125,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00036,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00262
+        },
+        "input_tokens": 10051,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 9973,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 727,
+        "output_tokens_details": {
+          "reasoning_tokens": 386
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 10778
+      },
+      "evidence": []
+    },
+    {
+      "company": "Zomato",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Zomato\nCategory: Expansion\nKey signals: Parent **Eternal**'s quick-commerce unit **Blinkit** targets **3,500 stores by March 2027** (https://economictimes.indiatimes.com/small-biz/zomato), adding about **250 dark stores per quarter** through 2026 (https://economictimes.indiatimes.com/markets/stocks/news/kotak-sees-zomato-shares-rallying-up-to-26-maintains-buy-rating/printarticle/117738231.cms). Rider base grew to **12 lakh** across Zomato and Blinkit (https://www.business-standard.com/companies/news/zomato-parent-eternal-reworks-2030-ev-delivery-target-amid-fleet-expansion-126111500167_1.html). Aligns with **SD-WAN iFLX**, **Smart Internet Leased Line** and **Managed Wi-Fi** for store connectivity, and **Smartflo CCaaS** and **WhatsApp Business** for rider communication.\nOpportunity type: **Multi-location store connectivity** for new dark stores (leased line, SD-WAN, Wi-Fi) and **distributed rider communication** at scale.\nRecommended outreach approach: Approach Blinkit/Eternal **IT infrastructure** and **store operations** heads with a bundled **SD-WAN iFLX** and **Managed Wi-Fi** proposal for new dark stores, plus **WhatsApp Business** for rider engagement.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00491,
+      "search_cost": 0.0,
+      "llm_cost": 0.00491,
+      "tool_cost": 0.0025,
+      "latency_ms": 11134,
+      "tokens_in": 12688,
+      "tokens_out": 1897,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00145,
+          "cache_read_cost": 1e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00095,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00491
+        },
+        "input_tokens": 12688,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 11604,
+          "cache_read_input_tokens": 1076,
+          "cached_tokens": 1076
+        },
+        "output_tokens": 1897,
+        "output_tokens_details": {
+          "reasoning_tokens": 1226
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 14585
+      },
+      "evidence": []
+    },
+    {
+      "company": "Zomato",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "Zomato\nCategory: None\nKey signals: Details not found\nOpportunity type: Details not found\nRecommended outreach approach: Details not found",
+      "status": "no_signal",
+      "category": null,
+      "cost": 0.00364,
+      "search_cost": 0.0,
+      "llm_cost": 0.00364,
+      "tool_cost": 0.0025,
+      "latency_ms": 10349,
+      "tokens_in": 6764,
+      "tokens_out": 586,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00084,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00029,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00364
+        },
+        "input_tokens": 6764,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 6686,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 586,
+        "output_tokens_details": {
+          "reasoning_tokens": 446
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 7350
+      },
+      "evidence": []
+    },
+    {
+      "company": "Zomato",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Zomato\nCategory: Funding\nKey signals: **Blinkit** (Eternal/Zomato quick-commerce arm) received a Rs 600 crore infusion to fund **dark store** expansion, targeting 3,000 micro-warehouses by March 2027 (https://www.economictimes.indiatimes.com/markets/stocks/news/eternal-shares-in-focus-following-rs-600-crore-fund-infusion-into-blinkit/printarticle/125604083.cms). Eternal is also reassessing its 2030 **EV delivery fleet** target as rider base grows to 12 lakh across 900 cities (https://www.business-standard.com/companies/news/zomato-parent-eternal-reworks-2030-ev-delivery-target-amid-fleet-expansion-126111500167_1.html). Aligns with **SD-WAN iFLX**, **Smart Internet Leased Line** and **Managed Wi-Fi** (multi-site connectivity) and **Smartflo CCaaS** / **WhatsApp Business** (rider communication).\nOpportunity type: **Multi-site connectivity** for new dark stores and **rider communication** at scale across 900 cities.\nRecommended outreach approach: Engage Eternal/Blinkit **IT and network heads** with **SD-WAN iFLX** and **leased line** proposals for dark-store rollout, and pitch **Smartflo** and **WhatsApp Business** for rider engagement.",
+      "status": "signal",
+      "category": "Funding",
+      "cost": 0.00332,
+      "search_cost": 0.0,
+      "llm_cost": 0.00332,
+      "tool_cost": 0.001,
+      "latency_ms": 12208,
+      "tokens_in": 12730,
+      "tokens_out": 1954,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00132,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00098,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00332
+        },
+        "input_tokens": 12730,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 10570,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1954,
+        "output_tokens_details": {
+          "reasoning_tokens": 1299
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 14684
+      },
+      "evidence": []
+    },
+    {
+      "company": "Zomato",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "Zomato\nCategory: Expansion — [Bengaluru warehouse lease](https://www.economictimes.indiatimes.com/industry/services/property-/-cstruction/zomato-signs-lease-for-its-largest-warehousing-space-in-bengaluru/printarticle/107533729.cms)\nKey signals: **300,000-sq-ft Bengaluru warehouse** and launches in 17 additional Indian cities expand Zomato’s operating footprint ([warehouse](https://www.economictimes.indiatimes.com/industry/services/property-/-cstruction/zomato-signs-lease-for-its-largest-warehousing-space-in-bengaluru/printarticle/107533729.cms); [city expansion](https://www.economictimes.indiatimes.com/small-biz/startups/newsbuzz/zomato-expands-food-delivery-business-to-213-cities-across-india/printarticle/68672719.cms).  \n**GenAI experimentation** includes customer-facing features and backend customer-support tools ([Economic Times](https://www.economictimes.indiatimes.com/tech/startups/zomato-starts-experimenting-with-generative-artificial-intelligence/articleshow/100819374.cms)).\nOpportunity type: **Managed Wi-Fi and leased-line connectivity** for the new warehouse; assess secure, reliable connectivity needs as operations extend to more cities.  \nPotential **cloud and monitoring** discussion for AI-related workloads ([warehouse](https://www.economictimes.indiatimes.com/industry/services/property-/-cstruction/zomato-signs-lease-for-its-largest-warehousing-space-in-bengaluru/printarticle/107533729.cms); [AI initiative](https://www.economictimes.indiatimes.com/tech/startups/zomato-starts-experimenting-with-generative-artificial-intelligence/articleshow/100819374.cms)).\nRecommended outreach approach: Engage **operations and technology stakeholders** to validate warehouse go-live timelines, bandwidth, Wi-Fi and resilience requirements.  \nSeparately qualify **cloud and security needs** for the reported AI experimentation before proposing TTBS services ([warehouse](https://www.economictimes.indiatimes.com/industry/services/property-/-cstruction/zomato-signs-lease-for-its-largest-warehousing-space-in-bengaluru/printarticle/107533729.cms); [AI initiative](https://www.economictimes.indiatimes.com/tech/startups/zomato-starts-experimenting-with-generative-artificial-intelligence/articleshow/100819374.cms)).",
+      "status": "signal",
+      "category": null,
+      "cost": 0.00243,
+      "search_cost": 0.0,
+      "llm_cost": 0.00243,
+      "tool_cost": 0.001,
+      "latency_ms": 13838,
+      "tokens_in": 6828,
+      "tokens_out": 1164,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00084,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00058,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00243
+        },
+        "input_tokens": 6828,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 6750,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 1164,
+        "output_tokens_details": {
+          "reasoning_tokens": 516
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 7992
+      },
+      "evidence": []
+    },
+    {
+      "company": "Apollo Hospitals",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Apollo Hospitals\nCategory: Expansion\nKey signals: New 450-bed Gurugram hospital opened, needing **multi-site connectivity** and **Managed Wi-Fi** (SD-WAN iFLX, ILL) (https://www.digitalhealthnews.com/apollo-hospitals-enters-gurugram-with-a-new-450-bed-multi-speciality-facility). Apollo Clinic and **Diagnostics National Reference Lab** launched in Gurugram Sector 52 with a digitally monitored lab (https://www.outlookbusiness.com/spotlight/news-wire/apollo-health-strengthens-its-expansion-in-north-india-with-new-clinic-and-national-reference-laboratory-in-gurugram). IHD 2026 announced a **Hospital of the Future** in Hyderabad and a **Microsoft**-backed Clinician Copilot, aligned with **Azure** and **cloud** (https://www.biospectrumindia.com/news/16/27257/apollo-hospitals-commits-to-year-round-operations-and-announces-hospital-of-the-future-at-ihd-2026.html).\nOpportunity type: **Multi-location connectivity** for new hospitals and labs (Managed Wi-Fi, SD-WAN, ILL, **SIP Trunk**); **Azure migration** and **TTBS Smart Cloud** support for AI-led clinical platforms; **Smartflo CCaaS** for the 24x7 patient-request model.\nRecommended outreach approach: Pitch **Managed Wi-Fi and SD-WAN iFLX** for the Gurugram and Hyderabad sites, and **Smartflo CCaaS** for the Dial50 and 24x7 contact-centre operations, through the hospital IT and operations heads.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00497,
+      "search_cost": 0.0,
+      "llm_cost": 0.00497,
+      "tool_cost": 0.0025,
+      "latency_ms": 11426,
+      "tokens_in": 13827,
+      "tokens_out": 1979,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00146,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00099,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00497
+        },
+        "input_tokens": 13827,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 11667,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1979,
+        "output_tokens_details": {
+          "reasoning_tokens": 1175
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 15806
+      },
+      "evidence": []
+    },
+    {
+      "company": "Apollo Hospitals",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "APOLLO HOSPITALS\nCategory: Expansion ([source](https://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/apollo-hospitals-plans-to-add-5800-beds-over-next-five-years-gurugram-facility-to-open-in-q3-fy27/printarticle/135542311.cms))\nKey signals: Plans to add **~5,800 beds** over five years; its **~470-bed Gurugram facility** is on track for commissioning in Q3 FY27 ([source](https://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/apollo-hospitals-plans-to-add-5800-beds-over-next-five-years-gurugram-facility-to-open-in-q3-fy27/printarticle/135542311.cms)). Apollo and Microsoft also deployed an AI patient-safety review system using hospital data in Microsoft Fabric ([source](https://news.microsoft.com/source/features/digital-transformation/at-apollo-hospitals-clinicians-use-a-continuous-learning-ai-system-to-improve-patient-safety-reviews/)).\nOpportunity type: **Multi-site connectivity** for new and expanding hospitals via Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi; **managed cybersecurity** to support connected clinical operations ([expansion source](https://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/apollo-hospitals-plans-to-add-5800-beds-over-next-five-years-gurugram-facility-to-open-in-q3-fy27/printarticle/135542311.cms); [technology source](https://news.microsoft.com/source/features/digital-transformation/at-apollo-hospitals-clinicians-use-a-continuous-learning-ai-system-to-improve-patient-safety-reviews/)).\nRecommended outreach approach: Engage **IT/network and hospital operations leaders** to assess connectivity and Wi-Fi requirements at commissioning and ramp-up sites, and propose a phased SD-WAN/ILL and security review ([source](https://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/apollo-hospitals-plans-to-add-5800-beds-over-next-five-years-gurugram-facility-to-open-in-q3-fy27/printarticle/135542311.cms)).",
+      "status": "signal",
+      "category": null,
+      "cost": 0.0041,
+      "search_cost": 0.0,
+      "llm_cost": 0.0041,
+      "tool_cost": 0.0025,
+      "latency_ms": 18930,
+      "tokens_in": 7230,
+      "tokens_out": 1405,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00089,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.0007,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.0041
+        },
+        "input_tokens": 7230,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7152,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 1405,
+        "output_tokens_details": {
+          "reasoning_tokens": 786
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8635
+      },
+      "evidence": []
+    },
+    {
+      "company": "Apollo Hospitals",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Apollo Hospitals\nCategory: Digital\nKey signals: **Google Cloud** expanded partnership for Apollo 24|7, built entirely on Google Cloud with Vertex AI and gen AI (aligns with **TTBS Smart Cloud** and Azure migration) [https://medtechspectrum.com/news/3/343/apollo-hospitals-expands-partnership-with-google-cloud-to-boost-healthcare-ecosystem-in-india.html]. New **Gurugram** clinic and National Reference Laboratory, plus plans for **5,800 beds** over five years (aligns with **SD-WAN iFLX**, **Smart Internet Leased Line**, **Managed Wi-Fi**) [https://www.outlookbusiness.com/spotlight/news-wire/apollo-health-strengthens-its-expansion-in-north-india-with-new-clinic-and-national-reference-laboratory-in-gurugram] [https://economictimes.indiatimes.com/topic/apollo-hospitals-enterprise-stocks/news].\nOpportunity type: **Multi-site hospital connectivity** for new Gurugram and Tier-II facilities; **cloud hosting and migration** for the Google Cloud-based Apollo 24|7 platform; **AI/data workloads** from Clinical Intelligence Engine rollout [https://www.financialexpress.com/business/healthcare/making-every-minute-count/4385368/].\nRecommended outreach approach: Pitch **SD-WAN iFLX** and **Smart Internet Leased Line** for the Gurugram and new-city hospital rollouts; position **TTBS Smart Cloud** and **CloudMon monitoring** as a complement to the Google Cloud build, and lead with **Managed SOC** and **DLP** for patient-data protection.",
+      "status": "signal",
+      "category": "Digital",
+      "cost": 0.00332,
+      "search_cost": 0.0,
+      "llm_cost": 0.00332,
+      "tool_cost": 0.001,
+      "latency_ms": 9347,
+      "tokens_in": 13758,
+      "tokens_out": 1705,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00145,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00085,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00332
+        },
+        "input_tokens": 13758,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 11598,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1705,
+        "output_tokens_details": {
+          "reasoning_tokens": 914
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 15463
+      },
+      "evidence": []
+    },
+    {
+      "company": "Apollo Hospitals",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "Apollo Hospitals\nCategory: Expansion  \nKey signals: **₹6,000 crore expansion** targets 4,300+ beds across India over 3–4 years, including Gurugram, Kolkata, Pune, Hyderabad, Delhi and Sarjapur. [Economic Times](https://www.economictimes.indiatimes.com/markets/stocks/news/apollo-hospitals-to-invest-rs-6000-crore-for-4300-new-beds-across-india/printarticle/121521117.cms)  \n**Gurugram clinic and reference laboratory** opened with robotics and AI-enabled diagnostics; Apollo also reported expanded Google Cloud work on its digital health platform. [Digital Health News](https://www.digitalhealthnews.com/apollo-diagnostics-national-reference-laboratory-and-apollo-clinic-inaugurated-in-gurugrams-sector-52) · [MedTech Spectrum](https://medtechspectrum.com/news/3/343/apollo-hospitals-expands-partnership-with-google-cloud-to-boost-healthcare-ecosystem-in-india.html)  \nOpportunity type: **Multi-site connectivity and security** for new and expanding facilities: Smart Internet Leased Line, SD-WAN iFLX, Managed Wi-Fi, and Managed SOC/EDR. [Economic Times](https://www.economictimes.indiatimes.com/markets/stocks/news/apollo-hospitals-to-invest-rs-6000-crore-for-4300-new-beds-across-india/printarticle/121521117.cms)  \n**Cloud monitoring and data protection** may complement its growing cloud-based and AI-enabled clinical platforms. [Microsoft](https://news.microsoft.com/source/features/digital-transformation/at-apollo-hospitals-clinicians-use-a-continuous-learning-ai-system-to-improve-patient-safety-reviews/)  \nRecommended outreach approach: **Engage IT and operations leaders** around connectivity, Wi-Fi and cybersecurity requirements for new and expanding sites; propose a site-readiness assessment. [Economic Times](https://www.economictimes.indiatimes.com/markets/stocks/news/apollo-hospitals-to-invest-rs-6000-crore-for-4300-new-beds-across-india/printarticle/121521117.cms)  \nPosition **managed security and cloud monitoring** as complementary to Apollo’s existing cloud and AI initiatives, not as a replacement for its platforms. [MedTech Spectrum](https://medtechspectrum.com/news/3/343/apollo-hospitals-expands-partnership-with-google-cloud-to-boost-healthcare-ecosystem-in-india.html) · [Microsoft](https://news.microsoft.com/source/features/digital-transformation/at-apollo-hospitals-clinicians-use-a-continuous-learning-ai-system-to-improve-patient-safety-reviews/)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00252,
+      "search_cost": 0.0,
+      "llm_cost": 0.00252,
+      "tool_cost": 0.001,
+      "latency_ms": 13158,
+      "tokens_in": 7522,
+      "tokens_out": 1162,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00093,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00058,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00252
+        },
+        "input_tokens": 7522,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7444,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 1162,
+        "output_tokens_details": {
+          "reasoning_tokens": 472
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8684
+      },
+      "evidence": []
+    },
+    {
+      "company": "Delhivery",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Delhivery\nCategory: Expansion\nKey signals: **Intra-city fleet expansion** to ~20,000 vehicles in 4-5 years, with **₹80-100 crore** for charging and parking infrastructure and a **Delhi-NCR charging pilot at facilities** (Smartflo/WhatsApp for field-force communication; Managed Wi-Fi/ILL for facility connectivity) ([Economic Times, 14 Nov 2026](https://www.economictimes.indiatimes.com/news/india/delhivery-eyes-20000-intracity-vehicles-in-five-years/printarticle/135781535.cms); [Mathrubhumi, 13 Nov 2026](https://english.mathrubhumi.com/news/money/delhivery-tata-motors-euler-motors-montra-electric-fleet-deal-ptid6w0lafk))\nOpportunity type: **Distributed fleet and vendor-partner communication** across multi-site intra-city network; **charging-site connectivity** and **fleet telematics/monitoring** needs as EV rollout scales ([Business Standard, 13 Nov 2026](https://www.business-standard.com/companies/news/delhivery-electric-commercial-vehicles-tata-motors-euler-montra-electric-126111300742_1.html); [Brief, 15 Nov 2026](https://www.brief.news/electric-vehicles/2026/11/15/delhivery-electrifies-its-fleet))\nRecommended outreach approach: Pitch **Smartflo CCaaS** and **WhatsApp Business** for driver and vendor-partner engagement, plus **Smart Internet ILL/Managed Wi-Fi** for Delhi-NCR charging-pilot sites, via the Delhivery fleet/operations and IT procurement teams.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00453,
+      "search_cost": 0.0,
+      "llm_cost": 0.00453,
+      "tool_cost": 0.0025,
+      "latency_ms": 8930,
+      "tokens_in": 12745,
+      "tokens_out": 1388,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00132,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00069,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00453
+        },
+        "input_tokens": 12745,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 10585,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1388,
+        "output_tokens_details": {
+          "reasoning_tokens": 614
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 14133
+      },
+      "evidence": []
+    },
+    {
+      "company": "Delhivery",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "DELHIVERY\nCategory: Expansion\nKey signals: **1,500–2,000 EVs** planned for intra-city operations over 12–18 months, with rollout starting in Delhi-NCR; Delhivery is also piloting charging and parking facilities. [Delhivery](https://www.delhivery.com/press-release/delhivery-partners-with-tata-motors-euler-motors-and-montra-electric-to-deploy-2000-electric-commercial-vehicles)\nOpportunity type: **Managed connectivity** for new or expanding operational sites, using TTBS Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi. [Delhivery](https://www.delhivery.com/press-release/delhivery-partners-with-tata-motors-euler-motors-and-montra-electric-to-deploy-2000-electric-vehicles)\nRecommended outreach approach: **Map Delhi-NCR rollout and planned facility locations** with Delhivery operations/IT; assess connectivity and Wi-Fi requirements for charging and parking sites. [Delhivery](https://www.delhivery.com/press-release/delhivery-partners-with-tata-motors-euler-motors-and-montra-electric-to-deploy-2000-electric-commercial-vehicles)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00384,
+      "search_cost": 0.0,
+      "llm_cost": 0.00384,
+      "tool_cost": 0.0025,
+      "latency_ms": 12158,
+      "tokens_in": 7569,
+      "tokens_out": 771,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00094,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00039,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00384
+        },
+        "input_tokens": 7569,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7491,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 771,
+        "output_tokens_details": {
+          "reasoning_tokens": 413
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8340
+      },
+      "evidence": []
+    },
+    {
+      "company": "Delhivery",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Delhivery\nCategory: Expansion\nKey signals: **Intracity EV fleet** MoUs with Tata Motors, Euler and Montra for 1,500-2,000 eCVs, starting in **Delhi-NCR**, with **charging infrastructure** piloted at its facilities; aligns with **Connectivity** (SD-WAN/ILL for multi-site connectivity) and **Business communications** (Smartflo field-force calling) ([Business Standard, 13 Nov 2026](https://www.business-standard.com/companies/news/delhivery-electric-commercial-vehicles-tata-motors-euler-montra-126111300742_1.html); [Mathrubhumi](https://english.mathrubhumi.com/news/money/delhivery-tata-motors-euler-montra-electric-fleet-deal-ptid6w0lafk)). Plan to grow intracity fleet to **~20,000 vehicles** in 4-5 years with ₹80-100 crore for charging and parking infrastructure ([Economic Times, 15 Nov 2026](http://www.economictimes.indiatimes.com/news/india/delhivery-eyes-20000-intracity-vehicles-in-five-years/printarticle/135781535.cms)).\nOpportunity type: **Multi-site connectivity** for new charging and parking hubs and **fleet telematics/monitoring** across a growing intracity network; **field-force communication** for a larger distributed driver and fleet-partner base.\nRecommended outreach approach: Engage Delhivery's **intracity operations and network-infrastructure leads** in Delhi-NCR, positioning **SD-WAN iFLX/Smart ILL** for new charging and hub sites and **Smartflo** for driver and fleet-partner communication.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00316,
+      "search_cost": 0.0,
+      "llm_cost": 0.00316,
+      "tool_cost": 0.001,
+      "latency_ms": 7498,
+      "tokens_in": 14237,
+      "tokens_out": 1259,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00151,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00063,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00316
+        },
+        "input_tokens": 14237,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 12077,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1259,
+        "output_tokens_details": {
+          "reasoning_tokens": 513
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 15496
+      },
+      "evidence": []
+    },
+    {
+      "company": "Delhivery",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "Delhivery\nCategory: Expansion\nKey signals: **1,500–2,000 electric vehicles** are planned for its intracity network over 12–18 months; charging-infrastructure pilots are starting at facilities in Delhi-NCR. This creates a potential distributed-site connectivity need for **Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi**. [Source](https://www.theweek.in/wire-updates/business/2026/11/13/delhivery-partners-with-tata-motors-euler-motors-montra-electric-to-deploy-up-to-2-000-ecvs0.html)\nOpportunity type: Assess **managed connectivity and Wi-Fi** for charging and operating sites as the EV network expands. [Source](https://www.theweek.in/wire-updates/business/2026/11/13/delhivery-partners-with-tata-motors-euler-motors-montra-electric-to-deploy-up-to-2-000-ecvs0.html)\nRecommended outreach approach: Engage **In-City Operations** to map the rollout’s site-connectivity requirements and propose a pilot for secure, monitored connectivity at charging facilities. [Source](https://www.theweek.in/wire-updates/business/2026/11/13/delhivery-partners-with-tata-motors-euler-motors-montra-electric-to-deploy-up-to-2-000-ecvs0.html)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00225,
+      "search_cost": 0.0,
+      "llm_cost": 0.00225,
+      "tool_cost": 0.001,
+      "latency_ms": 13663,
+      "tokens_in": 6899,
+      "tokens_out": 782,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00085,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00039,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00225
+        },
+        "input_tokens": 6899,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 6821,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 782,
+        "output_tokens_details": {
+          "reasoning_tokens": 385
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 7681
+      },
+      "evidence": []
+    },
+    {
+      "company": "Tata Motors",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Tata Motors\nCategory: Expansion\nKey signals: Tata Group's Agratas signed an MoU for a ₹1.3 lakh crore, 20 GWh lithium-ion cell plant in Sanand, Gujarat (Tata Group unit, not Tata Motors directly); a new **manufacturing plant** build-out creates **Managed Wi-Fi**, **Smart Internet Leased Line (ILL)** and **SD-WAN iFLX** needs. Source: https://www.economictimes.indiatimes.com/industry/renewables/tata-group-signs-1-6-bln-electric-vehicle-battery-plant-deal/printarticle/100709618.cms (2026-11-16)\nOpportunity type: **Greenfield plant** connectivity and network setup for a new Gujarat facility, with potential **Smartflo** communications and **Managed SOC** for OT/IT security as the site scales.\nRecommended outreach approach: Engage Tata Motors' EV and manufacturing IT leads and Agratas project team with a **Managed Wi-Fi** and **SD-WAN iFLX** proposal for the Sanand site, plus **Smart Internet Leased Line (ILL)** for plant connectivity.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00467,
+      "search_cost": 0.0,
+      "llm_cost": 0.00467,
+      "tool_cost": 0.0025,
+      "latency_ms": 10484,
+      "tokens_in": 13217,
+      "tokens_out": 1546,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00138,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00077,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00467
+        },
+        "input_tokens": 13217,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 11057,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1546,
+        "output_tokens_details": {
+          "reasoning_tokens": 967
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 14763
+      },
+      "evidence": []
+    },
+    {
+      "company": "Tata Motors",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "Tata Motors\nCategory: Cybersecurity  \nKey signals: **CERT-In flagged four high-severity vulnerabilities** in Tata’s iRA connected-vehicle apps; Tata said fixes were issued through mandatory updates. [Source](https://ground.news/article/cert-in-flags-security-vulnerabilities-in-tata-motors-ira-connected-vehicle-apps)  \nOpportunity type: **VAPT** to assess related digital services and connected systems for residual exposure. [Source](https://ground.news/article/cert-in-flags-security-vulnerabilities-in-tata-motors-ira-connected-vehicle-apps)  \nRecommended outreach approach: Offer a **targeted VAPT discussion** focused on application and data-protection risks, coordinating with the security team. [Source](https://ground.news/article/cert-in-flags-security-vulnerabilities-in-tata-motors-ira-connected-vehicle-apps)",
+      "status": "signal",
+      "category": "Cybersecurity",
+      "cost": 0.00379,
+      "search_cost": 0.0,
+      "llm_cost": 0.00379,
+      "tool_cost": 0.0025,
+      "latency_ms": 12126,
+      "tokens_in": 6982,
+      "tokens_out": 843,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00086,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00042,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00379
+        },
+        "input_tokens": 6982,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 6904,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 843,
+        "output_tokens_details": {
+          "reasoning_tokens": 549
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 7825
+      },
+      "evidence": []
+    },
+    {
+      "company": "Tata Motors",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Tata Motors\nCategory: Expansion\nKey signals: Tata Group's Agratas signed a Rs 13,000 crore MoU with the Gujarat government for a **20 GWh EV battery plant** in Sanand, with work expected to start within three years; this is a new plant that needs **Smart Internet Leased Line (ILL)**, **SD-WAN iFLX** and **Managed Wi-Fi** (source: https://www.economictimes.indiatimes.com/industry/renewables/tata-group-signs-1-6-bln-electric-vehicle-battery-plant-deal/printarticle/100709618.cms, 2026-11-16).\nOpportunity type: **Greenfield plant connectivity** and **multi-site network setup** at the Sanand battery facility, plus later **Smart Cloud** and **CloudMon** monitoring for plant operations.\nRecommended outreach approach: Engage Tata Motors and Agratas procurement and IT teams on **ILL and SD-WAN** for the Sanand plant build-out, positioning TTBS as the connectivity partner before the site goes live.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00344,
+      "search_cost": 0.0,
+      "llm_cost": 0.00344,
+      "tool_cost": 0.001,
+      "latency_ms": 9960,
+      "tokens_in": 14805,
+      "tokens_out": 1679,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00158,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00084,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00344
+        },
+        "input_tokens": 14805,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 12645,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1679,
+        "output_tokens_details": {
+          "reasoning_tokens": 1145
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 16484
+      },
+      "evidence": []
+    },
+    {
+      "company": "Tata Motors",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "Tata Motors\nCategory: Cybersecurity\nKey signals: Tata Motors PV said vulnerabilities in its iRA 2.0 and iRA.ev apps had been addressed through updates and enhanced security measures. [Source](https://economictimes.indiatimes.com/topic/tata-motors-cybersecurity-breach/news)\nOpportunity type: **VAPT** to assess connected-app security and **Managed SOC** for ongoing threat monitoring. [Source](https://economictimes.indiatimes.com/topic/tata-motors-cybersecurity-breach/news)\nRecommended outreach approach: Engage the CISO with a focused **application-security and threat-monitoring** discussion, referencing the disclosed app vulnerabilities. [Source](https://x.com/ET_CIO/status/2120861371147706654)",
+      "status": "signal",
+      "category": "Cybersecurity",
+      "cost": 0.00251,
+      "search_cost": 0.0,
+      "llm_cost": 0.00251,
+      "tool_cost": 0.001,
+      "latency_ms": 16674,
+      "tokens_in": 6863,
+      "tokens_out": 1294,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00085,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00065,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00251
+        },
+        "input_tokens": 6863,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 6785,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 1294,
+        "output_tokens_details": {
+          "reasoning_tokens": 1020
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8157
+      },
+      "evidence": []
+    },
+    {
+      "company": "Asian Paints",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Asian Paints\nCategory: None\nKey signals: Details not found\nOpportunity type: Details not found\nRecommended outreach approach: Details not found",
+      "status": "no_signal",
+      "category": null,
+      "cost": 0.00435,
+      "search_cost": 0.0,
+      "llm_cost": 0.00435,
+      "tool_cost": 0.0025,
+      "latency_ms": 8789,
+      "tokens_in": 12765,
+      "tokens_out": 1008,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00133,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.0005,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00435
+        },
+        "input_tokens": 12765,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 10605,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1008,
+        "output_tokens_details": {
+          "reasoning_tokens": 784
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 13773
+      },
+      "evidence": []
+    },
+    {
+      "company": "Asian Paints",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "Asian Paints\nCategory: Expansion\nKey signals: Asian Paints plans a **₹960 crore capacity expansion** at its Ankleshwar, Gujarat facility over 2–3 years. [Source](http://economictimes.indiatimes.com/industry/cons-products/paints/asian-paints-to-invest-rs-960-cr-to-expand-gujarat-unit/printarticle/87975809.cms)\nOpportunity type: Assess **plant connectivity and managed Wi-Fi** needs as the facility expands; potential fit for Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi. [Source](http://economictimes.indiatimes.com/industry/cons-products/paints/asian-paints-to-invest-rs-960-cr-to-expand-gujarat-unit/printarticle/87975809.cms)\nRecommended outreach approach: Contact the **plant operations and IT teams** to understand expansion timelines and assess resilient site connectivity and Wi-Fi requirements. [Source](http://economictimes.indiatimes.com/industry/cons-products/paints/asian-paints-to-invest-rs-960-cr-to-expand-gujarat-unit/printarticle/87975809.cms)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00375,
+      "search_cost": 0.0,
+      "llm_cost": 0.00375,
+      "tool_cost": 0.0025,
+      "latency_ms": 9610,
+      "tokens_in": 7360,
+      "tokens_out": 658,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00091,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00033,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00375
+        },
+        "input_tokens": 7360,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7282,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 658,
+        "output_tokens_details": {
+          "reasoning_tokens": 302
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8018
+      },
+      "evidence": []
+    },
+    {
+      "company": "Asian Paints",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Asian Paints\nCategory: Expansion\nKey signals: **Ankleshwar (Gujarat)** plant expansion, Rs 960 cr, paint capacity 1.3 to 2.5 lakh KL, to finish in 2-3 years, aligns with **Smart Internet Leased Line (ILL)** and **SD-WAN iFLX** (https://economictimes.indiatimes.com/industry/cons-products/paints/asian-paints-to-invest-rs-960-cr-to-expand-gujarat-unit/printarticle/87975809.cms, 17 Nov 2026). **Visakhapatnam and Mysuru** new plants, Rs 4,000 cr total, add 1.1 million KL, align with **P2P Leased Line** and **Managed Wi-Fi** (https://www.economictimes.indiatimes.com/industry/cons-products/paints/asian-paints-to-invest-rs-4000-cr-this-fiscal-in-largest/printarticle/64719461.cms, 12 Nov 2026).\nOpportunity type: New multi-site plant build-outs need **plant-to-HQ connectivity**, **branch and site networking**, and **SD-WAN** for new facilities, which TTBS can sell as **Smart ILL**, **SD-WAN iFLX**, **P2P Leased Line** and **Managed Wi-Fi**.\nRecommended outreach approach: Approach the **IT head or plant-IT lead** for Ankleshwar, Visakhapatnam and Mysuru with a **connectivity and SD-WAN proposal** for the new plant sites, timed to the build-out phase.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00312,
+      "search_cost": 0.0,
+      "llm_cost": 0.00312,
+      "tool_cost": 0.001,
+      "latency_ms": 8603,
+      "tokens_in": 13588,
+      "tokens_out": 1333,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00143,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00067,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00312
+        },
+        "input_tokens": 13588,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 11428,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1333,
+        "output_tokens_details": {
+          "reasoning_tokens": 624
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 14921
+      },
+      "evidence": []
+    },
+    {
+      "company": "Asian Paints",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "ASIAN PAINTS\nCategory: None\nKey signals: Details not found\nOpportunity type: Details not found\nRecommended outreach approach: Details not found",
+      "status": "no_signal",
+      "category": null,
+      "cost": 0.00256,
+      "search_cost": 0.0,
+      "llm_cost": 0.00256,
+      "tool_cost": 0.001,
+      "latency_ms": 13862,
+      "tokens_in": 7981,
+      "tokens_out": 1121,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00099,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00056,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00256
+        },
+        "input_tokens": 7981,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7903,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 1121,
+        "output_tokens_details": {
+          "reasoning_tokens": 980
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 9102
+      },
+      "evidence": []
+    },
+    {
+      "company": "Nykaa",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "FSN E-Commerce Ventures (Nykaa)\nCategory: Expansion\nKey signals: **14 net-new stores** in Q2 FY27 took the network to **338 stores across 111 cities**, aligning with **SD-WAN iFLX**, **Smart Internet Leased Line** and **Managed Wi-Fi** (https://economictimes.indiatimes.com/markets/stocks/news/nykaa-shares-rise-4-as-q2-fy27-update-points-to-strong-growth-across-beauty-fashion/printarticle/134687436.cms; https://www.financialexpress.com/business/industry-nykaa-q2-profit-nearly-triples-to-rs-101-crore-beats-estimates-4377185/). Plan to expand the **beauty store network to about 600 stores** over the next few years (https://www.moneycontrol.com/news/business/companies/nykaa-bets-on-premium-brands-lower-marketing-costs-to-boost-fashion-margins-14070277.html).\nOpportunity type: **Multi-location branch connectivity** for each new **retail store** rollout, plus **store-level Wi-Fi** and uptime needs.\nRecommended outreach approach: Pitch an **SD-WAN iFLX** and **Managed Wi-Fi** bundle for store rollouts to the IT or network head, with **Smart Internet Leased Line** as the uptime backup.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00479,
+      "search_cost": 0.0,
+      "llm_cost": 0.00479,
+      "tool_cost": 0.0025,
+      "latency_ms": 11152,
+      "tokens_in": 13272,
+      "tokens_out": 1767,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00139,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00088,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00479
+        },
+        "input_tokens": 13272,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 11112,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1767,
+        "output_tokens_details": {
+          "reasoning_tokens": 1130
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 15039
+      },
+      "evidence": []
+    },
+    {
+      "company": "Nykaa",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "NYKAA\nCategory: Expansion\nKey signals: Nykaa Now plans to expand quick-commerce coverage from 15 to **25+ cities by FY27-end**, scaling its distributed delivery operations. [Source](https://economictimes.indiatimes.com/tech/nykaa)\nOpportunity type: Assess **reliable multi-city connectivity, SD-WAN and CloudMon monitoring** needs supporting its growing quick-commerce footprint. [Source](https://economictimes.indiatimes.com/tech/nykaa)\nRecommended outreach approach: Engage **operations and technology leaders** to map connectivity and uptime requirements as Nykaa Now adds cities. [Source](https://economictimes.indiatimes.com/tech/nykaa)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00374,
+      "search_cost": 0.0,
+      "llm_cost": 0.00374,
+      "tool_cost": 0.0025,
+      "latency_ms": 13495,
+      "tokens_in": 6683,
+      "tokens_out": 794,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00083,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.0004,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00374
+        },
+        "input_tokens": 6683,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 6605,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 794,
+        "output_tokens_details": {
+          "reasoning_tokens": 533
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 7477
+      },
+      "evidence": []
+    },
+    {
+      "company": "Nykaa",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Nykaa (FSN E-Commerce Ventures)\nCategory: Expansion\nKey signals: **Store network** grew to 338 stores with 14 net-new in Q2 FY27 (as of 30 Sep 2026), and **Nykaa Now** quick-commerce is expanding from 15 to 25+ cities by FY27-end. Aligns with **Smart Internet Leased Line**, **Managed Wi-Fi** and **SD-WAN iFLX** (multi-site connectivity). Sources: https://economictimes.indiatimes.com/markets/stocks/news/nykaa-shares-rise-4-as-q2-fy27-update-points-to-strong-growth-across-beauty-fashion/printarticle/134687436.cms ; https://economictimes.indiatimes.com/topic/quick-commerce-nykaa/news\nOpportunity type: **Multi-location store connectivity** and **quick-commerce dark-store network** connectivity for new cities and outlets.\nRecommended outreach approach: Pitch **SD-WAN iFLX** and **Managed Wi-Fi** for new stores and **Smart Internet Leased Line** for new quick-commerce sites, targeting the network or IT infrastructure head.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00315,
+      "search_cost": 0.0,
+      "llm_cost": 0.00315,
+      "tool_cost": 0.001,
+      "latency_ms": 10193,
+      "tokens_in": 13444,
+      "tokens_out": 1437,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00141,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00072,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00315
+        },
+        "input_tokens": 13444,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 11284,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1437,
+        "output_tokens_details": {
+          "reasoning_tokens": 851
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 14881
+      },
+      "evidence": []
+    },
+    {
+      "company": "Nykaa",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "Nykaa\nCategory: Expansion ([source](https://www.medianama.com/2026/11/223-nykaa-clocks-profit-revenue/))\nKey signals: **14 new stores** brought the network to 338 stores across 111 cities; Nykaa Now reached 15 cities, with expansion planned to 25+ by FY27-end ([source](https://www.medianama.com/2026/11/223-nykaa-clocks-profit-revenue/)).\nOpportunity type: **SD-WAN, leased-line connectivity and managed Wi-Fi** for distributed stores and quick-commerce operations ([source](https://www.medianama.com/2026/11/223-nykaa-clocks-profit-revenue/)).\nRecommended outreach approach: **Engage IT/operations** on resilient, centrally managed connectivity and Wi-Fi for new and existing retail locations ([source](https://www.medianama.com/2026/11/223-nykaa-clocks-profit-revenue/)).",
+      "status": "signal",
+      "category": null,
+      "cost": 0.00231,
+      "search_cost": 0.0,
+      "llm_cost": 0.00231,
+      "tool_cost": 0.001,
+      "latency_ms": 10744,
+      "tokens_in": 7374,
+      "tokens_out": 782,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00091,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00039,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00231
+        },
+        "input_tokens": 7374,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7296,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 782,
+        "output_tokens_details": {
+          "reasoning_tokens": 474
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8156
+      },
+      "evidence": []
+    },
+    {
+      "company": "Bajaj Finance",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Bajaj Finance\nCategory: None\nKey signals: Details not found\nOpportunity type: Details not found\nRecommended outreach approach: Details not found",
+      "status": "no_signal",
+      "category": null,
+      "cost": 0.00435,
+      "search_cost": 0.0,
+      "llm_cost": 0.00435,
+      "tool_cost": 0.0025,
+      "latency_ms": 8601,
+      "tokens_in": 12843,
+      "tokens_out": 985,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00134,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00049,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00435
+        },
+        "input_tokens": 12843,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 10683,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 985,
+        "output_tokens_details": {
+          "reasoning_tokens": 772
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 13828
+      },
+      "evidence": []
+    },
+    {
+      "company": "Bajaj Finance",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "BAJAJ FINANCE\nCategory: Digital\nKey signals: **AI-powered customer engagement:** Bajaj Finance acquired a 5% stake in TrueFan AI, citing production-scale use of its platform and plans to expand personalized, AI-enhanced communication. [Source](http://www.economictimes.indiatimes.com/markets/stocks/news/bajaj-finance-acquires-5-stake-in-truefan-ai-as-part-of-finserv-intelligence/printarticle/133926755.cms)\nOpportunity type: Explore **CPaaS, WhatsApp Business and Enterprise RCS** for delivering personalized customer communications at scale. [Source](http://www.economictimes.indiatimes.com/markets/stocks/news/bajaj-finance-acquires-5-stake-in-truefan-ai-as-part-of-finserv-intelligence/printarticle/133926755.cms)\nRecommended outreach approach: Engage digital and customer-communications stakeholders to discuss how TTBS channels could support **AI-personalized customer engagement**. [Source](http://www.economictimes.indiatimes.com/markets/stocks/news/bajaj-finance-acquires-5-stake-in-truefan-ai-as-part-of-finserv-intelligence/printarticle/133926755.cms)",
+      "status": "signal",
+      "category": "Digital",
+      "cost": 0.00374,
+      "search_cost": 0.0,
+      "llm_cost": 0.00374,
+      "tool_cost": 0.0025,
+      "latency_ms": 11853,
+      "tokens_in": 6998,
+      "tokens_out": 717,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00087,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00036,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00374
+        },
+        "input_tokens": 6998,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 6920,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 717,
+        "output_tokens_details": {
+          "reasoning_tokens": 358
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 7715
+      },
+      "evidence": []
+    },
+    {
+      "company": "Bajaj Finance",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Bajaj Finance\nCategory: None\nKey signals: Details not found\nOpportunity type: Details not found\nRecommended outreach approach: Details not found",
+      "status": "no_signal",
+      "category": null,
+      "cost": 0.00275,
+      "search_cost": 0.0,
+      "llm_cost": 0.00275,
+      "tool_cost": 0.001,
+      "latency_ms": 6100,
+      "tokens_in": 13613,
+      "tokens_out": 608,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00143,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.0003,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00275
+        },
+        "input_tokens": 13613,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 11453,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 608,
+        "output_tokens_details": {
+          "reasoning_tokens": 396
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 14221
+      },
+      "evidence": []
+    },
+    {
+      "company": "Bajaj Finance",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "BAJAJ FINANCE\nCategory: Digital\nKey signals: **AI-powered customer engagement** is in focus through Bajaj Finance’s investment in TrueFan AI, whose platform it already uses; the stated aim includes personalized marketing and AI-enhanced communication. [Source](http://www.economictimes.indiatimes.com/markets/stocks/news/bajaj-finance-acquires-5-stake-in-truefan-ai-as-part-of-finserv-intelligence/printarticle/133926755.cms)\nOpportunity type: Explore **CPaaS and WhatsApp Business** for scalable, personalized customer communications alongside AI-generated content. [Source](http://www.economictimes.indiatimes.com/markets/stocks/news/bajaj-finance-acquires-5-stake-in-truefan-ai-as-part-of-finserv-intelligence/printarticle/133926755.cms)\nRecommended outreach approach: Engage digital and customer-engagement stakeholders to discuss **omnichannel communication** use cases integrating personalized AI content with WhatsApp and CPaaS. [Source](http://www.economictimes.indiatimes.com/markets/stocks/news/bajaj-finance-acquires-5-stake-in-truefan-ai-as-part-of-finserv-intelligence/printarticle/133926755.cms)",
+      "status": "signal",
+      "category": "Digital",
+      "cost": 0.00228,
+      "search_cost": 0.0,
+      "llm_cost": 0.00228,
+      "tool_cost": 0.001,
+      "latency_ms": 10664,
+      "tokens_in": 6882,
+      "tokens_out": 833,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00085,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00042,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00228
+        },
+        "input_tokens": 6882,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 6804,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 833,
+        "output_tokens_details": {
+          "reasoning_tokens": 460
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 7715
+      },
+      "evidence": []
+    },
+    {
+      "company": "Dixon Technologies",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Dixon Technologies\nCategory: Expansion\nKey signals: **Tirupati ₹700 crore** fresh investment (2,300 jobs) and **Kopparthy ₹450 crore** AIL Dixon expansion (7,000 jobs), aligning with **Smart Internet Leased Line** and **SD-WAN iFLX** (https://www.thehindubusinessline.com/news/dixon-technologies-to-invest-700-crore-in-tirupati-in-ap/article71696793.ece). **Acer** laptop manufacturing at Noida, up to 5 lakh units/year (https://www.economictimes.indiatimes.com/markets/stocks/news/dixon-jumps-4-after-tying-up-with-acer-for-laptop-manufacturing/printarticle/87902623.cms).\nOpportunity type: New multi-site plant build-outs need **branch connectivity**, **Managed Wi-Fi** and **SIP Trunk/Smartflo** communications. Asset purchase of up to ₹49.75 crore from Vimal signals **capex** scale-up (https://nsearchives.nseindia.com/corporate/DIXON_16112026201438_Regulation30AnnouncementVimal16112026.pdf).\nRecommended outreach approach: Pitch **SD-WAN iFLX** and **Smart Internet Leased Line** to Dixon's Noida, Tirupati and Kopparthy site IT teams for new plant connectivity. Lead with **Smartflo** and **SIP Trunk** for factory-floor communication.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00478,
+      "search_cost": 0.0,
+      "llm_cost": 0.00478,
+      "tool_cost": 0.0025,
+      "latency_ms": 13471,
+      "tokens_in": 12808,
+      "tokens_out": 1862,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00133,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00093,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00478
+        },
+        "input_tokens": 12808,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 10648,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1862,
+        "output_tokens_details": {
+          "reasoning_tokens": 1171
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 14670
+      },
+      "evidence": []
+    },
+    {
+      "company": "Dixon Technologies",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "Dixon Technologies\nCategory: Expansion\nKey signals: **Noida scale-up:** a nearly complete 1-million-sq-ft facility is expected to start operations in Q3 FY27, alongside ₹500 crore of planned IT-PLI capex; aligns with **Smart ILL, SD-WAN iFLX and Managed Wi-Fi**. [NSE earnings-call transcript](https://nsearchives.nseindia.com/corporate/DIXON_05112026163605_EarningCallTranscriptQ2Intimation.pdf)\n**New production footprint:** Dixon announced a Google Pixel manufacturing pact using its Noida facility and a proposed ₹700 crore Tirupati investment; aligns with **multi-site connectivity**. [Economic Times](https://www.economictimes.indiatimes.com/industry/cons-products/electronics/dixon-technologies-partners-with-taiwans-compal-electronics-to-make-google-pixel-devices-in-india/printarticle/115813869.cms) · [The Hindu BusinessLine](https://www.thehindubusinessline.com/news/dixon-technologies-to-invest-700-crore-in-tirupati-in-ap/article71696793.ece)\nOpportunity type: **Plant connectivity:** assess resilient leased-line access, SD-WAN and managed Wi-Fi requirements for the expanding Noida and Tirupati operations. [NSE earnings-call transcript](https://nsearchives.nseindia.com/corporate/DIXON_05112026163605_EarningCallTranscriptQ2Intimation.pdf) · [The Hindu BusinessLine](https://www.thehindubusinessline.com/news/dixon-technologies-to-invest-700-crore-in-tirupati-in-ap/article71696793.ece)\nRecommended outreach approach: Engage **plant IT and operations teams** to map site timelines, bandwidth, uptime and Wi-Fi requirements; propose a phased **Smart ILL/SD-WAN and Managed Wi-Fi** assessment. [NSE earnings-call transcript](https://nsearchives.nseindia.com/corporate/DIXON_05112026163605_EarningCallTranscriptQ2Intimation.pdf)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00414,
+      "search_cost": 0.0,
+      "llm_cost": 0.00414,
+      "tool_cost": 0.0025,
+      "latency_ms": 12384,
+      "tokens_in": 9258,
+      "tokens_out": 968,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00115,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00048,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00414
+        },
+        "input_tokens": 9258,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 9180,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 968,
+        "output_tokens_details": {
+          "reasoning_tokens": 428
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 10226
+      },
+      "evidence": []
+    },
+    {
+      "company": "Dixon Technologies",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Dixon Technologies\nCategory: Expansion\nKey signals: **Tirupati/Sri City integrated factory** MoU with Andhra Pradesh govt for microwave, dishwasher and vacuum production, 2,500 jobs, ₹800-1,000 crore over five years ([Fortune India](https://www.fortuneindia.com/business-news/dixon-technologies-lines-up-1000-crore-investment-to-expand-consumer-durables-offerings/170666), 2026-11-17). Asset purchase from Vimal Plast for up to ₹49.75 crore to expand **washing machine capacity** ([Moneycontrol](https://www.moneycontrol.com/news/business/markets/dixon-tech-shares-rise-3-as-company-buys-new-assets-to-boost-washing-machine-operations-14082562.html/amp), 2026-11-17). Data-centre component plans via Inventec JV, operational from Q1 FY27 ([Economic Times](http://www.economictimes.indiatimes.com/industry/telecom/telecom-news/dixon-technologies-posts-81-jump-in-quarterly-profit-on-new-contracts/printarticle/124641791.cms), 2026-11-17). Aligns with **Smart Internet Leased Line**, **SD-WAN iFLX**, **Managed Wi-Fi** and **P2P Leased Line** for new plant sites.\nOpportunity type: **New multi-site manufacturing connectivity** for the Tirupati factory and washing machine facility; **data-centre component** operations may need **Smart Cloud** and **CloudMon** monitoring.\nRecommended outreach approach: Engage Dixon's IT or operations head on **leased line and SD-WAN** for the Tirupati plant and **Managed Wi-Fi** for new facilities; pitch **CloudMon** and **Managed SOC** for the data-centre component business.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00309,
+      "search_cost": 0.0,
+      "llm_cost": 0.00309,
+      "tool_cost": 0.001,
+      "latency_ms": 8790,
+      "tokens_in": 13128,
+      "tokens_out": 1393,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00137,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.0007,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00309
+        },
+        "input_tokens": 13128,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 10968,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1393,
+        "output_tokens_details": {
+          "reasoning_tokens": 578
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 14521
+      },
+      "evidence": []
+    },
+    {
+      "company": "Dixon Technologies",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "Dixon Technologies\nCategory: Expansion\nKey signals: Dixon plans an integrated appliance facility in Tirupati, with ₹800–1,000 crore investment and about 2,500 jobs; additional expansion is planned at its Tirupati and Kopparthy manufacturing operations. [Fortune India](https://www.fortuneindia.com/business-news/dixon-technologies-lines-up-1000-crore-investment-to-expand-consumer-durables-offerings/170666) · [BusinessLine](https://www.thehindubusinessline.com/news/dixon-technologies-to-invest-700-crore-in-tirupati-in-ap/article71696793.ece)\nOpportunity type: **Multi-site connectivity and network management** for growing manufacturing operations—Smart Internet Leased Line, SD-WAN iFLX, Managed Wi-Fi and CloudMon. [Fortune India](https://www.fortuneindia.com/business-news/dixon-technologies-lines-up-1000-crore-investment-to-expand-consumer-durables-offerings/170666)\nRecommended outreach approach: Engage the **plant expansion/operations team** to assess site connectivity, network resilience and managed Wi-Fi needs for the new Tirupati facility and expanding locations. [BusinessLine](https://www.thehindubusinessline.com/news/dixon-technologies-to-invest-700-crore-in-tirupati-in-ap/article71696793.ece)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00228,
+      "search_cost": 0.0,
+      "llm_cost": 0.00228,
+      "tool_cost": 0.001,
+      "latency_ms": 9721,
+      "tokens_in": 7354,
+      "tokens_out": 712,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00091,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00036,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00228
+        },
+        "input_tokens": 7354,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7276,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 712,
+        "output_tokens_details": {
+          "reasoning_tokens": 330
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8066
+      },
+      "evidence": []
+    },
+    {
+      "company": "Mahindra Logistics",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Mahindra Logistics\nCategory: None\nKey signals: Details not found\nOpportunity type: Details not found\nRecommended outreach approach: Details not found",
+      "status": "no_signal",
+      "category": null,
+      "cost": 0.00425,
+      "search_cost": 0.0,
+      "llm_cost": 0.00425,
+      "tool_cost": 0.0025,
+      "latency_ms": 6226,
+      "tokens_in": 13010,
+      "tokens_out": 730,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00136,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00037,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00425
+        },
+        "input_tokens": 13010,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 10850,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 730,
+        "output_tokens_details": {
+          "reasoning_tokens": 508
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 13740
+      },
+      "evidence": []
+    },
+    {
+      "company": "Mahindra Logistics",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "Mahindra Logistics\nCategory: Expansion\nKey signals: **Warehouse expansion**: 6.5-lakh-sq-ft Bhiwandi facility and 4.75-lakh-sq-ft Howrah lease add large, distributed operating sites. [Bhiwandi](http://economictimes.indiatimes.com/small-biz/sme-sector/mahindra-logistics-unveils-multi-client-warehouse-in-bhiwandi/printarticle/104039427.cms) · [Howrah](http://economictimes.indiatimes.com/industry/services/property-/-cstruction/mahindra-logistics-leases-4-75-lakh-sq-ft-warehouse-in-kolkata/printarticle/124580506.cms)\nOpportunity type: **Site connectivity and Wi-Fi**: assess SD-WAN iFLX, Smart Internet Leased Line and Managed Wi-Fi requirements across the expanded warehouse footprint.\nRecommended outreach approach: **Warehouse-network assessment**: engage operations and IT to map site readiness, uptime and connectivity requirements; propose a phased connectivity and Wi-Fi plan. [Bhiwandi facility](http://economictimes.indiatimes.com/small-biz/sme-sector/mahindra-logistics-unveils-multi-client-warehouse-in-bhiwandi/printarticle/104039427.cms) · [Howrah expansion](http://economictimes.indiatimes.com/industry/services/property-/-cstruction/mahindra-logistics-leases-4-75-lakh-sq-ft-warehouse-in-kolkata/printarticle/124580506.cms)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00384,
+      "search_cost": 0.0,
+      "llm_cost": 0.00384,
+      "tool_cost": 0.0025,
+      "latency_ms": 15095,
+      "tokens_in": 7335,
+      "tokens_out": 837,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00091,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00042,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00384
+        },
+        "input_tokens": 7335,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7257,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 837,
+        "output_tokens_details": {
+          "reasoning_tokens": 402
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8172
+      },
+      "evidence": []
+    },
+    {
+      "company": "Mahindra Logistics",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Mahindra Logistics\nCategory: Expansion\nKey signals: **Bhiwandi multi-client warehouse** unveiled 17 Nov 2026: 6.5 lakh sq ft, 84 docks, described as \"technology-driven\" fulfilment, aligns with **SD-WAN iFLX**, **Smart Internet Leased Line (ILL)** and **Managed Wi-Fi** for the new site (https://economictimes.indiatimes.com/small-biz/sme-sector/mahindra-logistics-unveils-multi-client-warehouse-in-bhiwandi/printarticle/104039427.cms)\nOpportunity type: New **warehouse site** needs **connectivity** and **Smartflo CCaaS** for distributed fulfilment and customer communication\nRecommended outreach approach: Pitch **SD-WAN iFLX** and **ILL** for Bhiwandi site connectivity, with **Smartflo** for logistics customer support, via the logistics operations and IT head",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00273,
+      "search_cost": 0.0,
+      "llm_cost": 0.00273,
+      "tool_cost": 0.001,
+      "latency_ms": 8721,
+      "tokens_in": 12530,
+      "tokens_out": 813,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.0013,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00041,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00273
+        },
+        "input_tokens": 12530,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 10370,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 813,
+        "output_tokens_details": {
+          "reasoning_tokens": 313
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 13343
+      },
+      "evidence": []
+    },
+    {
+      "company": "Mahindra Logistics",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "Mahindra Logistics\nCategory: Expansion\nKey signals: **New 6.5-lakh-sq-ft Bhiwandi warehouse** and **Agartala facility** expand multi-client operations and regional footprint. [Economic Times](http://economictimes.indiatimes.com/small-biz/sme-sector/mahindra-logistics-unveils-multi-client-warehouse-in-bhiwandi/printarticle/104039427.cms) · [Economic Times](https://www.economictimes.com/industry/transportation/shipping-/-transport/stronger-rivigo-b2c-e-mobility-to-drive-mahindra-logistics-rebound/printarticle/124283907.cms)\nOpportunity type: **Resilient site connectivity** and managed Wi-Fi for warehouse operations, aligned with **Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi**.\nRecommended outreach approach: Offer a **warehouse connectivity assessment** covering uptime, secure inter-site access and Wi-Fi requirements at new and expanding facilities.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00227,
+      "search_cost": 0.0,
+      "llm_cost": 0.00227,
+      "tool_cost": 0.001,
+      "latency_ms": 13040,
+      "tokens_in": 7342,
+      "tokens_out": 705,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00091,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00035,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00227
+        },
+        "input_tokens": 7342,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7264,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 705,
+        "output_tokens_details": {
+          "reasoning_tokens": 391
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8047
+      },
+      "evidence": []
+    },
+    {
+      "company": "Kalyan Jewellers",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Kalyan Jewellers\nCategory: Expansion\nKey signals: **Store expansion**: 11 net new Kalyan India stores in Q2 FY27 (365 total), with plans for 84 Kalyan FOCO stores, 50 Candere stores and 4 more **ATM showrooms** in Tamil Nadu in FY27 (https://insights.dsij.in/markets/reports/report-details/kalyan-jewellers-india-ltd/46169; https://www.thehindubusinessline.com/companies/strong-festive-demand-volume-growth-lift-kalyan-jewellers-growth-outlook/article71693030.ece/amp/). Aligns with **Smart Internet Leased Line** and **SD-WAN iFLX** for store connectivity, and **Managed Wi-Fi** for in-store networks.\nOpportunity type: **Multi-site branch connectivity** for new showroom rollouts, with openings weighted to H2 FY27 (https://insights.dsij.in/markets/reports/report-details/kalyan-jewellers-india-ltd/46156; https://economictimes.indiatimes.com/markets/stocks/news/kalyan-jewellers-shares-zoom-10-hit-upper-circuit-after-strong-q2-earnings-what-analysts-are-saying/printarticle/135725602.cms).\nRecommended outreach approach: Pitch **SD-WAN iFLX**, **Smart ILL** and **Managed Wi-Fi** as a standard bundle for each new FOCO and ATM store, timed before the H2 FY27 openings (https://www.thehindubusinessline.com/companies/strong-festive-demand-volume-growth-lift-kalyan-jewellers-growth-outlook/article71693030.ece/amp/).",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00458,
+      "search_cost": 0.0,
+      "llm_cost": 0.00458,
+      "tool_cost": 0.0025,
+      "latency_ms": 10340,
+      "tokens_in": 12606,
+      "tokens_out": 1490,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00131,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00075,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00458
+        },
+        "input_tokens": 12606,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 10446,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1490,
+        "output_tokens_details": {
+          "reasoning_tokens": 718
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 14096
+      },
+      "evidence": []
+    },
+    {
+      "company": "Kalyan Jewellers",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "Kalyan Jewellers\nCategory: Expansion\nKey signals: Plans **four additional ATM showrooms in Tamil Nadu** during FY27, alongside a wider showroom rollout. [Source](https://www.thehindubusinessline.com/companies/strong-festive-demand-volume-growth-lift-kalyan-jewellers-growth-outlook/article71693030.ece)\nOpportunity type: **Branch connectivity and Wi-Fi** for new showrooms; assess Smart Internet ILL, SD-WAN iFLX and Managed Wi-Fi needs. [Source](https://www.thehindubusinessline.com/companies/strong-festive-demand-volume-growth-lift-kalyan-jewellers-growth-outlook/article71693030.ece)\nRecommended outreach approach: Contact **retail expansion/operations and IT teams** to scope connectivity and managed Wi-Fi for planned Tamil Nadu openings. [Source](https://www.thehindubusinessline.com/companies/strong-festive-demand-volume-growth-lift-kalyan-jewellers-growth-outlook/article71693030.ece)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00373,
+      "search_cost": 0.0,
+      "llm_cost": 0.00373,
+      "tool_cost": 0.0025,
+      "latency_ms": 11187,
+      "tokens_in": 7306,
+      "tokens_out": 633,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.0009,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00032,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00373
+        },
+        "input_tokens": 7306,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7228,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 633,
+        "output_tokens_details": {
+          "reasoning_tokens": 299
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 7939
+      },
+      "evidence": []
+    },
+    {
+      "company": "Kalyan Jewellers",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Kalyan Jewellers\nCategory: Expansion\nKey signals: **84 Kalyan FOCO stores**, **50 Candere stores** and **five ATM showrooms** planned for FY27, with 11 net new Kalyan India stores in Q2 FY27 (365 total) ([source](https://insights.dsij.in/markets/reports/report-details/kalyan-jewellers-india-ltd/46169)). Aligns with **SD-WAN iFLX**, **Smart Internet Leased Line (ILL)** and **Managed Wi-Fi** for new store connectivity. ([source](https://economictimes.indiatimes.com/markets/stocks/earnings/kalyan-jewellers-hits-52-week-high-on-64-profit-growth/articleshow/135785714.cms))\nOpportunity type: **Multi-store connectivity rollout** across new India retail stores, plus **Smartflo** contact-center needs for customer support across the expanded store base. ([source](https://www.moneycontrol.com/news/business/markets/kalyan-jewellers-shares-rally-8-to-hit-52-week-high-brokerages-bullish-on-q3-demand-check-target-prices-14077964.html/amp))\nRecommended outreach approach: Pitch a **standardised store-network bundle** (SD-WAN iFLX, ILL, Managed Wi-Fi) for the 84 FOCO and 50 Candere openings weighted to 2HFY27, and link it to **Smartflo** for store customer support. ([source](https://insights.dsij.in/markets/reports/report-details/kalyan-jewellers-india-ltd/46156))",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00295,
+      "search_cost": 0.0,
+      "llm_cost": 0.00295,
+      "tool_cost": 0.001,
+      "latency_ms": 6704,
+      "tokens_in": 13280,
+      "tokens_out": 1084,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00139,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00054,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00295
+        },
+        "input_tokens": 13280,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 11120,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1084,
+        "output_tokens_details": {
+          "reasoning_tokens": 354
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 14364
+      },
+      "evidence": []
+    },
+    {
+      "company": "Kalyan Jewellers",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "Kalyan Jewellers\nCategory: Expansion (https://economictimes.indiatimes.com/markets/stocks/earnings/kalyan-jewellers-hits-52-week-high-on-64-profit-growth/articleshow/135785714.cms)\nKey signals: Plans FY27 openings of **84 Kalyan stores, 50 Candere outlets and five ATM stores**—a growing, distributed retail footprint. (https://economictimes.indiatimes.com/markets/stocks/earnings/kalyan-jewellers-hits-52-week-high-on-64-profit-growth/articleshow/135785714.cms)\nOpportunity type: **Branch connectivity and managed Wi-Fi** for new showrooms; assess ILL or SD-WAN needs across locations. (https://economictimes.indiatimes.com/markets/stocks/earnings/kalyan-jewellers-hits-52-week-high-on-64-profit-growth/articleshow/135785714.cms)\nRecommended outreach approach: Approach **retail IT and operations** to map rollout locations and propose a standardized connectivity and Wi-Fi plan for new stores. (https://economictimes.indiatimes.com/markets/stocks/earnings/kalyan-jewellers-hits-52-week-high-on-64-profit-growth/articleshow/135785714.cms)",
+      "status": "signal",
+      "category": null,
+      "cost": 0.0023,
+      "search_cost": 0.0,
+      "llm_cost": 0.0023,
+      "tool_cost": 0.001,
+      "latency_ms": 9068,
+      "tokens_in": 7521,
+      "tokens_out": 710,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00093,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00036,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.0023
+        },
+        "input_tokens": 7521,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7443,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 710,
+        "output_tokens_details": {
+          "reasoning_tokens": 335
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8231
+      },
+      "evidence": []
+    },
+    {
+      "company": "Lenskart",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Lenskart Solutions Limited\nCategory: Expansion\nKey signals: **Store network expansion** target of 10 crore annual eyewear units in India, up from 3.2 crore, per the [Fortune India, Nov 12, 2026](https://www.fortuneindia.com/business-news/lenskart-targets-10-crore-eyewear-units-annually-in-india-makes-blue-light-lenses-standard/169913) and the [Economic Times, Nov 14, 2026](http://www.economictimes.indiatimes.com/news/company/corporate-trends/what-we-have-done-is-not-enough-says-lenskart-ceo-as-he-eyes-10-cr-eyewear-units-a-year/printarticle/135767225.cms). Aligns with **Smart Internet Leased Line (ILL)**, **SD-WAN iFLX** and **Managed Wi-Fi** for multi-store connectivity.\nOpportunity type: **Multi-location store connectivity** and **customer-support scale-up** for new stores, inferred from the store-led growth target. Aligns with **Smartflo CCaaS** for contact-center capacity.\nRecommended outreach approach: Pitch **SD-WAN iFLX** and **Smart ILL** for store rollouts, and **Smartflo CCaaS** for customer-support scaling, to Lenskart's IT or network heads.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00457,
+      "search_cost": 0.0,
+      "llm_cost": 0.00457,
+      "tool_cost": 0.0025,
+      "latency_ms": 9458,
+      "tokens_in": 12432,
+      "tokens_out": 1546,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00128,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00077,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00457
+        },
+        "input_tokens": 12432,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 10272,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1546,
+        "output_tokens_details": {
+          "reasoning_tokens": 929
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 13978
+      },
+      "evidence": []
+    },
+    {
+      "company": "Lenskart",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "Lenskart\nCategory: Expansion\nKey signals: Plans **450+ net new Indian stores** this fiscal, adding distributed retail sites; this points to branch connectivity and Wi-Fi needs. [Economic Times, Nov. 12](http://economictimes.indiatimes.com/markets/stocks/earnings/lenskart-eyes-more-growth-as-q2-revenue-jumps-21/printarticle/125668149.cms)\nOpportunity type: **SD-WAN iFLX, Smart ILL and Managed Wi-Fi** for reliable connectivity across new stores. [Economic Times, Nov. 12](http://economictimes.indiatimes.com/markets/stocks/earnings/lenskart-eyes-more-growth-as-q2-revenue-jumps-21/printarticle/125668149.cms)\nRecommended outreach approach: Engage **retail expansion and IT/network teams** on a repeatable store-connectivity package with centralized monitoring as rollout proceeds. [Economic Times, Nov. 12](http://economictimes.indiatimes.com/markets/stocks/earnings/lenskart-eyes-more-growth-as-q2-revenue-jumps-21/printarticle/125668149.cms)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00387,
+      "search_cost": 0.0,
+      "llm_cost": 0.00387,
+      "tool_cost": 0.0025,
+      "latency_ms": 11399,
+      "tokens_in": 7246,
+      "tokens_out": 925,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.0009,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00046,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00387
+        },
+        "input_tokens": 7246,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7168,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 925,
+        "output_tokens_details": {
+          "reasoning_tokens": 577
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8171
+      },
+      "evidence": []
+    },
+    {
+      "company": "Lenskart",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Lenskart\nCategory: Expansion\nKey signals: **165 net new stores** in Q2 FY27, taking the network to 3,624, and **61 new cities** added, which drives **store connectivity** needs (Smart Internet Leased Line, SD-WAN iFLX, Managed Wi-Fi) ([ticker.finology.in](https://ticker.finology.in/discover/market-update/lenskart-q2-fy27-results-analysis)). **Remote optometry** in 934 Indian stores and AI eye-testing pilots depend on **reliable branch connectivity** ([ticker.finology.in](https://ticker.finology.in/discover/market-update/lenskart-q2-fy27-results-analysis); [multibagg.ai](https://www.multibagg.ai/market-pulse/articles/lenskart-hustlr-glasses-early-scale-concall-cmwassyyg004t2qo6upocu74n)). Plans to add **about 20 stores a month** in tier I and II cities ([economictimes.indiatimes.com](http://economictimes.indiatimes.com/small-biz/startups/lenskart-to-expand-in-tier-i-ii-cities-launches-new-app/printarticle/56854421.cms)).\nOpportunity type: **Multi-site connectivity** for new stores and remote optometry sites (Smart Internet Leased Line, SD-WAN iFLX, Managed Wi-Fi); **customer-engagement communications** for a growing store base (Smartflo CCaaS, WhatsApp Business) ([nicodigital.com](https://www.nicodigital.com/marketing-strategy/lenskart-business-model/)).\nRecommended outreach approach: Approach the **IT infrastructure or network head** with an **SD-WAN and leased-line bundle** for new store rollouts and remote-optometry uptime, and add **Smartflo** for store and contact-center calling.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00294,
+      "search_cost": 0.0,
+      "llm_cost": 0.00294,
+      "tool_cost": 0.001,
+      "latency_ms": 7403,
+      "tokens_in": 12323,
+      "tokens_out": 1299,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00127,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00065,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00294
+        },
+        "input_tokens": 12323,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 10163,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1299,
+        "output_tokens_details": {
+          "reasoning_tokens": 503
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 13622
+      },
+      "evidence": []
+    },
+    {
+      "company": "Lenskart",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "Lenskart\nCategory: Expansion\nKey signals: **450+ planned India store additions** and ongoing omnichannel growth; the company also described **AI-enabled remote testing** and investment in manufacturing capacity. [Economic Times](http://economictimes.indiatimes.com/tech/startups/lenskart-revenue-grows-21-in-q2-net-profit-rises-at-similar-clip-as-margins-improve/articleshow/125657952.cms) [Economic Times](http://economictimes.indiatimes.com/tech/technology/ettech-qa-were-not-an-online-or-offline-company-were-an-eyewear-company-lenskart-ceo-peyush-bansal/articleshow/124841824.cms)\nOpportunity type: **Store connectivity** through Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi; assess resilient connectivity and monitoring needs for new sites and manufacturing operations. [Economic Times](http://economictimes.indiatimes.com/tech/startups/lenskart-revenue-grows-21-in-q2-net-profit-rises-at-similar-clip-as-margins-improve/articleshow/125657952.cms) [Economic Times](http://economictimes.indiatimes.com/tech/technology/ettech-qa-were-not-an-online-or-offline-company-were-an-eyewear-company-lenskart-ceo-peyush-bansal/articleshow/124841824.cms)\nRecommended outreach approach: Engage **IT and retail operations** to map rollout timelines, connectivity standards and site uptime requirements; position a pilot across new stores or a manufacturing site. [Economic Times](http://economictimes.indiatimes.com/tech/startups/lenskart-revenue-grows-21-in-q2-net-profit-rises-at-similar-clip-as-margins-improve/articleshow/125657952.cms) [Economic Times](http://economictimes.indiatimes.com/tech/technology/ettech-qa-were-not-an-online-or-offline-company-were-an-eyewear-company-lenskart-ceo-peyush-bansal/articleshow/124841824.cms)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00267,
+      "search_cost": 0.0,
+      "llm_cost": 0.00267,
+      "tool_cost": 0.001,
+      "latency_ms": 17121,
+      "tokens_in": 7603,
+      "tokens_out": 1434,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00094,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00072,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00267
+        },
+        "input_tokens": 7603,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7525,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 1434,
+        "output_tokens_details": {
+          "reasoning_tokens": 883
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 9037
+      },
+      "evidence": []
+    },
+    {
+      "company": "Sahyadri Hospitals",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Sahyadri Hospitals\nCategory: Expansion\nKey signals: **CCI approval** (14 Nov 2026) of **Manipal Hospitals'** acquisition of Sahyadri, covering 11 hospitals across Pune, Nashik, Ahilya Nagar and Karad (https://economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/cci-clears-manipal-hospitals-proposal-to-acquire-sahyadri-hospitals/printarticle/123659652.cms). Integration uses **centralised procurement** and **digital engagement**; digital channels are 11% of Sahyadri revenue in Q2 FY27 (https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-growth-concall-cmwjdbgui00972ntk8a6o7ga0). Aligns with **Smart Internet Leased Line**, **SD-WAN iFLX** and **Managed Wi-Fi** for multi-site connectivity, and **WhatsApp Business** and **Smartflo** for patient engagement.\nOpportunity type: **Multi-location network consolidation** across the newly acquired hospitals and the Pune cluster, plus **digital patient-engagement** scale-up (https://health.economictimes.indiatimes.com/amp/news/hospitals/manipal-posts-3399-cr-in-q2-fy27-net-profit-rises-21-6/135801358).\nRecommended outreach approach: Pitch **SD-WAN iFLX** and **Leased Line** for branch-to-hub connectivity, and **WhatsApp Business** for patient communication, to the **Manipal-Sahyadri integration** IT and procurement leads.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00459,
+      "search_cost": 0.0,
+      "llm_cost": 0.00459,
+      "tool_cost": 0.0025,
+      "latency_ms": 7523,
+      "tokens_in": 13085,
+      "tokens_out": 1400,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00137,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.0007,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00459
+        },
+        "input_tokens": 13085,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 10925,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1400,
+        "output_tokens_details": {
+          "reasoning_tokens": 639
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 14485
+      },
+      "evidence": []
+    },
+    {
+      "company": "Sahyadri Hospitals",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "SAHYADRI HOSPITALS\nCategory: Expansion\nKey signals: Manipal’s acquisition of Sahyadri expands its multi-hospital network; around 50 beds are planned for Hadapsar, and digital channels contributed 11% of Sahyadri revenue in Q2 FY27. [Economic Times](http://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/manipal-health-buys-sahyadri-hospitals-for-rs-6400-crore/printarticle/122348011.cms) [Multibagg](https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-growth-concall-cmwjdbgui00972ntk8a6o7ga0)\nOpportunity type: **Multi-site connectivity and security assessment** for hospital integration and growing digital operations; assess Smart Internet ILL, SD-WAN iFLX and Managed SOC. [Multibagg](https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-growth-concall-cmwjdbgui00972ntk8a6o7ga0)\nRecommended outreach approach: Engage **IT and operations leadership** to map integration and Hadapsar expansion needs, then propose a phased connectivity and security review. [Economic Times](http://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/manipal-health-buys-sahyadri-hospitals-for-rs-6400-crore/printarticle/122348011.cms)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00388,
+      "search_cost": 0.0,
+      "llm_cost": 0.00388,
+      "tool_cost": 0.0025,
+      "latency_ms": 11702,
+      "tokens_in": 7394,
+      "tokens_out": 917,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00091,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00046,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00388
+        },
+        "input_tokens": 7394,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7316,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 917,
+        "output_tokens_details": {
+          "reasoning_tokens": 474
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8311
+      },
+      "evidence": []
+    },
+    {
+      "company": "Sahyadri Hospitals",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Sahyadri Hospitals\nCategory: Expansion\nKey signals: **Sahyadri** (11 hospitals in Pune, Nashik, Ahilya Nagar, Karad) is adding **440-500 beds** in H2 FY27, with Mumbai Juhu (602 beds) and Gurugram (500-bed lease) in the pipeline. Its **digital revenue** rose to 11% in Q2 FY27 and it reported interoperability for 58 clinicians, which points to Managed Wi-Fi, ILL/SD-WAN for multi-site connectivity and Microsoft 365 for shared clinical systems. Sources: https://marketping.in/concalls/manipal-health-enterpri-l/2026-11-13 ; https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-growth-concall-cmwjdbgui00972ntk8a6o7ga0 ; https://www.multibagg.ai/market-pulse/articles/sahyadri-margin-integration-rollout-update-ppt-cmweuw8jn00fu2npiesaoc7fx\nOpportunity type: **Multi-site connectivity** for new and brownfield hospitals (Managed Wi-Fi, SD-WAN iFLX, Smart Internet Leased Line); **Cloud and workplace** support for **integration** of procurement, clinical and **brand transition** systems (TTBS Smart Cloud, Microsoft 365, Vaultastic); **Patient engagement** via Smartflo and WhatsApp Business. Source: https://www.economictimes.indiatimes.com/topic/sahyadri-hospitals-ltd/news ; https://health.economictimes.indiatimes.com/news/hospitals/manipal-posts-3399-cr-in-q2-fy27-net-profit-rises-21-6/135801358\nRecommended outreach approach: Target the **Manipal Health Enterprises** and **Sahyadri** IT/operations leads with a **multi-site connectivity** and **integration** proposal covering SD-WAN and Managed Wi-Fi for the new bed additions, plus **Microsoft 365** and **Smartflo/WhatsApp** for the Pune cluster. Lead with **Managed SOC** and **VAPT** for patient-data protection across the integrated network. Source: https://www.multibagg.ai/market-pulse/articles/sahyadri-margin-integration-rollout-update-ppt-cmweuw8jn00fu2npiesaoc7fx",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00339,
+      "search_cost": 0.0,
+      "llm_cost": 0.00339,
+      "tool_cost": 0.001,
+      "latency_ms": 9251,
+      "tokens_in": 14150,
+      "tokens_out": 1742,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.0015,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00087,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00339
+        },
+        "input_tokens": 14150,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 11990,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1742,
+        "output_tokens_details": {
+          "reasoning_tokens": 730
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 15892
+      },
+      "evidence": []
+    },
+    {
+      "company": "Sahyadri Hospitals",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "Sahyadri Hospitals\nCategory: Expansion\nKey signals: **Manipal acquisition** adds 11 Sahyadri hospitals to its network, creating a multi-site integration context; **~50 beds planned at Hadapsar** in Q3 FY27. [Economic Times](http://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/manipal-health-buys-sahyadri-hospitals-for-rs-6400-crore/printarticle/122348011.cms) · [Multibagg](https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-share-rises)\nOpportunity type: **Multi-site connectivity standardization** across hospitals and the Hadapsar capacity addition; assess Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi. [Economic Times](http://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/manipal-health-buys-sahyadri-hospitals-for-rs-6400-crore/printarticle/122348011.cms) · [Multibagg](https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-share-rises)\nRecommended outreach approach: Engage IT/operations to map **site connectivity and integration priorities** following the acquisition; propose a phased network assessment for existing hospitals and Hadapsar. [Economic Times](http://www.economictimes.indiatimes.com/industry/healthcare/biotech/healthcare/manipal-health-buys-sahyadri-hospitals-for-rs-6400-crore/printarticle/122348011.cms) · [Multibagg](https://www.multibagg.ai/market-pulse/articles/manipal-sahyadri-margin-digital-share-rises)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00271,
+      "search_cost": 0.0,
+      "llm_cost": 0.00271,
+      "tool_cost": 0.001,
+      "latency_ms": 12012,
+      "tokens_in": 9455,
+      "tokens_out": 1059,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00117,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00053,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00271
+        },
+        "input_tokens": 9455,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 9377,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 1059,
+        "output_tokens_details": {
+          "reasoning_tokens": 559
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 10514
+      },
+      "evidence": []
+    },
+    {
+      "company": "Vardhman Textiles",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Vardhman Textiles\nCategory: Expansion\nKey signals: **Dhar greenfield expansion** and **open-end spinning project** (about 1.34 million spindles by FY28, Rs 8-9 bn capex into 1QFY28) ([DSIJ, 2026-11-17](https://insights.dsij.in/markets/reports/report-details/vardhman-textiles-ltd/44892)). Garment capacity doubling at Ludhiana from 2.2 to 4.5 million shirts p.a. by FY27 ([indiancompanies.in, 2026-11-13](https://indiancompanies.in/vardhman-textiles/)). Aligns with **Smart Internet Leased Line (ILL)** and **SD-WAN iFLX** for new multi-site connectivity.\nOpportunity type: **New plant and multi-location connectivity** needs at Dhar and Ludhiana; **capex-linked IT scale-up** across ₹3,660 crore programme ([Indian Textile Magazine, updated 2026-11-18](https://www.indiantextilemagazine.in/vardhman-bets-%E2%82%B93660-crore-on-scale-integration-and-value-added-growth/)). Fits **Smart Cloud**, **Managed Wi-Fi** and **SmartOffice** for new sites.\nRecommended outreach approach: Engage plant and IT heads at Dhar and Ludhiana on **SD-WAN iFLX** and **Smart Internet Leased Line** for greenfield site connectivity. Position **Managed Wi-Fi** and **TTBS Smart Cloud** for the garment and fabric capacity ramp-up.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00457,
+      "search_cost": 0.0,
+      "llm_cost": 0.00457,
+      "tool_cost": 0.0025,
+      "latency_ms": 9300,
+      "tokens_in": 12925,
+      "tokens_out": 1403,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00135,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.0007,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00457
+        },
+        "input_tokens": 12925,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 10765,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1403,
+        "output_tokens_details": {
+          "reasoning_tokens": 672
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 14328
+      },
+      "evidence": []
+    },
+    {
+      "company": "Vardhman Textiles",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "VARDHMAN TEXTILES\nCategory: Expansion  \nKey signals: In its **Nov. 10 earnings-call transcript**, management said a ~50-ton/day open-end project is expected to start operations in 6–7 months and that it has taken land in Madhya Pradesh’s PM MITRA Park for development. [Source](https://nsearchives.nseindia.com/corporate/VTL_10112026103714_vtl_transcript_sd.pdf)  \nOpportunity type: **New-site connectivity** for the developing Madhya Pradesh facility: assess Smart Internet Leased Line, SD-WAN iFLX and Managed Wi-Fi requirements. [Source](https://nsearchives.nseindia.com/corporate/VTL_10112026103714_vtl_transcript_sd.pdf)  \nRecommended outreach approach: Engage the **IT and plant operations teams** to understand site timelines and assess resilient connectivity and managed Wi-Fi needs for the new location. [Source](https://nsearchives.nseindia.com/corporate/VTL_10112026103714_vtl_transcript_sd.pdf)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00387,
+      "search_cost": 0.0,
+      "llm_cost": 0.00387,
+      "tool_cost": 0.0025,
+      "latency_ms": 12353,
+      "tokens_in": 7700,
+      "tokens_out": 815,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00095,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00041,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00387
+        },
+        "input_tokens": 7700,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7622,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 815,
+        "output_tokens_details": {
+          "reasoning_tokens": 480
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8515
+      },
+      "evidence": []
+    },
+    {
+      "company": "Vardhman Textiles",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Vardhman Textiles\nCategory: Expansion\nKey signals: **50 TPD open-end yarn project** expected operational within 6-7 months of the 6 Nov 2026 call, a **manufacturing capacity expansion** ([multibagg.ai, 10 Nov 2026](https://www.multibagg.ai/market-pulse/articles/vardhman-low-cost-cotton-gains-concall-cmwa8gk0h00cv2mph3xttas6v)). Aligns with **SD-WAN iFLX** and **Smart Internet Leased Line** for plant connectivity. **Garmenting capacity doubling** to 4.5 million shirts p.a. by end FY27 ([Hindu BusinessLine, 11 Nov 2026](https://www.thehindubusinessline.com/markets/brokers-call-vardhman-textiles-buy/article71685708.ece)). Aligns with **Managed Wi-Fi** and **SD-WAN iFLX** for the Ludhiana site.\nOpportunity type: **New open-end spinning unit** and **Ludhiana garmenting expansion** need **branch and plant connectivity**, **network uptime** and **remote-site access**.\nRecommended outreach approach: Engage the **plant IT or operations head** with **SD-WAN iFLX** and **Smart Internet Leased Line** proposals for the new open-end unit and the Ludhiana garmenting site before commissioning.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00322,
+      "search_cost": 0.0,
+      "llm_cost": 0.00322,
+      "tool_cost": 0.001,
+      "latency_ms": 8943,
+      "tokens_in": 13996,
+      "tokens_out": 1442,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00148,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00072,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00322
+        },
+        "input_tokens": 13996,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 11836,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1442,
+        "output_tokens_details": {
+          "reasoning_tokens": 788
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 15438
+      },
+      "evidence": []
+    },
+    {
+      "company": "Vardhman Textiles",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "Vardhman Textiles\nCategory: Expansion\nKey signals: Management disclosed a **50-tonne/day open-end yarn project** expected to be operational within six to seven months, and **garment capacity expansion** at an existing location from 2.2 million to 4.5 million shirts annually by FY27-end. [Q2 FY27 call transcript](https://www.evenfolio.com/in/stocks/vtl/) · [Call transcript coverage](https://www.alphatribe.in/concalls/VTL)\nOpportunity type: Assess **resilient site connectivity**—Smart Internet Leased Line and SD-WAN iFLX—and **Managed Wi-Fi** for expanding production operations. [Q2 FY27 call transcript](https://www.evenfolio.com/in/stocks/vtl/)\nRecommended outreach approach: Contact **IT and plant operations** to map connectivity, uptime and Wi-Fi requirements for the yarn project and garment expansion. [Q2 FY27 call transcript](https://www.evenfolio.com/in/stocks/vtl/)",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.0024,
+      "search_cost": 0.0,
+      "llm_cost": 0.0024,
+      "tool_cost": 0.001,
+      "latency_ms": 11178,
+      "tokens_in": 7693,
+      "tokens_out": 874,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00095,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00044,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.0024
+        },
+        "input_tokens": 7693,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7615,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 874,
+        "output_tokens_details": {
+          "reasoning_tokens": 557
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 8567
+      },
+      "evidence": []
+    },
+    {
+      "company": "Shreeji Logistics Pvt Ltd",
+      "mode": "agentic",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "SHREEJI TRANSLOGISTICS LTD (matched entity; \"Shreeji Logistics Pvt Ltd\" not found as a separate filer)\nCategory: Expansion\nKey signals: **Navi Mumbai International Airport** bonded trucking permission for air-cargo transhipment to all Indian gateways, expanding its **logistics network** (https://themachinemaker.com/news/shreeji-translogistics-gets-approval-for-bonded-cargo-transport-from-navi-mumbai-international-airport/, 2026-11-10; filing: https://alfafinder.com/filings/shreeji-translogistics/2026-11-03-business-update-v55neop5/). Aligns with **SD-WAN iFLX** and **Smart Internet Leased Line** for multi-gateway connectivity.\nOpportunity type: **Multi-location connectivity** for new airport-linked bonded operations across gateways; **dispatch communication** needs via Smartflo CCaaS for coordination of transhipment movements.\nRecommended outreach approach: Engage operations/IT head on **SD-WAN iFLX** for linking Navi Mumbai and gateway sites, and position **Smartflo CCaaS** for dispatch and customer support as the airport route scales.",
+      "status": "signal",
+      "category": "Expansion",
+      "cost": 0.00448,
+      "search_cost": 0.0,
+      "llm_cost": 0.00448,
+      "tool_cost": 0.0025,
+      "latency_ms": 8590,
+      "tokens_in": 12090,
+      "tokens_out": 1440,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00124,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.00072,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00448
+        },
+        "input_tokens": 12090,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 9930,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1440,
+        "output_tokens_details": {
+          "reasoning_tokens": 849
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 13530
+      },
+      "evidence": []
+    },
+    {
+      "company": "Shreeji Logistics Pvt Ltd",
+      "mode": "agentic",
+      "model": "openai/gpt-6-luna",
+      "answer": "Shreeji Logistics Pvt Ltd\nCategory: None\nKey signals: Details not found\nOpportunity type: Details not found\nRecommended outreach approach: Details not found",
+      "status": "no_signal",
+      "category": null,
+      "cost": 0.00373,
+      "search_cost": 0.0,
+      "llm_cost": 0.00373,
+      "tool_cost": 0.0025,
+      "latency_ms": 10548,
+      "tokens_in": 7186,
+      "tokens_out": 656,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00089,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00033,
+          "tool_calls_cost": 0.0025,
+          "tool_calls_cost_details": {
+            "search_web": 0.0025
+          },
+          "total_cost": 0.00373
+        },
+        "input_tokens": 7186,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 7108,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 656,
+        "output_tokens_details": {
+          "reasoning_tokens": 516
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.0025,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 7842
+      },
+      "evidence": []
+    },
+    {
+      "company": "Shreeji Logistics Pvt Ltd",
+      "mode": "agentic_lean",
+      "model": "anthropic/claude-haiku-5-5",
+      "answer": "Shreeji Logistics Pvt Ltd\nCategory: None\nKey signals: Details not found\nOpportunity type: Details not found\nRecommended outreach approach: Details not found",
+      "status": "no_signal",
+      "category": null,
+      "cost": 0.00304,
+      "search_cost": 0.0,
+      "llm_cost": 0.00304,
+      "tool_cost": 0.001,
+      "latency_ms": 6860,
+      "tokens_in": 14296,
+      "tokens_out": 1007,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00152,
+          "cache_read_cost": 2e-05,
+          "currency": "USD",
+          "input_cost": 0,
+          "output_cost": 0.0005,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00304
+        },
+        "input_tokens": 14296,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 12136,
+          "cache_read_input_tokens": 2152,
+          "cached_tokens": 2152
+        },
+        "output_tokens": 1007,
+        "output_tokens_details": {
+          "reasoning_tokens": 777
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 15303
+      },
+      "evidence": []
+    },
+    {
+      "company": "Shreeji Logistics Pvt Ltd",
+      "mode": "agentic_lean",
+      "model": "openai/gpt-6-luna",
+      "answer": "Shreeji Logistics Pvt Ltd\nCategory: None\nKey signals: Details not found\nOpportunity type: Details not found\nRecommended outreach approach: Details not found",
+      "status": "no_signal",
+      "category": null,
+      "cost": 0.00231,
+      "search_cost": 0.0,
+      "llm_cost": 0.00231,
+      "tool_cost": 0.001,
+      "latency_ms": 6018,
+      "tokens_in": 9221,
+      "tokens_out": 311,
+      "tool_calls": 1,
+      "search_hits": 0,
+      "hits_used": 0,
+      "error": null,
+      "usage": {
+        "cost": {
+          "cache_creation_cost": 0.00114,
+          "currency": "USD",
+          "input_cost": 1e-05,
+          "output_cost": 0.00016,
+          "tool_calls_cost": 0.001,
+          "tool_calls_cost_details": {
+            "search_web": 0.001
+          },
+          "total_cost": 0.00231
+        },
+        "input_tokens": 9221,
+        "input_tokens_details": {
+          "cache_creation_input_tokens": 9143,
+          "cache_read_input_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 311,
+        "output_tokens_details": {
+          "reasoning_tokens": 167
+        },
+        "tool_calls_details": {
+          "search_web": {
+            "cost_usd": 0.001,
+            "invocation": 1
+          }
+        },
+        "total_tokens": 9532
+      },
+      "evidence": []
+    }
+  ]
+}

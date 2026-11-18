@@ -1,0 +1,1 @@
+poc/.venv/bin/python poc/search_mode_poc.py --model anthropic/claude-haiku-5-5 --companies Infosys Zomato
